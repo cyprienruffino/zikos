@@ -125,13 +125,30 @@ def test_api_endpoint():
 @pytest.mark.slow
 def test_long_running_test():
     ...
+
+@pytest.mark.expensive
+def test_llm_inference():
+    ...
+
+@pytest.mark.llama
+def test_requires_llm_model():
+    ...
 ```
 
 Run specific test categories:
 ```bash
 pytest -m unit          # Only unit tests
 pytest -m "not slow"    # Skip slow tests
+pytest -m "not expensive and not llama"  # Skip expensive/LLM tests (default in CI)
+pytest -m llama         # Run LLM tests (requires model file)
 ```
+
+**Important**: LLM tests are marked as `expensive` and `llama` and are **excluded by default** in CI. These tests require:
+- `llama-cpp-python` installed
+- A valid LLM model file configured via `LLM_MODEL_PATH`
+- Significant computational resources
+
+LLM service code is intentionally excluded from coverage requirements due to the expense of running these tests.
 
 ### Coverage Requirements
 

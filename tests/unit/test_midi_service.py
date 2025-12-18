@@ -1,7 +1,6 @@
 """Tests for MIDI service"""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,12 +10,16 @@ from src.zikos.services.midi import MidiService
 @pytest.fixture
 def midi_service(temp_dir):
     """Create MidiService instance with temp directory"""
+    from unittest.mock import patch
+
     with patch("src.zikos.config.settings") as mock_settings:
         mock_settings.midi_storage_path = temp_dir
         mock_settings.notation_storage_path = temp_dir
+        mock_settings.audio_storage_path = temp_dir
         service = MidiService()
         service.storage_path = temp_dir
         service.notation_path = temp_dir
+        service.midi_tools.storage_path = temp_dir
         return service
 
 
@@ -25,47 +28,107 @@ class TestMidiService:
 
     @pytest.mark.asyncio
     async def test_validate_midi(self, midi_service):
-        """Test MIDI validation"""
-        with patch.object(midi_service.midi_tools, "validate_midi") as mock_validate:
-            mock_validate.return_value = {"valid": True, "midi_file_id": "test"}
+        """Test MIDI validation with real implementation"""
+        midi_text = """
+[MIDI]
+Tempo: 120
+Time Signature: 4/4
+Key: C major
+Track 1:
+  C4 velocity=60 duration=0.5
+  D4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        result = await midi_service.validate_midi(midi_text)
 
-            result = await midi_service.validate_midi("[MIDI]C4[/MIDI]")
+        assert "valid" in result
+        assert result["valid"] is True
+        assert "midi_file_id" in result
+        assert result["midi_file_id"] != ""
+        assert "errors" in result
+        assert isinstance(result["errors"], list)
 
-            assert "valid" in result
-            mock_validate.assert_called_once_with("[MIDI]C4[/MIDI]")
+        midi_file_id = result["midi_file_id"]
+        midi_path = midi_service.storage_path / f"{midi_file_id}.mid"
+        assert midi_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_validate_midi_invalid(self, midi_service):
+        """Test MIDI validation with invalid input"""
+        result = await midi_service.validate_midi("invalid MIDI text")
+
+        assert "valid" in result
+        assert result["valid"] is False
+        assert len(result["errors"]) > 0
 
     @pytest.mark.asyncio
     async def test_synthesize(self, midi_service, temp_dir):
-        """Test MIDI synthesis"""
-        midi_file_id = "test_midi"
-        test_file = temp_dir / f"{midi_file_id}.mid"
-        test_file.touch()
+        """Test MIDI synthesis with real implementation"""
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
 
-        with patch.object(midi_service.midi_tools, "midi_to_audio") as mock_synth:
-            mock_synth.return_value = {"audio_file_id": "test_audio"}
+        try:
+            midi_file_id = "test_synth"
+            midi_path = temp_dir / f"{midi_file_id}.mid"
+            midi_text_to_file(midi_text, midi_path)
 
-            result = await midi_service.synthesize(midi_file_id, "piano")
+            try:
+                result = await midi_service.synthesize(midi_file_id, "piano")
+                assert isinstance(result, str)
+                assert result != ""
 
-            assert isinstance(result, str)
-            assert result == "test_audio"
+                audio_path = temp_dir / f"{result}.wav"
+                if audio_path.exists():
+                    assert audio_path.stat().st_size > 0
+            except (RuntimeError, FileNotFoundError, ImportError) as e:
+                if "SoundFont" in str(e) or "fluidsynth" in str(e).lower():
+                    pytest.skip(f"Skipping synthesis test: {e}")
+                raise
+        except ImportError:
+            pytest.skip("music21 not available")
 
     @pytest.mark.asyncio
     async def test_render_notation(self, midi_service, temp_dir):
-        """Test notation rendering"""
-        midi_file_id = "test_midi"
-        test_file = temp_dir / f"{midi_file_id}.mid"
-        test_file.touch()
+        """Test notation rendering with real implementation"""
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+  D4 velocity=60 duration=0.5
+  E4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
 
-        with patch.object(midi_service.midi_tools, "midi_to_notation") as mock_render:
-            mock_render.return_value = {
-                "sheet_music_url": "/notation/sheet.png",
-                "tabs_url": "/notation/tabs.png",
-            }
+        try:
+            midi_file_id = "test_notation"
+            midi_path = temp_dir / f"{midi_file_id}.mid"
+            midi_text_to_file(midi_text, midi_path)
 
-            result = await midi_service.render_notation(midi_file_id, "both")
+            try:
+                result = await midi_service.render_notation(midi_file_id, "both")
 
-            assert "sheet_music_url" in result
-            mock_render.assert_called_once_with(str(test_file), "both")
+                assert "midi_file_id" in result
+                assert result["midi_file_id"] == midi_file_id
+                assert "format" in result
+
+                if "sheet_music_url" in result:
+                    sheet_path = temp_dir / f"sheet_{midi_file_id}.png"
+                    if sheet_path.exists():
+                        assert sheet_path.stat().st_size > 0
+            except Exception as e:
+                if "lilypond" in str(e).lower() or "musescore" in str(e).lower():
+                    pytest.skip(f"Skipping notation test: {e}")
+                raise
+        except ImportError:
+            pytest.skip("music21 not available")
 
     @pytest.mark.asyncio
     async def test_get_midi_path(self, midi_service, temp_dir):

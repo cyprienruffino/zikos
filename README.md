@@ -133,10 +133,13 @@ This project follows Test-Driven Development (TDD) principles with comprehensive
 - **Integration tests**: Test API endpoints and service interactions
 - **Coverage target**: Minimum 80% code coverage
 
+**Note**: LLM service tests are excluded from coverage calculations and CI runs. These tests are marked as `expensive` and `llama` and require model files. See [DEVELOPMENT.md](./DEVELOPMENT.md) for details.
+
 Run tests:
 ```bash
-make test-cov  # With coverage report
-make test      # Standard test run
+make test-cov  # With coverage report (excludes LLM tests)
+make test      # Standard test run (excludes LLM tests)
+pytest -m llama  # Run LLM tests explicitly (requires model file)
 ```
 
 ## Code Quality

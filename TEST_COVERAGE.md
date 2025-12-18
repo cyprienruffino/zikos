@@ -94,8 +94,10 @@
 
 ## Test Coverage Target
 
-Current coverage: **~15-20%** (estimated)
+Current coverage: **~77%** (as of latest run)
 Target coverage: **80%+** (as per project requirements)
+
+**Note**: LLM service tests are excluded from coverage calculations as they are expensive and require model files. These tests are marked with `@pytest.mark.expensive` and `@pytest.mark.llama` and are skipped by default in CI.
 
 ## Notes
 

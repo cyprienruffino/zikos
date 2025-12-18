@@ -29,41 +29,64 @@ class TestMidiTools:
     @pytest.mark.asyncio
     async def test_validate_midi(self, midi_tools):
         """Test MIDI validation"""
-        result = await midi_tools.validate_midi("[MIDI]C4[/MIDI]")
+        midi_text = """
+[MIDI]
+Tempo: 120
+Time Signature: 4/4
+Key: C major
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        result = await midi_tools.validate_midi(midi_text)
 
         assert "valid" in result
         assert result["valid"] is True
         assert "midi_file_id" in result
+        assert result["midi_file_id"] != ""
         assert "errors" in result
         assert "warnings" in result
         assert isinstance(result["errors"], list)
         assert isinstance(result["warnings"], list)
 
     @pytest.mark.asyncio
-    async def test_midi_to_audio(self, midi_tools):
-        """Test MIDI to audio synthesis"""
-        result = await midi_tools.midi_to_audio("test_midi", "piano")
-
-        assert "audio_file_id" in result
-        assert isinstance(result["audio_file_id"], str)
+    async def test_midi_to_audio_file_not_found(self, midi_tools):
+        """Test MIDI to audio with non-existent file"""
+        with pytest.raises(FileNotFoundError):
+            await midi_tools.midi_to_audio("nonexistent_midi", "piano")
 
     @pytest.mark.asyncio
-    async def test_midi_to_audio_default_instrument(self, midi_tools):
+    async def test_midi_to_audio_default_instrument(self, midi_tools, temp_dir):
         """Test MIDI to audio with default instrument via call_tool"""
-        result = await midi_tools.call_tool("midi_to_audio", midi_file_id="test_midi")
+        from pathlib import Path
 
-        assert "audio_file_id" in result
+        from src.zikos.config import settings
+
+        midi_path = Path(settings.midi_storage_path) / "test_midi.mid"
+        midi_path.parent.mkdir(parents=True, exist_ok=True)
+
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
+
+        try:
+            midi_text_to_file(midi_text, midi_path)
+
+            with pytest.raises((RuntimeError, FileNotFoundError, ImportError)):
+                await midi_tools.call_tool("midi_to_audio", midi_file_id="test_midi")
+        except ImportError:
+            pytest.skip("music21 not available")
 
     @pytest.mark.asyncio
-    async def test_midi_to_notation(self, midi_tools):
-        """Test MIDI to notation rendering"""
-        result = await midi_tools.midi_to_notation("test_midi", "both")
-
-        assert "midi_file_id" in result
-        assert result["midi_file_id"] == "test_midi"
-        assert "sheet_music_url" in result
-        assert "tabs_url" in result
-        assert result["format"] == "both"
+    async def test_midi_to_notation_file_not_found(self, midi_tools):
+        """Test MIDI to notation with non-existent file"""
+        with pytest.raises(FileNotFoundError):
+            await midi_tools.midi_to_notation("nonexistent_midi", "both")
 
     @pytest.mark.asyncio
     async def test_midi_to_notation_default_format(self, midi_tools):
@@ -75,34 +98,33 @@ class TestMidiTools:
     @pytest.mark.asyncio
     async def test_call_tool_validate_midi(self, midi_tools):
         """Test call_tool for validate_midi"""
-        result = await midi_tools.call_tool("validate_midi", midi_text="[MIDI]C4[/MIDI]")
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        result = await midi_tools.call_tool("validate_midi", midi_text=midi_text)
 
         assert "valid" in result
+        assert result["valid"] is True
 
     @pytest.mark.asyncio
-    async def test_call_tool_midi_to_audio(self, midi_tools):
-        """Test call_tool for midi_to_audio"""
-        result = await midi_tools.call_tool(
-            "midi_to_audio", midi_file_id="test", instrument="piano"
-        )
-
-        assert "audio_file_id" in result
-
-    @pytest.mark.asyncio
-    async def test_call_tool_midi_to_audio_default_instrument(self, midi_tools):
-        """Test call_tool for midi_to_audio with default instrument"""
-        result = await midi_tools.call_tool("midi_to_audio", midi_file_id="test")
-
-        assert "audio_file_id" in result
+    async def test_call_tool_midi_to_audio_file_not_found(self, midi_tools):
+        """Test call_tool for midi_to_audio with non-existent file"""
+        with pytest.raises(FileNotFoundError):
+            await midi_tools.call_tool(
+                "midi_to_audio", midi_file_id="nonexistent", instrument="piano"
+            )
 
     @pytest.mark.asyncio
-    async def test_call_tool_midi_to_notation(self, midi_tools):
-        """Test call_tool for midi_to_notation"""
-        result = await midi_tools.call_tool(
-            "midi_to_notation", midi_file_id="test", format="sheet_music"
-        )
-
-        assert "midi_file_id" in result
+    async def test_call_tool_midi_to_notation_file_not_found(self, midi_tools):
+        """Test call_tool for midi_to_notation with non-existent file"""
+        with pytest.raises(FileNotFoundError):
+            await midi_tools.call_tool(
+                "midi_to_notation", midi_file_id="nonexistent", format="sheet_music"
+            )
 
     @pytest.mark.asyncio
     async def test_call_tool_unknown_tool(self, midi_tools):

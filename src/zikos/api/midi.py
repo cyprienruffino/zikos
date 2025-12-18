@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from src.zikos.services.midi import MidiService
 
@@ -9,11 +10,17 @@ router = APIRouter()
 midi_service = MidiService()
 
 
+class ValidateMidiRequest(BaseModel):
+    """Request model for MIDI validation"""
+
+    midi_text: str
+
+
 @router.post("/validate")
-async def validate_midi(midi_text: str):
+async def validate_midi(request: ValidateMidiRequest):
     """Validate MIDI text"""
     try:
-        result = await midi_service.validate_midi(midi_text)
+        result = await midi_service.validate_midi(request.midi_text)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
