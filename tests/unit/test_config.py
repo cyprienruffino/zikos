@@ -2,9 +2,12 @@
 
 import os
 
+import pytest
+
 from src.zikos.config import Settings
 
 
+@pytest.mark.lightweight
 def test_settings_defaults():
     """Test default settings"""
     settings = Settings.from_env()

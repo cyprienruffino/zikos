@@ -96,6 +96,13 @@ select = [
 ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
+    "F401",  # unused imports (pytest is used as decorator)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "F401",  # pytest, unittest.mock, etc. are used but may appear unused
+    "F811",  # redefined imports in fixtures
 ]
 
 [tool.ruff.lint.isort]
