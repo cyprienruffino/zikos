@@ -12,7 +12,7 @@ audio_service = AudioService()
 @router.post("/upload")
 async def upload_audio(
     file: UploadFile = File(...),
-    recording_id: str | None = None,
+    recording_id: str | None = File(None),
 ):
     """Upload audio file"""
     try:

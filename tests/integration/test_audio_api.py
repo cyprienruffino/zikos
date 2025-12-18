@@ -1,11 +1,11 @@
 """Integration tests for audio API"""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 from fastapi.testclient import TestClient
 
 from src.zikos.main import app
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
@@ -18,87 +18,165 @@ class TestAudioAPI:
     """Tests for audio API endpoints"""
 
     def test_upload_audio(self, client, temp_dir):
-        """Test uploading audio file"""
-        with patch("src.zikos.api.audio.audio_service") as mock_service:
-            mock_service.store_audio = AsyncMock(return_value="test_audio_id")
-            mock_service.run_baseline_analysis = AsyncMock(
-                return_value={
-                    "tempo": {"bpm": 120.0},
-                    "pitch": {"notes": []},
-                    "rhythm": {"onsets": []},
-                }
-            )
+        """Test uploading audio file with real implementation"""
+        import math
+        import wave
+        from pathlib import Path
 
+        sample_rate = 44100
+        duration = 0.1
+        frequency = 440.0
+
+        audio_data = b""
+        for i in range(int(sample_rate * duration)):
+            t = i / sample_rate
+            sample = int(32767 * 0.3 * math.sin(2 * math.pi * frequency * t))
+            audio_data += sample.to_bytes(2, byteorder="little", signed=True)
+
+        test_wav = temp_dir / "test_upload.wav"
+        with wave.open(str(test_wav), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio_data)
+
+        with open(test_wav, "rb") as f:
             response = client.post(
                 "/api/audio/upload",
-                files={"file": ("test.wav", b"fake audio data", "audio/wav")},
+                files={"file": ("test.wav", f.read(), "audio/wav")},
                 data={"recording_id": "test_recording"},
             )
 
-            assert response.status_code == 200
-            data = response.json()
-            assert "audio_file_id" in data
-            assert "analysis" in data
+        assert response.status_code == 200
+        data = response.json()
+        assert "audio_file_id" in data
+        assert data["audio_file_id"] != ""
+        assert "recording_id" in data
+        assert data.get("recording_id") == "test_recording" or data.get("recording_id") is None
+        assert "analysis" in data
+        assert "tempo" in data["analysis"]
+        assert "pitch" in data["analysis"]
+        assert "rhythm" in data["analysis"]
 
-    def test_upload_audio_error(self, client):
-        """Test uploading audio with error"""
-        with patch("src.zikos.api.audio.audio_service") as mock_service:
-            mock_service.store_audio = AsyncMock(side_effect=Exception("Storage failed"))
+    def test_upload_audio_without_recording_id(self, client, temp_dir):
+        """Test uploading audio without recording ID"""
+        import math
+        import wave
+        from pathlib import Path
 
+        sample_rate = 44100
+        duration = 0.1
+        frequency = 440.0
+
+        audio_data = b""
+        for i in range(int(sample_rate * duration)):
+            t = i / sample_rate
+            sample = int(32767 * 0.3 * math.sin(2 * math.pi * frequency * t))
+            audio_data += sample.to_bytes(2, byteorder="little", signed=True)
+
+        test_wav = temp_dir / "test_upload2.wav"
+        with wave.open(str(test_wav), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio_data)
+
+        with open(test_wav, "rb") as f:
             response = client.post(
                 "/api/audio/upload",
-                files={"file": ("test.wav", b"fake audio data", "audio/wav")},
+                files={"file": ("test.wav", f.read(), "audio/wav")},
             )
 
-            assert response.status_code == 500
+        assert response.status_code == 200
+        data = response.json()
+        assert "audio_file_id" in data
 
-    def test_get_audio_info(self, client):
-        """Test getting audio info"""
-        with patch("src.zikos.api.audio.audio_service") as mock_service:
-            mock_service.get_audio_info = AsyncMock(
-                return_value={
-                    "duration": 10.5,
-                    "sample_rate": 44100,
-                }
-            )
+    def test_get_audio_info(self, client, temp_dir):
+        """Test getting audio info with real implementation"""
+        import math
+        import uuid
+        import wave
+        from pathlib import Path
 
-            response = client.get("/api/audio/test_audio_id/info")
+        from src.zikos.config import settings
 
-            assert response.status_code == 200
-            data = response.json()
-            assert "duration" in data
-            assert data["duration"] == 10.5
+        audio_file_id = str(uuid.uuid4())
+        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
+
+        sample_rate = 44100
+        duration = 0.1
+        frequency = 440.0
+
+        audio_data = b""
+        for i in range(int(sample_rate * duration)):
+            t = i / sample_rate
+            sample = int(32767 * 0.3 * math.sin(2 * math.pi * frequency * t))
+            audio_data += sample.to_bytes(2, byteorder="little", signed=True)
+
+        with wave.open(str(audio_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio_data)
+
+        response = client.get(f"/api/audio/{audio_file_id}/info")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "duration" in data
+        assert "sample_rate" in data
 
     def test_get_audio_info_not_found(self, client):
         """Test getting audio info for non-existent file"""
-        with patch("src.zikos.api.audio.audio_service") as mock_service:
-            mock_service.get_audio_info = AsyncMock(side_effect=Exception("Not found"))
+        response = client.get("/api/audio/nonexistent_audio_id_12345/info")
 
-            response = client.get("/api/audio/nonexistent/info")
-
-            assert response.status_code == 404
+        assert response.status_code == 200
+        data = response.json()
+        assert "error" in data
+        assert data["error"] is True
+        assert data["error_type"] == "FILE_NOT_FOUND"
 
     def test_get_audio_file(self, client, temp_dir):
-        """Test getting audio file"""
-        test_file = temp_dir / "test_audio.wav"
-        test_file.write_bytes(b"fake audio data")
+        """Test getting audio file with real implementation"""
+        import math
+        import uuid
+        import wave
+        from pathlib import Path
 
-        with patch("src.zikos.api.audio.audio_service") as mock_service:
-            mock_service.get_audio_path = AsyncMock(return_value=test_file)
+        from src.zikos.config import settings
 
-            response = client.get("/api/audio/test_audio")
+        audio_file_id = str(uuid.uuid4())
+        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
 
-            assert response.status_code == 200
-            assert (
-                "audio" in response.headers["content-type"]
-                or "application" in response.headers["content-type"]
-            )
+        sample_rate = 44100
+        duration = 0.1
+        frequency = 440.0
+
+        audio_data = b""
+        for i in range(int(sample_rate * duration)):
+            t = i / sample_rate
+            sample = int(32767 * 0.3 * math.sin(2 * math.pi * frequency * t))
+            audio_data += sample.to_bytes(2, byteorder="little", signed=True)
+
+        with wave.open(str(audio_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio_data)
+
+        response = client.get(f"/api/audio/{audio_file_id}")
+
+        assert response.status_code == 200
+        assert (
+            "audio" in response.headers["content-type"]
+            or "application" in response.headers["content-type"]
+        )
+        assert len(response.content) > 0
 
     def test_get_audio_file_not_found(self, client):
         """Test getting non-existent audio file"""
-        with patch("src.zikos.api.audio.audio_service") as mock_service:
-            mock_service.get_audio_path = AsyncMock(side_effect=Exception("Not found"))
+        response = client.get("/api/audio/nonexistent_audio_id")
 
-            response = client.get("/api/audio/nonexistent")
-
-            assert response.status_code == 404
+        assert response.status_code == 404

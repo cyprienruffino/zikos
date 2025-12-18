@@ -94,10 +94,44 @@
 
 ## Test Coverage Target
 
-Current coverage: **~77%** (as of latest run)
-Target coverage: **80%+** (as per project requirements)
+Current coverage: **83.16%** (as of latest run)
+Target coverage: **80%+** ✅ **TARGET MET**
 
 **Note**: LLM service tests are excluded from coverage calculations as they are expensive and require model files. These tests are marked with `@pytest.mark.expensive` and `@pytest.mark.llama` and are skipped by default in CI.
+
+## Coverage Status by Component
+
+### ✅ Fully Tested (100% coverage)
+- Configuration (`config.py`)
+- Chat Service (`services/chat.py`)
+- Chat API (`api/chat.py`)
+- Audio Service (`services/audio.py`)
+- Recording Tools (`mcp/tools/recording.py`)
+- Audio Utils (`mcp/tools/audio/utils.py`)
+- Tempo Analysis (`mcp/tools/audio/tempo.py`)
+
+### ✅ Well Tested (80-99% coverage)
+- MIDI Service (`services/midi.py`) - 92%
+- MIDI API (`api/midi.py`) - 92%
+- Audio API (`api/audio.py`) - 86%
+- MIDI Parser (`mcp/tools/midi_parser.py`) - 88%
+- Audio Analysis Tools (`mcp/tools/audio/analysis.py`) - 85%
+- Rhythm Analysis (`mcp/tools/audio/rhythm.py`) - 89%
+- Pitch Detection (`mcp/tools/audio/pitch.py`) - 91%
+- Articulation Analysis (`mcp/tools/audio/articulation.py`) - 82%
+- Dynamics Analysis (`mcp/tools/audio/dynamics.py`) - 81%
+- Key Detection (`mcp/tools/audio/key.py`) - 81%
+- Timbre Analysis (`mcp/tools/audio/timbre.py`) - 83%
+- Chord Detection (`mcp/tools/audio/chords.py`) - 88%
+
+### ⚠️ Lower Coverage (Requires External Dependencies)
+- MIDI Tools (`mcp/tools/midi.py`) - 45%
+  - Synthesis and notation rendering paths require fluidsynth/soundfonts
+  - Tested in integration tests when dependencies are available
+  - Code paths are implemented but can't be fully tested without external tools
+
+### ❌ Excluded from Coverage
+- LLM Service (`services/llm.py`) - Excluded (expensive, requires model files)
 
 ## Notes
 
