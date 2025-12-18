@@ -33,9 +33,9 @@ jobs:
       - name: Check formatting
         run: black --check src tests
 
-      - name: Run tests (excluding LLM-dependent tests)
+      - name: Run tests (unit tests only, excluding LLM-dependent tests)
         run: |
-          pytest -v --no-cov -k "not llm and not LLM"
+          pytest -v --no-cov -k "not llm and not LLM" tests/unit/
 
   # Full test suite for PRs (includes all dependencies and coverage)
   full-tests:

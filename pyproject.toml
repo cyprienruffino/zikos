@@ -45,6 +45,7 @@ dev = [
 ]
 # Lightweight dependencies for CI (base deps + dev tools, excludes heavy ML libraries)
 lightweight = [
+    "httpx>=0.24.0",  # Required for FastAPI TestClient
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
