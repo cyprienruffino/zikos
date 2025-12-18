@@ -72,6 +72,16 @@ clean: ## Clean build artifacts
 run: ## Run the application
 	python run.py
 
+download-model: ## Download Llama model (usage: make download-model MODEL=llama-3.1-8b-instruct-q4)
+	@if [ -z "$(MODEL)" ]; then \
+		python scripts/download_model.py --list; \
+		echo ""; \
+		echo "Usage: make download-model MODEL=<model-name>"; \
+		echo "Example: make download-model MODEL=llama-3.1-8b-instruct-q4"; \
+	else \
+		python scripts/download_model.py $(MODEL); \
+	fi
+
 requirements.txt: pyproject.toml ## Generate requirements.txt from pyproject.toml
 	pip-compile pyproject.toml -o requirements.txt
 

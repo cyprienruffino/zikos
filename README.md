@@ -5,13 +5,13 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 ## Quick Overview
 
 - **Audio Input**: User recordings analyzed via signal processing tools
-- **LLM**: Llama 3.1/3.2 8B-Instruct with function calling support
+- **LLM**: Llama 3.1/3.2 8B-Instruct (or Llama 3.3 70B) with function calling support
 - **Output**: Text feedback + MIDI-generated musical examples with notation
 - **Architecture**: FastAPI backend + React/Vue frontend
 
 ## Key Technologies
 
-- **LLM**: Llama 3.1/3.2 8B-Instruct via llama-cpp-python
+- **LLM**: Llama 3.1/3.2 8B-Instruct (or Llama 3.3 70B) via llama-cpp-python
 - **Audio Processing**: librosa, torchaudio, soundfile
 - **MIDI**: Music21 for processing, FluidSynth for synthesis
 - **Backend**: FastAPI with WebSocket support
@@ -22,7 +22,7 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 ### Prerequisites
 
 - Python 3.11+
-- LLM model file (GGUF format)
+- LLM model file (GGUF format) - see [Downloading Models](#downloading-models) below
 
 ### Installation
 
@@ -50,6 +50,47 @@ pip install -e ".[dev,ml]"
 # Set environment variables
 cp .env.example .env
 # Edit .env with your settings
+```
+
+### Downloading Models
+
+You can download Llama models using the provided helper script:
+
+```bash
+# List available models
+python scripts/download_model.py --list
+
+# Download a model (recommended: 8B Q4_K_M for balance of quality and size)
+python scripts/download_model.py llama-3.1-8b-instruct-q4
+
+# Or download Llama 3.3 70B (requires 16GB+ RAM, much larger but more capable)
+python scripts/download_model.py llama-3.3-70b-instruct-q4
+
+# Or use the Makefile target
+make download-model MODEL=llama-3.1-8b-instruct-q4
+
+# Download to a specific directory
+python scripts/download_model.py llama-3.1-8b-instruct-q4 -o ./models
+
+# With Hugging Face token (for private models)
+python scripts/download_model.py llama-3.1-8b-instruct-q4 -t YOUR_TOKEN
+```
+
+The script will download the model to `~/.zikos/models/` by default. After downloading, set the `LLM_MODEL_PATH` environment variable or add it to your `.env` file:
+
+```bash
+export LLM_MODEL_PATH=~/.zikos/models/Llama-3.1-8B-Instruct-Q4_K_M.gguf
+```
+
+**Note**: The script requires either `huggingface_hub` (recommended) or `requests`. Install with:
+```bash
+# Recommended: install model download helpers
+pip install -e ".[model-download]"
+
+# Or install individually
+pip install huggingface_hub  # Recommended
+# or
+pip install requests  # Fallback option
 ```
 
 ### Development

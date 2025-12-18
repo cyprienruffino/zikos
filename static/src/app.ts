@@ -1,5 +1,8 @@
 const API_URL = window.location.origin;
-const WS_URL = API_URL.replace("http", "ws") + "/api/chat/ws";
+const WS_URL =
+    (API_URL.startsWith("https")
+        ? API_URL.replace("https", "wss")
+        : API_URL.replace("http", "ws")) + "/api/chat/ws";
 
 interface WebSocketMessage {
     type: string;
@@ -16,6 +19,9 @@ let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
+let isProcessing = false;
+let reconnectAttempts = 0;
+let reconnectTimeout: number | null = null;
 
 const statusEl = document.getElementById("status") as HTMLElement;
 const messagesEl = document.getElementById("messages") as HTMLElement;
@@ -57,6 +63,28 @@ function addMessage(
 
     messagesEl.appendChild(messageEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addTypingIndicator(): void {
+    const existingIndicator = document.getElementById("typing-indicator");
+    if (existingIndicator) {
+        return;
+    }
+
+    const indicatorEl = document.createElement("div");
+    indicatorEl.id = "typing-indicator";
+    indicatorEl.className = "message assistant typing-indicator";
+    indicatorEl.innerHTML =
+        '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    messagesEl.appendChild(indicatorEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeTypingIndicator(): void {
+    const indicator = document.getElementById("typing-indicator");
+    if (indicator) {
+        indicator.remove();
+    }
 }
 
 function addRecordingWidget(recordingId: string, prompt: string, _maxDuration: number): void {
@@ -173,6 +201,21 @@ async function sendRecording(recordingId: string): Promise<void> {
         return;
     }
 
+    const widgetEl = document.getElementById(`recording-${recordingId}`);
+    if (!widgetEl) return;
+
+    const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
+    const statusEl = document.getElementById(`status-${recordingId}`) as HTMLElement;
+
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Uploading...";
+    }
+    if (statusEl) {
+        statusEl.textContent = "Uploading audio...";
+        statusEl.className = "recording-status";
+    }
+
     const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
     const formData = new FormData();
     formData.append("file", audioBlob, "recording.wav");
@@ -185,13 +228,16 @@ async function sendRecording(recordingId: string): Promise<void> {
         });
 
         if (!response.ok) {
-            throw new Error(`Upload failed: ${response.statusText}`);
+            const errorText = await response.text().catch(() => response.statusText);
+            throw new Error(`Upload failed: ${errorText}`);
         }
 
         const data = (await response.json()) as { audio_file_id: string };
         removeRecordingWidget(recordingId);
 
         if (ws && ws.readyState === WebSocket.OPEN) {
+            addTypingIndicator();
+            isProcessing = true;
             ws.send(
                 JSON.stringify({
                     type: "audio_ready",
@@ -200,6 +246,8 @@ async function sendRecording(recordingId: string): Promise<void> {
                     session_id: sessionId,
                 })
             );
+        } else {
+            addMessage("Connection lost. Please reconnect and try again.", "error");
         }
 
         audioChunks = [];
@@ -207,6 +255,15 @@ async function sendRecording(recordingId: string): Promise<void> {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         addMessage(`Error uploading audio: ${errorMessage}`, "error");
+
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Send";
+        }
+        if (statusEl) {
+            statusEl.textContent = "Upload failed. Please try again.";
+            statusEl.className = "recording-status";
+        }
     }
 }
 
@@ -230,9 +287,16 @@ function cancelRecording(recordingId: string): void {
 }
 
 function connect(): void {
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+
+    updateStatus("Connecting...", "disconnected");
     ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
+        reconnectAttempts = 0;
         updateStatus("Connected", "connected");
         if (sendButton) {
             sendButton.disabled = false;
@@ -240,26 +304,38 @@ function connect(): void {
     };
 
     ws.onmessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data as string) as WebSocketMessage;
+        removeTypingIndicator();
+        isProcessing = false;
 
-        if (data.session_id) {
-            sessionId = data.session_id;
-        }
+        try {
+            const data = JSON.parse(event.data as string) as WebSocketMessage;
 
-        if (data.type === "response") {
-            addMessage(data.message || "", "assistant", data);
-        } else if (data.type === "tool_call" && data.tool_name === "request_audio_recording") {
-            const args = (data.arguments || {}) as {
-                prompt?: string;
-                max_duration?: number;
-            };
-            addRecordingWidget(
-                data.tool_id || `rec_${Date.now()}`,
-                args.prompt || "Please record audio",
-                args.max_duration || 60.0
-            );
-        } else if (data.type === "error") {
-            addMessage(`Error: ${data.message || "Unknown error"}`, "error");
+            if (data.session_id) {
+                sessionId = data.session_id;
+            }
+
+            if (data.type === "response") {
+                addMessage(data.message || "", "assistant", data);
+            } else if (data.type === "tool_call" && data.tool_name === "request_audio_recording") {
+                const args = (data.arguments || {}) as {
+                    prompt?: string;
+                    max_duration?: number;
+                };
+                addRecordingWidget(
+                    data.tool_id || `rec_${Date.now()}`,
+                    args.prompt || "Please record audio",
+                    args.max_duration || 60.0
+                );
+            } else if (data.type === "recording_cancelled") {
+                const recordingId = data.tool_id || "";
+                removeRecordingWidget(recordingId);
+                addMessage("Recording cancelled", "assistant");
+            } else if (data.type === "error") {
+                addMessage(`Error: ${data.message || "Unknown error"}`, "error");
+            }
+        } catch (error) {
+            console.error("Error parsing WebSocket message:", error);
+            addMessage("Error processing message from server", "error");
         }
     };
 
@@ -273,15 +349,24 @@ function connect(): void {
         if (sendButton) {
             sendButton.disabled = true;
         }
-        setTimeout(connect, 3000);
+
+        reconnectAttempts++;
+        const delay = Math.min(3000 * reconnectAttempts, 30000);
+        updateStatus(`Disconnected. Reconnecting in ${delay / 1000}s...`, "disconnected");
+
+        reconnectTimeout = window.setTimeout(() => {
+            connect();
+        }, delay);
     };
 }
 
 if (sendButton) {
     sendButton.addEventListener("click", () => {
         const message = messageInput?.value.trim();
-        if (message && ws && ws.readyState === WebSocket.OPEN) {
+        if (message && ws && ws.readyState === WebSocket.OPEN && !isProcessing) {
             addMessage(message, "user");
+            addTypingIndicator();
+            isProcessing = true;
             ws.send(
                 JSON.stringify({
                     type: "message",
@@ -292,6 +377,10 @@ if (sendButton) {
             if (messageInput) {
                 messageInput.value = "";
             }
+        } else if (isProcessing) {
+            addMessage("Please wait for the current response to complete", "error");
+        } else if (!ws || ws.readyState !== WebSocket.OPEN) {
+            addMessage("Not connected. Please wait for connection...", "error");
         }
     });
 }

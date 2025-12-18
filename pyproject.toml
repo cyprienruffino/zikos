@@ -45,6 +45,12 @@ dev = [
     "pre-commit>=3.5.0",
     "pip-tools>=7.3.0",
 ]
+# Model download helpers (optional, for downloading models)
+model-download = [
+    "huggingface-hub>=0.20.0",  # Recommended for model downloads
+    "requests>=2.31.0",  # Fallback for model downloads
+]
+
 # Lightweight dependencies for CI (base deps + dev tools, excludes heavy ML libraries)
 lightweight = [
     "httpx>=0.24.0",  # Required for FastAPI TestClient

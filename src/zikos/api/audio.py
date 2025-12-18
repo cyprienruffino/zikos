@@ -1,6 +1,6 @@
 """Audio API endpoints"""
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from src.zikos.services.audio import AudioService
@@ -12,7 +12,7 @@ audio_service = AudioService()
 @router.post("/upload")
 async def upload_audio(
     file: UploadFile = File(...),
-    recording_id: str | None = File(None),
+    recording_id: str | None = Form(None),
 ):
     """Upload audio file"""
     try:
