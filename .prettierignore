@@ -1,5 +1,7 @@
 node_modules/
 *.min.js
+static/app.js
+static/src/**/*.js
 coverage/
 htmlcov/
 .pytest_cache/

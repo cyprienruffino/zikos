@@ -63,12 +63,12 @@ class LLMService:
 
         while iteration < max_iterations:
             iteration += 1
-            response = self.llm.create_chat_completion(
+        response = self.llm.create_chat_completion(
                 messages=history,
-                tools=tools,
-                temperature=settings.llm_temperature,
-                top_p=settings.llm_top_p,
-            )
+            tools=tools,
+            temperature=settings.llm_temperature,
+            top_p=settings.llm_top_p,
+        )
 
             message_obj = response["choices"][0]["message"]
             history.append(message_obj)

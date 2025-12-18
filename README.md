@@ -34,8 +34,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install Python dependencies
 make install-dev  # Installs with dev dependencies
 
-# Install JavaScript dependencies (optional, for frontend linting/formatting)
+# Install JavaScript dependencies (for TypeScript frontend)
 npm install
+npm run build  # Build TypeScript to JavaScript
 
 # Or install production only (without heavy ML libraries)
 make install

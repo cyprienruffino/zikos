@@ -70,3 +70,7 @@ coverage.xml
 # Node
 node_modules/
 package-lock.json
+
+# TypeScript
+static/app.js
+static/src/**/*.js

@@ -26,8 +26,14 @@ lint: ## Run linters (ruff + eslint)
 	ruff check src tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; fi
 
-lint-js: ## Run JavaScript linter (eslint)
-	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; else echo "npm not found or package.json missing, skipping JS lint"; fi
+lint-js: ## Run TypeScript linter (eslint)
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; else echo "npm not found or package.json missing, skipping TS lint"; fi
+
+build-js: ## Build TypeScript to JavaScript
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run build; else echo "npm not found or package.json missing, skipping TS build"; fi
+
+type-check-js: ## Run TypeScript type checker
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run type-check; else echo "npm not found or package.json missing, skipping TS type check"; fi
 
 format-check: ## Check code formatting (black + prettier)
 	black --check src tests
@@ -38,8 +44,8 @@ format: ## Format code (black + prettier)
 	ruff check --fix src tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; fi
 
-format-js: ## Format JavaScript code (prettier)
-	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; else echo "npm not found or package.json missing, skipping JS format"; fi
+format-js: ## Format TypeScript code (prettier)
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; else echo "npm not found or package.json missing, skipping TS format"; fi
 
 type-check: ## Run type checker (mypy)
 	mypy src

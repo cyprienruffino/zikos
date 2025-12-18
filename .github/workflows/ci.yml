@@ -36,11 +36,19 @@ jobs:
         run: |
           if [ -f package.json ]; then npm install; fi
 
+      - name: Build TypeScript
+        run: |
+          if [ -f package.json ]; then npm run build; fi
+
       - name: Run linters
         run: make lint
 
       - name: Check formatting
         run: make format-check
+
+      - name: Type check TypeScript
+        run: |
+          if [ -f package.json ]; then npm run type-check; fi
 
       - name: Run tests (unit tests only, excluding LLM-dependent tests)
         run: |
@@ -74,14 +82,22 @@ jobs:
           pip install -e ".[dev,ml]"
           if [ -f package.json ]; then npm install; fi
 
+      - name: Build TypeScript
+        run: |
+          if [ -f package.json ]; then npm run build; fi
+
       - name: Run linters
         run: make lint
 
       - name: Check formatting
         run: make format-check
 
-      - name: Type check
+      - name: Type check Python
         run: make type-check
+
+      - name: Type check TypeScript
+        run: |
+          if [ -f package.json ]; then npm run type-check; fi
 
       - name: Run tests with coverage
         run: make test-cov

@@ -34,7 +34,7 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
-        files: ^static/.*\.(js|html|css)$
+        files: ^static/.*\.(ts|html|css)$
 
   - repo: local
     hooks:
@@ -42,6 +42,12 @@ repos:
         name: eslint
         entry: bash -c 'if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; else exit 0; fi'
         language: system
-        files: ^static/.*\.js$
+        files: ^static/src/.*\.ts$
+        pass_filenames: false
+      - id: typescript-build
+        name: typescript build
+        entry: bash -c 'if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run build; else exit 0; fi'
+        language: system
+        files: ^static/src/.*\.ts$
         pass_filenames: false
 
