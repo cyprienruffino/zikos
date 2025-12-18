@@ -35,6 +35,9 @@ build-js: ## Build TypeScript to JavaScript
 type-check-js: ## Run TypeScript type checker
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run type-check; else echo "npm not found or package.json missing, skipping TS type check"; fi
 
+test-js: ## Run TypeScript tests
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run test; else echo "npm not found or package.json missing, skipping TS tests"; fi
+
 format-check: ## Check code formatting (black + prettier)
 	black --check src tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format:check; fi
@@ -65,4 +68,3 @@ requirements.txt: pyproject.toml ## Generate requirements.txt from pyproject.tom
 
 requirements-dev.txt: pyproject.toml ## Generate requirements-dev.txt
 	pip-compile pyproject.toml --extra=dev -o requirements-dev.txt
-

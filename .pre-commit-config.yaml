@@ -48,3 +48,9 @@ repos:
         language: system
         files: ^static/src/.*\.ts$
         pass_filenames: false
+      - id: typescript-test
+        name: typescript test
+        entry: bash -c 'if command -v npm >/dev/null 2>&1 && [ -f package.json ] && find static/src -name "*.test.ts" -o -name "*.spec.ts" | grep -q .; then npm run test; else exit 0; fi'
+        language: system
+        files: ^static/src/.*\.ts$
+        pass_filenames: false
