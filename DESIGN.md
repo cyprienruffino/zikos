@@ -57,7 +57,7 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 #### LLM
 - **Primary**: Llama 3.1 8B-Instruct or Llama 3.2 8B-Instruct
 - **Inference**: llama.cpp for efficient serving
-- **Conditioning**: 
+- **Conditioning**:
   - **POC**: Tool-based via MCP (LLM calls audio analysis tools)
   - **Future**: Direct embedding conditioning via cross-attention layer
 - **MIDI Generation**: LLM generates MIDI directly as text (validated via MCP tool)
@@ -85,7 +85,7 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 
 #### Phase 1: Tool-based (POC)
 - **Approach**: LLM acts as agent, uses MCP tools to interact with user and analyze audio
-- **Method**: 
+- **Method**:
   1. LLM requests audio recording via `request_audio_recording()` tool
   2. UI shows recording interface, user records audio
   3. Audio uploaded and stored, baseline tools automatically run (tempo, pitch, rhythm)
@@ -202,35 +202,29 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 
 ## Future Work / "Do Later"
 
-### Model Training
-- [ ] Fine-tune LLM adapter layer to accept CLAP embeddings directly
-- [ ] Train LoRA for music teaching domain
-- [ ] Fine-tune MIDI generation model for educational examples
-- [ ] Collect and curate training data for music teaching
+See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for comprehensive future features roadmap, including:
+- Source separation with SAM-Audio for learning from songs
+- Real-time processing capabilities
+- Multi-instrument support
+- Progress tracking and curriculum
+- Advanced model training
+- And more...
 
-### Real-Time Processing
-- [ ] Implement streaming audio processing
-- [ ] WebSocket-based real-time updates
-- [ ] Low-latency inference optimizations
-- [ ] Caching strategies for CLAP embeddings
+### Quick Reference
 
-### Enhanced Features
-- [ ] Text-to-speech for voice interaction
-- [ ] Multi-turn conversation with audio context retention
-- [ ] Progress tracking and personalized curriculum
-- [ ] Integration with music learning platforms
+**High Priority**:
+- [ ] SAM-Audio integration for source separation
+- [ ] Multi-instrument analysis support
+- [ ] Progress tracking system
+- [ ] Real-time processing
 
-### Evaluation & Metrics
-- [ ] Define evaluation metrics for teaching effectiveness
-- [ ] User feedback collection system
-- [ ] A/B testing framework for different conditioning approaches
-- [ ] Quantitative analysis of improvement suggestions
+**Medium Priority**:
+- [ ] CLAP embedding integration
+- [ ] Neural audio synthesis
+- [ ] Advanced technique detection
+- [ ] Personalized curriculum
 
-### Infrastructure
-- [ ] Optimize for resource-constrained environments
-- [ ] Model quantization and compression
-- [ ] Distributed inference setup
-- [ ] Monitoring and logging
+See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for detailed roadmap.
 
 ## Open Questions
 
@@ -266,4 +260,3 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 6. Build minimal web UI (chat + audio recording + playback + notation display)
 7. Wire LLM to MCP tools
 8. End-to-end integration and testing
-

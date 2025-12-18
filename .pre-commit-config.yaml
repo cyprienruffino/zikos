@@ -15,7 +15,6 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        language_version: python3.11
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.1.9
@@ -27,7 +26,6 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-all]
         args: [--ignore-missing-imports]
 
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -50,4 +48,3 @@ repos:
         language: system
         files: ^static/src/.*\.ts$
         pass_filenames: false
-

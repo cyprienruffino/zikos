@@ -107,16 +107,23 @@ zikos/
 │   ├── services/      # Business logic
 │   ├── config.py      # Configuration
 │   └── main.py        # FastAPI app
-├── DESIGN.md          # Architecture design
-├── TOOLS.md           # MCP tools specification
-├── SYSTEM_PROMPT.md   # LLM system prompt
+├── DESIGN.md              # Architecture design
+├── TOOLS.md               # MCP tools specification
+├── SYSTEM_PROMPT.md       # LLM system prompt
 ├── IMPLEMENTATION_NOTES.md  # Implementation details
-└── requirements.txt   # Python dependencies
+├── AUDIO_ANALYSIS_TOOLS.md # Comprehensive audio analysis tools catalog
+├── FUTURE_FEATURES.md     # Future features and roadmap
+└── requirements.txt       # Python dependencies
 ```
 
 ## Documentation
 
-See [DESIGN.md](./DESIGN.md) for detailed architecture, implementation decisions, and future work.
+- [DESIGN.md](./DESIGN.md) - Architecture design and implementation decisions
+- [AUDIO_ANALYSIS_TOOLS.md](./AUDIO_ANALYSIS_TOOLS.md) - Comprehensive catalog of audio analysis tools and techniques
+- [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) - Future features roadmap and planned enhancements
+- [TOOLS.md](./TOOLS.md) - MCP tools specification
+- [SYSTEM_PROMPT.md](./SYSTEM_PROMPT.md) - LLM system prompt
+- [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) - Implementation details
 
 ## Testing
 

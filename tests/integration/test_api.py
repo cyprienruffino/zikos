@@ -16,7 +16,11 @@ def test_root_endpoint(client):
     """Test root endpoint"""
     response = client.get("/")
     assert response.status_code == 200
-    assert "message" in response.json()
+    # Root endpoint serves HTML if index.html exists, otherwise JSON
+    if response.headers.get("content-type", "").startswith("text/html"):
+        assert b"<!doctype html>" in response.content or b"<html" in response.content
+    else:
+        assert "message" in response.json()
 
 
 def test_health_endpoint(client):
