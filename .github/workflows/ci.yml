@@ -27,11 +27,20 @@ jobs:
           # Install lightweight extras (includes all base deps except heavy ML libs)
           pip install -e ".[lightweight]"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install JavaScript dependencies
+        run: |
+          if [ -f package.json ]; then npm install; fi
+
       - name: Run linters
-        run: ruff check src tests
+        run: make lint
 
       - name: Check formatting
-        run: black --check src tests
+        run: make format-check
 
       - name: Run tests (unit tests only, excluding LLM-dependent tests)
         run: |
@@ -54,10 +63,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,ml]"
+          if [ -f package.json ]; then npm install; fi
 
       - name: Run linters
         run: make lint

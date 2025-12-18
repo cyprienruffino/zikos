@@ -24,10 +24,11 @@ class MidiService:
     async def synthesize(self, midi_file_id: str, instrument: str) -> str:
         """Synthesize MIDI to audio"""
         midi_path = self.storage_path / f"{midi_file_id}.mid"
-        audio_file_id = await self.midi_tools.midi_to_audio(
+        result = await self.midi_tools.midi_to_audio(
             str(midi_path),
             instrument,
         )
+        audio_file_id: str = result.get("audio_file_id", "")
         return audio_file_id
 
     async def render_notation(self, midi_file_id: str, format: str) -> dict[str, Any]:

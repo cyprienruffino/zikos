@@ -32,5 +32,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 await websocket.send_json(response)
 
+            elif data["type"] == "cancel_recording":
+                await websocket.send_json(
+                    {
+                        "type": "recording_cancelled",
+                        "recording_id": data.get("recording_id"),
+                    }
+                )
+
     except WebSocketDisconnect:
         await chat_service.disconnect(websocket)

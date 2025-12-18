@@ -31,11 +31,8 @@ class ChatService:
             self.mcp_server,
         )
 
-        return {
-            "type": "response",
-            "message": response,
-            "session_id": session_id,
-        }
+        response["session_id"] = session_id
+        return response
 
     async def handle_audio_ready(
         self,

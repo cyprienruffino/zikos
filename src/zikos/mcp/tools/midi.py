@@ -78,9 +78,9 @@ class MidiTools:
             "metadata": {},
         }
 
-    async def midi_to_audio(self, midi_file_id: str, instrument: str) -> str:
+    async def midi_to_audio(self, midi_file_id: str, instrument: str) -> dict[str, Any]:
         """Synthesize MIDI to audio"""
-        return "audio_file_id_placeholder"
+        return {"audio_file_id": "audio_file_id_placeholder"}
 
     async def midi_to_notation(self, midi_file_id: str, format: str) -> dict[str, Any]:
         """Render MIDI to notation"""

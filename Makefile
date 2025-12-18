@@ -22,15 +22,24 @@ test-cov: ## Run tests with coverage
 test-fast: ## Run tests without coverage (faster)
 	pytest --no-cov -x
 
-lint: ## Run linters (ruff)
+lint: ## Run linters (ruff + eslint)
 	ruff check src tests
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; fi
 
-format-check: ## Check code formatting (black)
+lint-js: ## Run JavaScript linter (eslint)
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; else echo "npm not found or package.json missing, skipping JS lint"; fi
+
+format-check: ## Check code formatting (black + prettier)
 	black --check src tests
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format:check; fi
 
-format: ## Format code (black)
+format: ## Format code (black + prettier)
 	black src tests
 	ruff check --fix src tests
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; fi
+
+format-js: ## Format JavaScript code (prettier)
+	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; else echo "npm not found or package.json missing, skipping JS format"; fi
 
 type-check: ## Run type checker (mypy)
 	mypy src

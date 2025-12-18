@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Zikos - AI Music Teacher</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+                    Cantarell, sans-serif;
+                background: #f5f5f5;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .header {
+                background: #2c3e50;
+                color: white;
+                padding: 1rem;
+                text-align: center;
+            }
+
+            .container {
+                flex: 1;
+                display: flex;
+                max-width: 1200px;
+                margin: 0 auto;
+                width: 100%;
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .chat-panel {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                overflow: hidden;
+            }
+
+            .messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 1rem;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .message {
+                padding: 0.75rem 1rem;
+                border-radius: 8px;
+                max-width: 80%;
+                word-wrap: break-word;
+            }
+
+            .message.user {
+                background: #3498db;
+                color: white;
+                align-self: flex-end;
+            }
+
+            .message.assistant {
+                background: #ecf0f1;
+                color: #2c3e50;
+                align-self: flex-start;
+            }
+
+            .message.error {
+                background: #e74c3c;
+                color: white;
+                align-self: center;
+            }
+
+            .input-area {
+                padding: 1rem;
+                border-top: 1px solid #ecf0f1;
+                display: flex;
+                gap: 0.5rem;
+            }
+
+            .input-area input {
+                flex: 1;
+                padding: 0.75rem;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 1rem;
+            }
+
+            .input-area button {
+                padding: 0.75rem 1.5rem;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 1rem;
+            }
+
+            .input-area button:hover {
+                background: #2980b9;
+            }
+
+            .input-area button:disabled {
+                background: #bdc3c7;
+                cursor: not-allowed;
+            }
+
+            .recording-widget {
+                background: #fff3cd;
+                border: 2px solid #ffc107;
+                border-radius: 8px;
+                padding: 1rem;
+                margin: 1rem;
+            }
+
+            .recording-widget h3 {
+                margin-bottom: 0.5rem;
+                color: #856404;
+            }
+
+            .recording-widget .prompt {
+                margin-bottom: 1rem;
+                color: #856404;
+            }
+
+            .recording-controls {
+                display: flex;
+                gap: 0.5rem;
+                align-items: center;
+            }
+
+            .recording-controls button {
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+
+            .recording-controls .record-btn {
+                background: #e74c3c;
+                color: white;
+            }
+
+            .recording-controls .record-btn:hover {
+                background: #c0392b;
+            }
+
+            .recording-controls .stop-btn {
+                background: #95a5a6;
+                color: white;
+            }
+
+            .recording-controls .send-btn {
+                background: #27ae60;
+                color: white;
+            }
+
+            .recording-controls .send-btn:hover {
+                background: #229954;
+            }
+
+            .recording-controls .send-btn:disabled {
+                background: #bdc3c7;
+                cursor: not-allowed;
+            }
+
+            .recording-status {
+                margin-left: 1rem;
+                color: #856404;
+                font-size: 0.9rem;
+            }
+
+            .recording-status.recording {
+                color: #e74c3c;
+                font-weight: bold;
+            }
+
+            .audio-player {
+                margin-top: 0.5rem;
+            }
+
+            .audio-player audio {
+                width: 100%;
+            }
+
+            .notation {
+                margin-top: 1rem;
+                text-align: center;
+            }
+
+            .notation img {
+                max-width: 100%;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+
+            .status {
+                padding: 0.5rem 1rem;
+                background: #ecf0f1;
+                text-align: center;
+                font-size: 0.9rem;
+                color: #7f8c8d;
+            }
+
+            .status.connected {
+                background: #d4edda;
+                color: #155724;
+            }
+
+            .status.disconnected {
+                background: #f8d7da;
+                color: #721c24;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Zikos - AI Music Teacher</h1>
+        </div>
+
+        <div class="status" id="status">Connecting...</div>
+
+        <div class="container">
+            <div class="chat-panel">
+                <div class="messages" id="messages"></div>
+                <div class="input-area">
+                    <input type="text" id="messageInput" placeholder="Type your message..." />
+                    <button id="sendButton">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const API_URL = window.location.origin;
+            const WS_URL = API_URL.replace("http", "ws") + "/api/chat/ws";
+
+            let ws = null;
+            let sessionId = null;
+            let currentRecording = null;
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let pendingRecordingId = null;
+
+            const statusEl = document.getElementById("status");
+            const messagesEl = document.getElementById("messages");
+            const messageInput = document.getElementById("messageInput");
+            const sendButton = document.getElementById("sendButton");
+
+            function updateStatus(text, className) {
+                statusEl.textContent = text;
+                statusEl.className = `status ${className}`;
+            }
+
+            function addMessage(text, type = "assistant", data = null) {
+                const messageEl = document.createElement("div");
+                messageEl.className = `message ${type}`;
+
+                const textEl = document.createElement("div");
+                textEl.textContent = text;
+                messageEl.appendChild(textEl);
+
+                if (data && data.audio_file_id) {
+                    const audioEl = document.createElement("div");
+                    audioEl.className = "audio-player";
+                    audioEl.innerHTML = `<audio controls src="${API_URL}/api/audio/${data.audio_file_id}"></audio>`;
+                    messageEl.appendChild(audioEl);
+                }
+
+                if (data && data.notation_url) {
+                    const notationEl = document.createElement("div");
+                    notationEl.className = "notation";
+                    notationEl.innerHTML = `<img src="${data.notation_url}" alt="Musical notation" />`;
+                    messageEl.appendChild(notationEl);
+                }
+
+                messagesEl.appendChild(messageEl);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            function addRecordingWidget(recordingId, prompt, maxDuration) {
+                const widgetEl = document.createElement("div");
+                widgetEl.className = "recording-widget";
+                widgetEl.id = `recording-${recordingId}`;
+                widgetEl.innerHTML = `
+                <h3>Recording Request</h3>
+                <div class="prompt">${prompt}</div>
+                <div class="recording-controls">
+                    <button class="record-btn" data-recording-id="${recordingId}">Record</button>
+                    <button class="stop-btn" data-recording-id="${recordingId}" style="display:none;">Stop</button>
+                    <button class="send-btn" data-recording-id="${recordingId}" disabled>Send</button>
+                    <button class="cancel-btn" data-recording-id="${recordingId}">Cancel</button>
+                    <span class="recording-status" id="status-${recordingId}"></span>
+                </div>
+                <div class="audio-player" id="player-${recordingId}"></div>
+            `;
+                messagesEl.appendChild(widgetEl);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+
+                widgetEl
+                    .querySelector(".record-btn")
+                    .addEventListener("click", () => startRecording(recordingId));
+                widgetEl
+                    .querySelector(".stop-btn")
+                    .addEventListener("click", () => stopRecording(recordingId));
+                widgetEl
+                    .querySelector(".send-btn")
+                    .addEventListener("click", () => sendRecording(recordingId));
+                widgetEl
+                    .querySelector(".cancel-btn")
+                    .addEventListener("click", () => cancelRecording(recordingId));
+            }
+
+            function removeRecordingWidget(recordingId) {
+                const widget = document.getElementById(`recording-${recordingId}`);
+                if (widget) {
+                    widget.remove();
+                }
+            }
+
+            async function startRecording(recordingId) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    currentRecording = recordingId;
+
+                    const widgetEl = document.getElementById(`recording-${recordingId}`);
+                    const statusEl = document.getElementById(`status-${recordingId}`);
+                    const recordBtn = widgetEl.querySelector(".record-btn");
+                    const stopBtn = widgetEl.querySelector(".stop-btn");
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const playerEl = document.getElementById(`player-${recordingId}`);
+                        playerEl.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+
+                        const sendBtn = widgetEl.querySelector(".send-btn");
+                        sendBtn.disabled = false;
+                        statusEl.textContent = "Recording complete";
+                        statusEl.className = "recording-status";
+                    };
+
+                    mediaRecorder.start();
+                    statusEl.textContent = "Recording...";
+                    statusEl.className = "recording-status recording";
+                    recordBtn.style.display = "none";
+                    stopBtn.style.display = "inline-block";
+                } catch (error) {
+                    addMessage(`Error accessing microphone: ${error.message}`, "error");
+                }
+            }
+
+            function stopRecording(recordingId) {
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                    mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+
+                    const widgetEl = document.getElementById(`recording-${recordingId}`);
+                    const stopBtn = widgetEl.querySelector(".stop-btn");
+                    const recordBtn = widgetEl.querySelector(".record-btn");
+
+                    recordBtn.style.display = "inline-block";
+                    stopBtn.style.display = "none";
+                }
+            }
+
+            async function sendRecording(recordingId) {
+                if (audioChunks.length === 0) {
+                    addMessage("No audio recorded", "error");
+                    return;
+                }
+
+                const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                const formData = new FormData();
+                formData.append("file", audioBlob, "recording.wav");
+                formData.append("recording_id", recordingId);
+
+                try {
+                    const response = await fetch(`${API_URL}/api/audio/upload`, {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Upload failed: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    removeRecordingWidget(recordingId);
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(
+                            JSON.stringify({
+                                type: "audio_ready",
+                                audio_file_id: data.audio_file_id,
+                                recording_id: recordingId,
+                                session_id: sessionId,
+                            })
+                        );
+                    }
+
+                    audioChunks = [];
+                    currentRecording = null;
+                    mediaRecorder = null;
+                } catch (error) {
+                    addMessage(`Error uploading audio: ${error.message}`, "error");
+                }
+            }
+
+            function cancelRecording(recordingId) {
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                    mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+                }
+                removeRecordingWidget(recordingId);
+                audioChunks = [];
+                currentRecording = null;
+                mediaRecorder = null;
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(
+                        JSON.stringify({
+                            type: "cancel_recording",
+                            recording_id: recordingId,
+                        })
+                    );
+                }
+            }
+
+            function connect() {
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    updateStatus("Connected", "connected");
+                    sendButton.disabled = false;
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+
+                    if (data.session_id) {
+                        sessionId = data.session_id;
+                    }
+
+                    if (data.type === "response") {
+                        addMessage(data.message, "assistant", data);
+                    } else if (
+                        data.type === "tool_call" &&
+                        data.tool_name === "request_audio_recording"
+                    ) {
+                        const args = data.arguments || {};
+                        addRecordingWidget(
+                            data.tool_id || `rec_${Date.now()}`,
+                            args.prompt || "Please record audio",
+                            args.max_duration || 60.0
+                        );
+                    } else if (data.type === "error") {
+                        addMessage(`Error: ${data.message}`, "error");
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    updateStatus("Connection error", "disconnected");
+                    console.error("WebSocket error:", error);
+                };
+
+                ws.onclose = () => {
+                    updateStatus("Disconnected", "disconnected");
+                    sendButton.disabled = true;
+                    setTimeout(connect, 3000);
+                };
+            }
+
+            sendButton.addEventListener("click", () => {
+                const message = messageInput.value.trim();
+                if (message && ws && ws.readyState === WebSocket.OPEN) {
+                    addMessage(message, "user");
+                    ws.send(
+                        JSON.stringify({
+                            type: "message",
+                            message: message,
+                            session_id: sessionId,
+                        })
+                    );
+                    messageInput.value = "";
+                }
+            });
+
+            messageInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    sendButton.click();
+                }
+            });
+
+            connect();
+        </script>
+    </body>
+</html>

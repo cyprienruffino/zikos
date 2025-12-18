@@ -31,8 +31,11 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install Python dependencies
 make install-dev  # Installs with dev dependencies
+
+# Install JavaScript dependencies (optional, for frontend linting/formatting)
+npm install
 
 # Or install production only (without heavy ML libraries)
 make install
@@ -57,8 +60,10 @@ make test-cov      # Run tests with coverage
 make test-fast     # Run tests without coverage (faster)
 
 # Code quality
-make lint          # Run ruff linter
-make format        # Format code with black
+make lint          # Run linters (ruff + eslint)
+make lint-js       # Run JavaScript linter only
+make format        # Format code (black + prettier)
+make format-js     # Format JavaScript code only
 make format-check  # Check formatting without changing files
 make type-check    # Run mypy type checker
 make check         # Run all checks (lint + format-check + type-check)

@@ -18,7 +18,7 @@ class AudioService:
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.analysis_tools = audio_tools_module.AudioAnalysisTools()
 
-    async def store_audio(self, file: UploadFile, recording_id: str = None) -> str:
+    async def store_audio(self, file: UploadFile, recording_id: str | None = None) -> str:
         """Store uploaded audio file"""
         audio_file_id = str(uuid.uuid4())
         file_path = self.storage_path / f"{audio_file_id}.wav"
