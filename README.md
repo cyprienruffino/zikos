@@ -34,8 +34,14 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 make install-dev  # Installs with dev dependencies
 
-# Or install production only
+# Or install production only (without heavy ML libraries)
 make install
+
+# Or install with ML libraries (for full functionality)
+pip install -e ".[ml]"
+
+# Or install everything
+pip install -e ".[dev,ml]"
 
 # Set environment variables
 cp .env.example .env

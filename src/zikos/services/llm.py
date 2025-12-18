@@ -1,6 +1,9 @@
 """LLM service"""
 
-from llama_cpp import Llama
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None  # type: ignore
 
 from src.zikos.config import settings
 from src.zikos.mcp.server import MCPServer
@@ -17,6 +20,8 @@ class LLMService:
 
     def _initialize_llm(self):
         """Initialize LLM"""
+        if Llama is None:
+            return
         if settings.llm_model_path:
             self.llm = Llama(
                 model_path=settings.llm_model_path,

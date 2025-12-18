@@ -7,12 +7,8 @@ dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "websockets>=12.0",
-    "llama-cpp-python>=0.2.0",
     "librosa>=0.10.0",
     "soundfile>=0.12.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
-    "transformers>=4.35.0",
     "music21>=9.0.0",
     "numpy>=1.24.0",
     "scipy>=1.11.0",
@@ -27,6 +23,14 @@ dependencies = [
 
 
 [project.optional-dependencies]
+# Heavy ML libraries (excluded from lightweight installs)
+ml = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "transformers>=4.35.0",
+    "llama-cpp-python>=0.2.0",
+]
+# Development tools
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
@@ -38,6 +42,16 @@ dev = [
     "mypy>=1.5.0",
     "pre-commit>=3.5.0",
     "pip-tools>=7.3.0",
+]
+# Lightweight dependencies for CI (base deps + dev tools, excludes heavy ML libraries)
+lightweight = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
 ]
 
 [build-system]
@@ -135,6 +149,7 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow running tests",
+    "lightweight: Tests that don't require heavy dependencies",
 ]
 asyncio_mode = "auto"
 

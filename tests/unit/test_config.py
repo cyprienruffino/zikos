@@ -13,6 +13,7 @@ def test_settings_defaults():
     assert settings.api_reload is False
 
 
+@pytest.mark.lightweight
 def test_settings_from_env():
     """Test settings from environment variables"""
     os.environ["API_PORT"] = "9000"
