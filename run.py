@@ -2,6 +2,7 @@
 """Run the application"""
 
 import uvicorn
+
 from src.zikos.config import settings
 
 if __name__ == "__main__":
@@ -11,4 +12,3 @@ if __name__ == "__main__":
         port=settings.api_port,
         reload=settings.api_reload,
     )
-

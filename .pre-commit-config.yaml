@@ -54,3 +54,10 @@ repos:
         language: system
         files: ^static/src/.*\.ts$
         pass_filenames: false
+      - id: pytest-unit
+        name: pytest unit tests with coverage
+        entry: bash -c 'PYTEST_CMD=""; if [ -f .venv/bin/pytest ]; then PYTEST_CMD=".venv/bin/pytest"; elif [ -f venv/bin/pytest ]; then PYTEST_CMD="venv/bin/pytest"; elif [ -n "$VIRTUAL_ENV" ]; then PYTEST_CMD="$VIRTUAL_ENV/bin/pytest"; else PYTEST_CMD="pytest"; fi; $PYTEST_CMD tests/unit/ -v -m "not expensive and not llama" -x --cov=src/zikos --cov-report=term-missing --cov-fail-under=75 || exit 1'
+        language: system
+        files: ^(src/|tests/).*\.py$
+        pass_filenames: false
+        always_run: false

@@ -179,4 +179,3 @@ Track 1:
 3. **MIDI Parser**: Need to implement parser for simplified format → standard MIDI conversion
 4. **Audio Storage**: Local filesystem vs object storage for POC? (Decision: Local filesystem for POC)
 5. **Tool Schema Definition**: How to define tool schemas for llama-cpp-python function calling?
-

@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import UploadFile
 
 from src.zikos.config import settings
-from src.zikos.mcp.tools import audio as audio_tools_module
+from src.zikos.mcp.tools.audio import AudioAnalysisTools
 
 
 class AudioService:
@@ -16,7 +16,7 @@ class AudioService:
     def __init__(self):
         self.storage_path = Path(settings.audio_storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        self.analysis_tools = audio_tools_module.AudioAnalysisTools()
+        self.analysis_tools = AudioAnalysisTools()
 
     async def store_audio(self, file: UploadFile, recording_id: str | None = None) -> str:
         """Store uploaded audio file"""
@@ -31,11 +31,9 @@ class AudioService:
 
     async def run_baseline_analysis(self, audio_file_id: str) -> dict[str, Any]:
         """Run baseline analysis tools"""
-        file_path = self.storage_path / f"{audio_file_id}.wav"
-
-        tempo_result = await self.analysis_tools.analyze_tempo(str(file_path))
-        pitch_result = await self.analysis_tools.detect_pitch(str(file_path))
-        rhythm_result = await self.analysis_tools.analyze_rhythm(str(file_path))
+        tempo_result = await self.analysis_tools.analyze_tempo(audio_file_id)
+        pitch_result = await self.analysis_tools.detect_pitch(audio_file_id)
+        rhythm_result = await self.analysis_tools.analyze_rhythm(audio_file_id)
 
         return {
             "tempo": tempo_result,
@@ -45,12 +43,7 @@ class AudioService:
 
     async def get_audio_info(self, audio_file_id: str) -> dict[str, Any]:
         """Get audio file information"""
-        file_path = self.storage_path / f"{audio_file_id}.wav"
-
-        if not file_path.exists():
-            raise FileNotFoundError(f"Audio file {audio_file_id} not found")
-
-        return await self.analysis_tools.get_audio_info(str(file_path))
+        return await self.analysis_tools.get_audio_info(audio_file_id)
 
     async def get_audio_path(self, audio_file_id: str) -> Path:
         """Get audio file path"""

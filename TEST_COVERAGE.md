@@ -103,4 +103,3 @@ Target coverage: **80%+** (as per project requirements)
 - Integration tests for full flows are missing
 - Mocking strategy needed for LLM calls (llama-cpp-python)
 - WebSocket testing requires async test client setup
-

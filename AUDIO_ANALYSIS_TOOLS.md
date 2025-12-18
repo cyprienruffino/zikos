@@ -7,8 +7,45 @@ This document catalogs all signal processing and music analysis tools available 
 - **Instrument-Agnostic Core**: Most tools work across instruments, with instrument-specific extensions
 - **Multi-Granularity**: Analysis at note-level, phrase-level, and overall performance
 - **Structured Output**: All tools return JSON-serializable data that LLMs can reason about
+- **LLM-Interpretable**: All outputs must be designed for LLM interpretation with clear musical meaning
 - **Composable**: Tools can be combined for deeper insights
 - **Extensible**: Easy to add new analysis dimensions
+
+## LLM-Interpretability Requirements
+
+All tool outputs must be designed for LLM interpretation. This means:
+
+1. **Musical Context**: Metrics should have clear musical meaning, not just raw numbers
+   - ✅ Good: `"timing_accuracy": 0.87` with interpretation guidelines (0.80-0.90 = "Good")
+   - ❌ Bad: Raw FFT coefficients or uninterpreted signal processing values
+
+2. **Structured Scores**: Use normalized scores (0.0-1.0) where possible for consistency
+   - Scores should be intuitive: higher = better (or clearly documented if inverted)
+   - Provide reference ranges in documentation (Excellent/Good/Needs Work/Poor)
+
+3. **Descriptive Fields**: Include both quantitative metrics and qualitative descriptions
+   - ✅ Good: `{"bpm": 120.5, "is_steady": true, "tempo_stability_score": 0.91}`
+   - ❌ Bad: `{"tempo": 120.5}` without context
+
+4. **Severity Indicators**: When identifying issues, include severity levels
+   - ✅ Good: `{"deviation_ms": -15, "severity": "minor"}`
+   - ❌ Bad: `{"deviation_ms": -15}` without context
+
+5. **Time References**: Include precise time references for issues
+   - ✅ Good: `{"time": 2.3, "issue": "wrong_note", "expected": "E4", "played": "F4"}`
+   - ❌ Bad: `{"issue": "wrong_note"}` without location
+
+6. **Comparative Context**: When possible, include what "good" looks like
+   - ✅ Good: `{"intonation_accuracy": 0.68, "reference_range": {"excellent": ">0.90", "good": "0.80-0.90"}}`
+   - ❌ Bad: `{"intonation_accuracy": 0.68}` without context
+
+7. **Musical Terminology**: Use standard musical terms that LLMs understand
+   - ✅ Good: `"pitch": "C4", "chord": "Cmaj", "key": "C major"`
+   - ❌ Bad: `"frequency": 261.63` without note name (include both if needed)
+
+8. **Error Handling**: Return structured errors that LLMs can reason about
+   - ✅ Good: `{"error": true, "error_type": "TOO_SHORT", "message": "Audio is too short (minimum 0.5 seconds required)"}`
+   - ❌ Bad: Generic exceptions or unclear error messages
 
 ---
 
@@ -906,3 +943,17 @@ LLM calls these based on context:
 - Tools should validate audio quality (duration, sample rate, etc.)
 - Consider caching intermediate results for efficiency
 - Design for batch processing (POC), but keep architecture flexible for future streaming
+
+## LLM-Interpretability Checklist
+
+When implementing or designing new tools, ensure:
+
+- [ ] Outputs use normalized scores (0.0-1.0) where applicable
+- [ ] Musical terminology is used (note names, chord names, keys)
+- [ ] Time references are included for all issues/events
+- [ ] Severity levels are provided for problems
+- [ ] Reference ranges or interpretation guidelines are documented
+- [ ] Both quantitative metrics and qualitative descriptions are included
+- [ ] Errors are structured and LLM-readable
+- [ ] Outputs are JSON-serializable and well-structured
+- [ ] Field names are descriptive and musically meaningful

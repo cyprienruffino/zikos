@@ -1,5 +1,18 @@
 # MCP Tools Specification
 
+## Tool Output Design Principles
+
+All tools must return **LLM-interpretable** structured data. This means:
+
+1. **Musical Context**: Metrics have clear musical meaning
+2. **Normalized Scores**: Use 0.0-1.0 scores where applicable (higher = better)
+3. **Musical Terminology**: Use note names, chord names, keys (not just frequencies)
+4. **Time References**: Include precise time locations for all events/issues
+5. **Severity Indicators**: Include severity levels for problems
+6. **Reference Ranges**: Document what "good" looks like (see SYSTEM_PROMPT.md)
+
+See [AUDIO_ANALYSIS_TOOLS.md](./AUDIO_ANALYSIS_TOOLS.md) for detailed LLM-interpretability requirements.
+
 ## Tool Categories
 
 ### Baseline Tools (Always Run)
@@ -349,4 +362,3 @@ Tools should provide metadata for LLM discovery:
 - Required parameters
 - Return type schema
 - Example usage
-

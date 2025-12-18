@@ -79,6 +79,14 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 - **MIDI**: Generate MIDI (LLM), validate MIDI syntax, synthesize to audio, render notation
 - **Utility**: Audio info, segmentation
 
+**Tool Output Requirements**: All analysis tools must return LLM-interpretable structured data:
+- Normalized scores (0.0-1.0) where applicable
+- Musical terminology (note names, chords, keys)
+- Time references for all events/issues
+- Severity indicators for problems
+- Clear musical meaning (not raw signal processing values)
+- See [AUDIO_ANALYSIS_TOOLS.md](./AUDIO_ANALYSIS_TOOLS.md) for detailed requirements
+
 ## Implementation Decisions
 
 ### Conditioning Strategy
@@ -101,6 +109,8 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 - Interpretable (can see which tools LLM calls)
 - Flexible (LLM decides what to analyze)
 - No training required
+- Tool outputs are designed for LLM interpretation (see [AUDIO_ANALYSIS_TOOLS.md](./AUDIO_ANALYSIS_TOOLS.md))
+- System prompt includes metric interpretation guidelines (see [SYSTEM_PROMPT.md](./SYSTEM_PROMPT.md))
 
 #### Phase 2: Embedding-based (Future)
 - **Approach**: Direct CLAP embedding conditioning via cross-attention

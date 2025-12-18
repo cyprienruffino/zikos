@@ -37,6 +37,7 @@ dev = [
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.12.0",
     "pytest-xdist>=3.5.0",
+    "httpx>=0.24.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
@@ -154,11 +155,14 @@ addopts = [
     "--cov-report=xml",
     "--cov-fail-under=80",
     "-v",
+    "-m", "not expensive and not llama",
 ]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow running tests",
+    "expensive: Computationally expensive tests (e.g., LLM inference)",
+    "llama: Tests that require llama-cpp-python and model files",
     "lightweight: Tests that don't require heavy dependencies",
 ]
 asyncio_mode = "auto"
@@ -182,4 +186,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
-

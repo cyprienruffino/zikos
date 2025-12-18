@@ -3,21 +3,19 @@
 from typing import Any
 
 from src.zikos.mcp.tools import (
-    audio as audio_tools,
-)
-from src.zikos.mcp.tools import (
     midi as midi_tools,
 )
 from src.zikos.mcp.tools import (
     recording as recording_tools,
 )
+from src.zikos.mcp.tools.audio import AudioAnalysisTools
 
 
 class MCPServer:
     """MCP server for tool management"""
 
     def __init__(self):
-        self.audio_tools = audio_tools.AudioAnalysisTools()
+        self.audio_tools = AudioAnalysisTools()
         self.midi_tools = midi_tools.MidiTools()
         self.recording_tools = recording_tools.RecordingTools()
 
@@ -33,7 +31,17 @@ class MCPServer:
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
         """Call a tool by name"""
-        if tool_name.startswith("audio_"):
+        audio_tool_names = [
+            "analyze_tempo",
+            "detect_pitch",
+            "analyze_rhythm",
+            "analyze_dynamics",
+            "analyze_articulation",
+            "analyze_timbre",
+            "detect_key",
+            "detect_chords",
+        ]
+        if tool_name in audio_tool_names:
             return await self.audio_tools.call_tool(tool_name, **kwargs)
         elif tool_name.startswith("midi_"):
             return await self.midi_tools.call_tool(tool_name, **kwargs)

@@ -17,11 +17,12 @@ async def test_analyze_tempo(temp_dir, sample_audio_path):
     tools = AudioAnalysisTools()
 
     with patch("librosa.load") as mock_load:
-        mock_load.return_value = ([0.0] * 1000, 22050)
+        # Generate 2 seconds of audio at 22050 Hz (enough to pass duration check)
+        mock_load.return_value = ([0.0] * 44100, 22050)
         with patch("librosa.beat.beat_track") as mock_beat:
-            mock_beat.return_value = (120.0, [0, 100, 200])
+            mock_beat.return_value = (120.0, [0, 5512, 11025])
 
-            result = await tools.analyze_tempo(str(sample_audio_path))
+            result = await tools.analyze_tempo(audio_path=str(sample_audio_path))
 
             assert "bpm" in result
             assert result["bpm"] == 120.0
