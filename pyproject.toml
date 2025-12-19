@@ -67,6 +67,12 @@ lightweight = [
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["zikos"]
+
+[tool.setuptools.package-dir]
+"" = "backend"
+
 [tool.black]
 line-length = 100
 target-version = ['py311']
