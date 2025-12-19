@@ -408,7 +408,9 @@ These tools are automatically called for every audio submission to provide funda
 #### `get_audio_info(audio_file_id: str) -> dict`
 **Purpose**: Get basic audio file metadata
 
-**Returns**:
+**Status**: ⚠️ **Not exposed as MCP tool** - Implemented internally but not available to LLM
+
+**Returns** (when exposed):
 ```json
 {
   "duration": 10.5,

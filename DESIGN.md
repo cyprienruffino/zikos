@@ -4,7 +4,7 @@
 
 A proof-of-concept AI music teacher that combines:
 - **LLM chat interaction** for personalized, conversational teaching
-- **Audio input analysis** using CLAP embeddings and signal processing
+- **Audio input analysis** using signal processing tools (librosa, soundfile)
 - **Intelligent agent behavior** to diagnose issues and suggest exercises
 - **MIDI generation + synthesis** for audio examples and visual notation (sheet music/tabs)
 
@@ -47,12 +47,11 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 ### Technology Stack
 
 #### Backend
-- **FastAPI**: Web framework with WebSocket support for future real-time features
-- **PyTorch**: For CLAP model inference
-- **Transformers**: CLAP model loading (`laion/clap-htsat-fused`)
+- **FastAPI**: Web framework with WebSocket support
 - **librosa**: Audio analysis (tempo, pitch, onset detection, chroma, MFCCs)
-- **torchaudio**: PyTorch-native audio I/O and processing
 - **soundfile**: Audio file I/O (WAV, FLAC)
+- **music21**: MIDI processing and notation rendering
+- **pyfluidsynth**: MIDI to audio synthesis
 
 #### LLM
 - **Primary**: Llama 3.1 8B-Instruct or Llama 3.2 8B-Instruct
@@ -68,16 +67,16 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 - **Notation Rendering**: Music21 for backend rendering, VexFlow for frontend display
 
 #### Frontend
-- **React/Vue**: Web UI framework
+- **TypeScript**: Frontend language
 - **Web Audio API**: Audio recording and playback
-- **WebSocket**: For future real-time updates (batch for POC)
+- **WebSocket**: Real-time communication with backend
 
 #### MCP Tools
 - **Audio Recording**: `request_audio_recording()` - LLM requests user to record audio
 - **Audio Analysis**: Tempo, pitch, rhythm, key, chords, timbre, dynamics, articulation
-- **Comparison**: Compare two audios, compare to reference
-- **MIDI**: Generate MIDI (LLM), validate MIDI syntax, synthesize to audio, render notation
-- **Utility**: Audio info, segmentation
+- **Comparison**: Compare two audios, compare to reference (scale, MIDI file)
+- **MIDI**: Validate MIDI syntax, synthesize to audio, render notation
+- **Widgets**: Metronome, tuner, chord progression, tempo trainer, ear trainer, practice timer
 
 **Tool Output Requirements**: All analysis tools must return LLM-interpretable structured data:
 - Normalized scores (0.0-1.0) where applicable
@@ -140,14 +139,16 @@ Optional: MIDI Generation → Synthesize audio examples + generate notation
 **Purpose**: Extract musical features from audio input
 
 **Tools**:
-- `analyze_tempo(audio) → float` - BPM detection
-- `detect_pitch(audio) → List[Note]` - Note-by-note pitch analysis
-- `analyze_rhythm(audio) → RhythmAnalysis` - Onset detection, timing accuracy
-- `detect_key(audio) → Key` - Musical key detection
-- `detect_chords(audio) → List[Chord]` - Chord progression analysis
-- `segment_phrases(audio) → List[Segment]` - Musical phrase boundaries
-- `analyze_timbre(audio) → TimbreFeatures` - Spectral characteristics
-- `find_similar_audio(audio, database) → List[SimilarAudio]` - CLAP-based similarity
+- `analyze_tempo(audio_file_id)` - BPM detection and tempo stability
+- `detect_pitch(audio_file_id)` - Note-by-note pitch analysis and intonation
+- `analyze_rhythm(audio_file_id)` - Onset detection, timing accuracy
+- `detect_key(audio_file_id)` - Musical key detection
+- `detect_chords(audio_file_id)` - Chord progression analysis
+- `analyze_timbre(audio_file_id)` - Spectral characteristics
+- `analyze_dynamics(audio_file_id)` - Volume and dynamic range analysis
+- `analyze_articulation(audio_file_id)` - Staccato, legato, accents
+- `compare_audio(audio_file_id_1, audio_file_id_2)` - Compare two recordings
+- `compare_to_reference(audio_file_id, reference_type, reference_params)` - Compare to scale or MIDI reference
 
 **Implementation**: Python service exposing MCP-compatible endpoints
 
@@ -236,13 +237,25 @@ See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for comprehensive future features
 
 See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for detailed roadmap.
 
-## Open Questions
+## Implementation Status
 
-1. **MIDI Format**: What MIDI format should LLM generate? (Standard MIDI file format, MusicXML, or simplified text format?)
-2. **MIDI Validation**: How strict should validation be? Accept partial/incomplete MIDI?
-3. **Audio Recording UX**: How to handle recording state in UI? Show recording button when tool is called?
-4. **Tool Call Format**: How should LLM format tool calls? JSON? Function calling format?
-5. **Evaluation Strategy**: How to measure POC success before retraining?
+### ✅ Completed
+- Project structure and MCP server implementation
+- Audio analysis tools (tempo, pitch, rhythm, key, chords, timbre, dynamics, articulation)
+- Audio recording tool with WebSocket integration
+- MIDI validation, synthesis, and notation rendering
+- LLM service with function calling support
+- Web UI with chat, audio recording, and widget support
+- Widget tools (metronome, tuner, chord progression, tempo trainer, ear trainer, practice timer)
+- Comparison tools (compare_audio, compare_to_reference)
+- End-to-end integration and testing
+
+### 🔄 Future Enhancements
+See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for planned features including:
+- CLAP embedding integration for direct audio understanding
+- Real-time streaming analysis
+- Multi-instrument support
+- Progress tracking and curriculum
 
 ## Potential Challenges
 
@@ -254,19 +267,21 @@ See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for detailed roadmap.
 
 ## Success Criteria (POC)
 
-- [ ] System can accept audio input and generate relevant feedback
-- [ ] LLM responses are contextually appropriate to audio analysis
-- [ ] MIDI generation produces usable musical examples
-- [ ] UI allows smooth interaction flow
-- [ ] System demonstrates personalized teaching behavior
+- [x] System can accept audio input and generate relevant feedback
+- [x] LLM responses are contextually appropriate to audio analysis
+- [x] MIDI generation produces usable musical examples
+- [x] UI allows smooth interaction flow
+- [x] System demonstrates personalized teaching behavior
 
-## Next Steps
+## Current Status
 
-1. Set up project structure
-2. Implement MCP server with audio analysis tools
-3. Implement audio recording tool (`request_audio_recording`)
-4. Set up LLM service (llama.cpp) with system prompt
-5. Implement MIDI validation, synthesis, and notation rendering tools
-6. Build minimal web UI (chat + audio recording + playback + notation display)
-7. Wire LLM to MCP tools
-8. End-to-end integration and testing
+The POC is functional with all core features implemented:
+- ✅ MCP server with comprehensive audio analysis tools
+- ✅ LLM service with function calling (llama-cpp-python)
+- ✅ Audio recording and baseline analysis
+- ✅ MIDI generation, validation, synthesis, and notation rendering
+- ✅ Interactive practice widgets
+- ✅ Web UI with chat, recording, and widget support
+- ✅ Comprehensive test coverage (80%+)
+
+See [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) for planned enhancements.

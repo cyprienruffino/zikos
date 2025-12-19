@@ -157,7 +157,6 @@ zikos/
 ├── DESIGN.md           # Architecture design
 ├── TOOLS.md            # MCP tools specification
 ├── SYSTEM_PROMPT.md    # LLM system prompt
-├── IMPLEMENTATION_NOTES.md  # Implementation details
 ├── AUDIO_ANALYSIS_TOOLS.md # Comprehensive audio analysis tools catalog
 ├── FUTURE_FEATURES.md  # Future features and roadmap
 └── requirements.txt    # Python dependencies
@@ -170,7 +169,6 @@ zikos/
 - [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) - Future features roadmap and planned enhancements
 - [TOOLS.md](./TOOLS.md) - MCP tools specification
 - [SYSTEM_PROMPT.md](./SYSTEM_PROMPT.md) - LLM system prompt
-- [IMPLEMENTATION_NOTES.md](./IMPLEMENTATION_NOTES.md) - Implementation details
 
 ## Testing
 
