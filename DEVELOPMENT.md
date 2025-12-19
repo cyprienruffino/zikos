@@ -276,7 +276,7 @@ pip install -e ".[dev]"
 
 ```bash
 # Check specific file
-mypy src/zikos/config.py
+mypy backend/zikos/config.py
 
 # Ignore missing imports (for external packages)
 # Already configured in pyproject.toml
@@ -286,7 +286,7 @@ mypy src/zikos/config.py
 
 ```bash
 # See what's not covered
-pytest --cov=src/zikos --cov-report=term-missing
+pytest --cov=backend/zikos --cov-report=term-missing
 
 # Focus on uncovered lines
 ```

@@ -133,7 +133,7 @@ python run.py
 Or with uvicorn directly:
 
 ```bash
-uvicorn src.zikos.main:app --reload
+uvicorn zikos.main:app --reload --app-dir backend
 ```
 
 API will be available at `http://localhost:8000`
