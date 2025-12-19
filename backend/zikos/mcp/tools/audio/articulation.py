@@ -86,11 +86,32 @@ async def analyze_articulation(audio_path: str) -> dict[str, Any]:
         articulation_consistency = float(1.0 / (1.0 + duration_std))
         articulation_consistency = max(0.0, min(1.0, articulation_consistency))
 
+        accents = []
+        mean_duration = float(np.mean(note_durations))
+        for i, onset_time in enumerate(onset_times[:-1]):
+            if i < len(onset_times) - 1:
+                start_sample = int(onset_time * sr)
+                end_sample = int(onset_times[i + 1] * sr)
+                segment = y[start_sample:end_sample]
+                if len(segment) > 0:
+                    max_amp = float(np.max(np.abs(segment)))
+                    relative_loudness = max_amp / (np.max(np.abs(y)) + 1e-10)
+                    if relative_loudness > 1.2 * mean_duration:
+                        intensity = min(1.0, relative_loudness)
+                        accents.append(
+                            {
+                                "time": float(onset_time),
+                                "intensity": float(intensity),
+                                "relative_loudness": float(relative_loudness),
+                            }
+                        )
+
         return {
             "articulation_types": articulation_types,
             "legato_percentage": float(legato_percentage),
             "staccato_percentage": float(staccato_percentage),
             "articulation_consistency": articulation_consistency,
+            "accents": accents,
         }
     except FileNotFoundError:
         return {

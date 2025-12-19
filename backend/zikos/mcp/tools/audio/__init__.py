@@ -3,6 +3,7 @@
 from zikos.mcp.tools.audio import (
     articulation,
     chords,
+    comparison,
     dynamics,
     key,
     pitch,

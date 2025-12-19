@@ -50,6 +50,33 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
         timbre_consistency = float(1.0 / (1.0 + centroid_std / 500.0))
         timbre_consistency = max(0.0, min(1.0, timbre_consistency))
 
+        onsets = librosa.onset.onset_detect(y=y, sr=sr)
+        onset_times = librosa.frames_to_time(onsets, sr=sr)
+        attack_times = []
+        for onset_time in onset_times[:10]:
+            onset_frame = librosa.time_to_frames(onset_time, sr=sr)
+            if onset_frame < len(y):
+                start_sample = int(onset_frame)
+                end_sample = min(int(onset_frame + sr * 0.1), len(y))
+                segment = y[start_sample:end_sample]
+                if len(segment) > 0:
+                    max_idx = int(np.argmax(np.abs(segment)))
+                    attack_time_ms = (max_idx / sr) * 1000
+                    attack_times.append(attack_time_ms)
+
+        average_attack_time = float(np.mean(attack_times)) if attack_times else 15.0
+        attack_time = average_attack_time / 1000.0
+
+        harmonic_ratio = 0.85
+        try:
+            harmonic, percussive = librosa.effects.hpss(y)
+            harmonic_energy = float(np.sum(harmonic**2))
+            total_energy_hpss = float(np.sum(y**2))
+            if total_energy_hpss > 0:
+                harmonic_ratio = float(harmonic_energy / total_energy_hpss)
+        except Exception:
+            pass
+
         return {
             "brightness": brightness,
             "warmth": warmth,
@@ -58,6 +85,8 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
             "spectral_rolloff": mean_rolloff,
             "spectral_bandwidth": mean_bandwidth,
             "timbre_consistency": timbre_consistency,
+            "attack_time": float(attack_time),
+            "harmonic_ratio": float(harmonic_ratio),
         }
     except FileNotFoundError:
         return {

@@ -5,6 +5,7 @@ from typing import Any
 from zikos.mcp.tools.audio import (
     articulation,
     chords,
+    comparison,
     dynamics,
     key,
     pitch,
@@ -133,10 +134,102 @@ class AudioAnalysisTools:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "compare_audio",
+                    "description": "Compare two audio recordings",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id_1": {"type": "string"},
+                            "audio_file_id_2": {"type": "string"},
+                            "comparison_type": {
+                                "type": "string",
+                                "enum": ["rhythm", "pitch", "tempo", "overall"],
+                                "default": "overall",
+                            },
+                        },
+                        "required": ["audio_file_id_1", "audio_file_id_2"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "compare_to_reference",
+                    "description": "Compare audio to a reference (scale, exercise, MIDI file)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                            "reference_type": {
+                                "type": "string",
+                                "enum": ["scale", "exercise", "midi_file"],
+                            },
+                            "reference_params": {
+                                "type": "object",
+                                "description": "Parameters for reference (e.g., {'scale': 'C major', 'tempo': 120} or {'midi_file_id': 'midi_123'})",
+                            },
+                        },
+                        "required": ["audio_file_id", "reference_type"],
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
         """Call a tool"""
+        if tool_name == "compare_audio":
+            audio_file_id_1 = kwargs.get("audio_file_id_1")
+            audio_file_id_2 = kwargs.get("audio_file_id_2")
+            comparison_type = kwargs.get("comparison_type", "overall")
+
+            if not audio_file_id_1 or not audio_file_id_2:
+                return {
+                    "error": True,
+                    "error_type": "MISSING_PARAMETER",
+                    "message": "audio_file_id_1 and audio_file_id_2 are required",
+                }
+
+            try:
+                path_1 = str(resolve_audio_path(audio_file_id_1))
+                path_2 = str(resolve_audio_path(audio_file_id_2))
+            except FileNotFoundError as e:
+                return {
+                    "error": True,
+                    "error_type": "FILE_NOT_FOUND",
+                    "message": str(e),
+                }
+
+            result = await comparison.compare_audio(path_1, path_2, comparison_type)
+            return dict(result)
+        elif tool_name == "compare_to_reference":
+            audio_file_id = kwargs.get("audio_file_id")
+            reference_type = kwargs.get("reference_type")
+            reference_params = kwargs.get("reference_params")
+
+            if not audio_file_id or not reference_type:
+                return {
+                    "error": True,
+                    "error_type": "MISSING_PARAMETER",
+                    "message": "audio_file_id and reference_type are required",
+                }
+
+            try:
+                resolved_path = str(resolve_audio_path(audio_file_id))
+            except FileNotFoundError as e:
+                return {
+                    "error": True,
+                    "error_type": "FILE_NOT_FOUND",
+                    "message": str(e),
+                }
+
+            result = await comparison.compare_to_reference(
+                resolved_path, reference_type, reference_params
+            )
+            return dict(result)
+
         audio_file_id = kwargs.get("audio_file_id")
         audio_path = kwargs.get("audio_path")
 

@@ -70,6 +70,8 @@ class MCPServer:
             "analyze_timbre",
             "detect_key",
             "detect_chords",
+            "compare_audio",
+            "compare_to_reference",
         ]
         if tool_name in audio_tool_names:
             result = await self.audio_tools.call_tool(tool_name, **kwargs)

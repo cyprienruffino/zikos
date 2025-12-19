@@ -25,12 +25,15 @@ These tools are automatically called for every audio submission to provide funda
 ```json
 {
   "bpm": 120.5,
-  "confidence": 0.92,
+  "confidence": 0.9,
   "is_steady": true,
+  "tempo_stability_score": 0.91,
   "tempo_changes": [
-    {"time": 0.0, "bpm": 120.0},
-    {"time": 15.3, "bpm": 121.2}
-  ]
+    {"time": 0.0, "bpm": 120.0, "confidence": 0.9},
+    {"time": 15.3, "bpm": 121.2, "confidence": 0.9}
+  ],
+  "rushing_detected": false,
+  "dragging_detected": false
 }
 ```
 
@@ -41,12 +44,28 @@ These tools are automatically called for every audio submission to provide funda
 ```json
 {
   "notes": [
-    {"time": 0.0, "duration": 0.5, "pitch": "C4", "frequency": 261.63, "confidence": 0.95},
-    {"time": 0.5, "duration": 0.5, "pitch": "D4", "frequency": 293.66, "confidence": 0.92}
+    {
+      "start_time": 0.0,
+      "end_time": 0.5,
+      "duration": 0.5,
+      "pitch": "C4",
+      "frequency": 261.63,
+      "confidence": 0.95
+    },
+    {
+      "start_time": 0.5,
+      "end_time": 1.0,
+      "duration": 0.5,
+      "pitch": "D4",
+      "frequency": 293.66,
+      "confidence": 0.92
+    }
   ],
   "intonation_accuracy": 0.88,
   "pitch_stability": 0.91,
-  "detected_key": "C major"
+  "detected_key": "C major",
+  "sharp_tendency": 0.12,
+  "flat_tendency": 0.08
 }
 ```
 
@@ -61,11 +80,14 @@ These tools are automatically called for every audio submission to provide funda
     {"time": 0.5, "confidence": 0.91}
   ],
   "timing_accuracy": 0.87,
-  "rhythmic_pattern": "quarter, quarter, half",
+  "rhythmic_pattern": "regular",
   "is_on_beat": true,
   "beat_deviations": [
-    {"time": 2.3, "deviation_ms": -15}
-  ]
+    {"time": 2.3, "deviation_ms": -15, "severity": "minor"}
+  ],
+  "average_deviation_ms": -8.5,
+  "rushing_tendency": 0.12,
+  "dragging_tendency": 0.08
 }
 ```
 
@@ -106,8 +128,12 @@ These tools are automatically called for every audio submission to provide funda
 {
   "brightness": 0.72,
   "warmth": 0.65,
-  "attack_time": 0.15,
+  "sharpness": 0.58,
   "spectral_centroid": 2500.0,
+  "spectral_rolloff": 5000.0,
+  "spectral_bandwidth": 1500.0,
+  "timbre_consistency": 0.84,
+  "attack_time": 0.015,
   "harmonic_ratio": 0.85
 }
 ```
@@ -115,7 +141,9 @@ These tools are automatically called for every audio submission to provide funda
 #### `segment_phrases(audio_file_id: str) -> dict`
 **Purpose**: Detect musical phrase boundaries
 
-**Returns**:
+**Status**: ⚠️ **Not yet implemented** - Documented for future use
+
+**Returns** (when implemented):
 ```json
 {
   "phrases": [
@@ -132,16 +160,27 @@ These tools are automatically called for every audio submission to provide funda
 **Returns**:
 ```json
 {
+  "average_rms": -12.5,
   "average_loudness": -12.5,
+  "peak_amplitude": -8.1,
+  "dynamic_range_db": 15.3,
   "dynamic_range": 15.3,
+  "lufs": -14.2,
+  "amplitude_envelope": [
+    {"time": 0.0, "rms": -12.5},
+    {"time": 0.1, "rms": -12.3}
+  ],
+  "dynamic_consistency": 0.87,
+  "is_consistent": true,
   "peaks": [
     {"time": 3.2, "amplitude": -8.1}
-  ],
-  "is_consistent": false
+  ]
 }
 ```
 
-#### `detect_articulation(audio_file_id: str) -> dict`
+**Note**: Both `average_rms`/`average_loudness` and `dynamic_range_db`/`dynamic_range` are provided for compatibility. `is_consistent` is derived from `dynamic_consistency` (threshold: 0.75).
+
+#### `analyze_articulation(audio_file_id: str) -> dict`
 **Purpose**: Staccato, legato, accents analysis
 
 **Returns**:
@@ -150,8 +189,13 @@ These tools are automatically called for every audio submission to provide funda
   "articulation_types": ["legato", "staccato"],
   "legato_percentage": 0.65,
   "staccato_percentage": 0.35,
+  "articulation_consistency": 0.82,
   "accents": [
-    {"time": 1.5, "intensity": 0.82}
+    {
+      "time": 1.5,
+      "intensity": 0.82,
+      "relative_loudness": 1.25
+    }
   ]
 }
 ```
@@ -162,7 +206,9 @@ These tools are automatically called for every audio submission to provide funda
 **Purpose**: Compare two audio recordings
 
 **Parameters**:
-- `comparison_type`: "rhythm" | "pitch" | "tempo" | "overall"
+- `audio_file_id_1`: First audio file ID
+- `audio_file_id_2`: Second audio file ID
+- `comparison_type`: "rhythm" | "pitch" | "tempo" | "overall" (default: "overall")
 
 **Returns**:
 ```json
@@ -170,23 +216,52 @@ These tools are automatically called for every audio submission to provide funda
   "comparison_type": "overall",
   "similarity_score": 0.78,
   "differences": {
-    "tempo": {"audio1": 120.0, "audio2": 118.5, "difference": 1.5},
-    "pitch_accuracy": {"audio1": 0.88, "audio2": 0.92, "improvement": 0.04},
-    "rhythm_accuracy": {"audio1": 0.85, "audio2": 0.87, "improvement": 0.02}
+    "tempo": {
+      "audio1": 120.0,
+      "audio2": 118.5,
+      "difference": 1.5,
+      "stability_audio1": 0.91,
+      "stability_audio2": 0.93
+    },
+    "pitch_accuracy": {
+      "audio1": 0.88,
+      "audio2": 0.92,
+      "improvement": 0.04
+    },
+    "pitch_stability": {
+      "audio1": 0.85,
+      "audio2": 0.87,
+      "improvement": 0.02
+    },
+    "rhythm_accuracy": {
+      "audio1": 0.85,
+      "audio2": 0.87,
+      "improvement": 0.02
+    },
+    "timing_deviation": {
+      "audio1": -8.5,
+      "audio2": -6.2,
+      "improvement": 2.3
+    }
   },
   "improvements": ["pitch_accuracy", "rhythm_accuracy"],
   "regressions": []
 }
 ```
 
+**Note**: `similarity_score` is only calculated when `comparison_type` is "overall".
+
 #### `compare_to_reference(audio_file_id: str, reference_type: str, reference_params: dict) -> dict`
-**Purpose**: Compare student performance to a reference (scale, exercise, etc.)
+**Purpose**: Compare student performance to a reference (scale, exercise, MIDI file)
 
 **Parameters**:
-- `reference_type`: "scale" | "exercise" | "midi_file"
-- `reference_params`: Parameters for reference generation
+- `audio_file_id`: Audio file ID to compare
+- `reference_type`: "scale" | "midi_file" (note: "exercise" not yet implemented)
+- `reference_params`: Parameters for reference:
+  - For "scale": `{"scale": "C major", "tempo": 120}` (tempo optional)
+  - For "midi_file": `{"midi_file_id": "midi_123"}`
 
-**Returns**:
+**Returns** (for scale):
 ```json
 {
   "reference_type": "scale",
@@ -197,8 +272,28 @@ These tools are automatically called for every audio submission to provide funda
     "tempo_match": 0.91
   },
   "errors": [
-    {"time": 2.3, "type": "wrong_note", "expected": "E4", "played": "F4"}
-  ]
+    {
+      "time": 2.3,
+      "type": "wrong_note",
+      "expected": "note in C major",
+      "played": "F4"
+    }
+  ],
+  "detected_key": "C major"
+}
+```
+
+**Returns** (for MIDI file):
+```json
+{
+  "reference_type": "midi_file",
+  "midi_file_id": "midi_123",
+  "comparison": {
+    "pitch_accuracy": 0.89,
+    "rhythm_accuracy": 0.82,
+    "tempo_match": 0.91
+  },
+  "errors": []
 }
 ```
 
@@ -327,7 +422,9 @@ These tools are automatically called for every audio submission to provide funda
 #### `segment_audio(audio_file_id: str, start_time: float, end_time: float) -> dict`
 **Purpose**: Extract segment from audio
 
-**Returns**:
+**Status**: ⚠️ **Not yet implemented** - Documented for future use
+
+**Returns** (when implemented):
 ```json
 {
   "new_audio_file_id": "audio_segmented_xyz",

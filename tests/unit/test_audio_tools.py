@@ -657,6 +657,265 @@ class TestUtils:
         assert "too short" in message.lower()
 
 
+class TestComparisonTools:
+    """Tests for audio comparison tools"""
+
+    @pytest.mark.asyncio
+    async def test_compare_audio_overall(self, audio_tools, temp_dir):
+        """Test compare_audio with overall comparison"""
+        audio_file_id_1 = "test_audio_1"
+        audio_file_id_2 = "test_audio_2"
+        file_1 = temp_dir / f"{audio_file_id_1}.wav"
+        file_2 = temp_dir / f"{audio_file_id_2}.wav"
+        file_1.touch()
+        file_2.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("librosa.load") as mock_load,
+            patch("librosa.beat.beat_track") as mock_beat,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
+            audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
+            sr = 22050
+            mock_load.return_value = (audio, sr)
+            mock_beat.return_value = (120.0, np.array([0, 5512, 11025]))
+            mock_pyin.return_value = (
+                np.array([440.0] * 100),
+                np.array([True] * 100),
+                np.array([0.9] * 100),
+            )
+            mock_onset.return_value = np.array([0, 5512, 11025])
+
+            result = await audio_tools.call_tool(
+                "compare_audio",
+                audio_file_id_1=audio_file_id_1,
+                audio_file_id_2=audio_file_id_2,
+                comparison_type="overall",
+            )
+
+            assert "comparison_type" in result
+            assert result["comparison_type"] == "overall"
+            assert "similarity_score" in result
+            assert "differences" in result
+            assert "improvements" in result
+            assert "regressions" in result
+
+    @pytest.mark.asyncio
+    async def test_compare_audio_tempo(self, audio_tools, temp_dir):
+        """Test compare_audio with tempo comparison"""
+        audio_file_id_1 = "test_audio_1"
+        audio_file_id_2 = "test_audio_2"
+        file_1 = temp_dir / f"{audio_file_id_1}.wav"
+        file_2 = temp_dir / f"{audio_file_id_2}.wav"
+        file_1.touch()
+        file_2.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("librosa.load") as mock_load,
+            patch("librosa.beat.beat_track") as mock_beat,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
+            audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
+            sr = 22050
+            mock_load.return_value = (audio, sr)
+            mock_beat.return_value = (120.0, np.array([0, 5512, 11025]))
+            mock_pyin.return_value = (
+                np.array([440.0] * 100),
+                np.array([True] * 100),
+                np.array([0.9] * 100),
+            )
+            mock_onset.return_value = np.array([0, 5512, 11025])
+
+            result = await audio_tools.call_tool(
+                "compare_audio",
+                audio_file_id_1=audio_file_id_1,
+                audio_file_id_2=audio_file_id_2,
+                comparison_type="tempo",
+            )
+
+            assert result["comparison_type"] == "tempo"
+            assert "differences" in result
+            assert "tempo" in result["differences"]
+
+    @pytest.mark.asyncio
+    async def test_compare_audio_missing_files(self, audio_tools):
+        """Test compare_audio with missing files"""
+        result = await audio_tools.call_tool(
+            "compare_audio",
+            audio_file_id_1="nonexistent_1",
+            audio_file_id_2="nonexistent_2",
+        )
+
+        assert "error" in result
+        assert result["error"] is True
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_scale(self, audio_tools, temp_dir):
+        """Test compare_to_reference with scale"""
+        audio_file_id = "test_audio"
+        file_path = temp_dir / f"{audio_file_id}.wav"
+        file_path.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("librosa.load") as mock_load,
+            patch("librosa.beat.beat_track") as mock_beat,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+            patch("librosa.feature.chroma_stft") as mock_chroma,
+        ):
+            audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
+            sr = 22050
+            mock_load.return_value = (audio, sr)
+            mock_beat.return_value = (120.0, np.array([0, 5512, 11025]))
+            mock_pyin.return_value = (
+                np.array([440.0] * 100),
+                np.array([True] * 100),
+                np.array([0.9] * 100),
+            )
+            mock_onset.return_value = np.array([0, 5512, 11025])
+            chroma_array = np.zeros((12, 100))
+            chroma_array[0, :] = 1.0
+            mock_chroma.return_value = chroma_array
+
+            result = await audio_tools.call_tool(
+                "compare_to_reference",
+                audio_file_id=audio_file_id,
+                reference_type="scale",
+                reference_params={"scale": "C major", "tempo": 120},
+            )
+
+            assert "reference_type" in result
+            assert result["reference_type"] == "scale"
+            assert "scale" in result
+            assert result["scale"] == "C major"
+            assert "comparison" in result
+            assert "errors" in result
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_midi_file(self, audio_tools, temp_dir):
+        """Test compare_to_reference with MIDI file"""
+        audio_file_id = "test_audio"
+        midi_file_id = "test_midi"
+        file_path = temp_dir / f"{audio_file_id}.wav"
+        midi_path = temp_dir / f"{midi_file_id}.mid"
+        file_path.touch()
+        midi_path.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("librosa.load") as mock_load,
+            patch("librosa.beat.beat_track") as mock_beat,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+            patch("zikos.mcp.tools.midi.MidiTools") as mock_midi_tools_class,
+        ):
+            audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
+            sr = 22050
+            mock_load.return_value = (audio, sr)
+            mock_beat.return_value = (120.0, np.array([0, 5512, 11025]))
+            mock_pyin.return_value = (
+                np.array([440.0] * 100),
+                np.array([True] * 100),
+                np.array([0.9] * 100),
+            )
+            mock_onset.return_value = np.array([0, 5512, 11025])
+
+            mock_midi_tools = MagicMock()
+            mock_midi_tools.storage_path = temp_dir
+            mock_midi_tools_class.return_value = mock_midi_tools
+
+            from unittest.mock import MagicMock as Mock
+
+            mock_score = Mock()
+            mock_score.metronomeMarkBoundaries.return_value = [(None, None, Mock(number=120))]
+            with patch("music21.midi.translate.midiFilePathToStream", return_value=mock_score):
+                result = await audio_tools.call_tool(
+                    "compare_to_reference",
+                    audio_file_id=audio_file_id,
+                    reference_type="midi_file",
+                    reference_params={"midi_file_id": midi_file_id},
+                )
+
+                assert "reference_type" in result
+                assert result["reference_type"] == "midi_file"
+                assert "comparison" in result
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_missing_midi_file_id(self, audio_tools, temp_dir):
+        """Test compare_to_reference with missing midi_file_id"""
+        audio_file_id = "test_audio"
+        file_path = temp_dir / f"{audio_file_id}.wav"
+        file_path.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("librosa.load") as mock_load,
+            patch("librosa.beat.beat_track") as mock_beat,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
+            audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
+            sr = 22050
+            mock_load.return_value = (audio, sr)
+            mock_beat.return_value = (120.0, np.array([0, 5512, 11025]))
+            mock_pyin.return_value = (
+                np.array([440.0] * 100),
+                np.array([True] * 100),
+                np.array([0.9] * 100),
+            )
+            mock_onset.return_value = np.array([0, 5512, 11025])
+
+            result = await audio_tools.call_tool(
+                "compare_to_reference",
+                audio_file_id=audio_file_id,
+                reference_type="midi_file",
+                reference_params={},
+            )
+
+            assert "error" in result
+            assert result["error"] is True
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_invalid_type(self, audio_tools, temp_dir):
+        """Test compare_to_reference with invalid reference type"""
+        audio_file_id = "test_audio"
+        file_path = temp_dir / f"{audio_file_id}.wav"
+        file_path.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("librosa.load") as mock_load,
+            patch("librosa.beat.beat_track") as mock_beat,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
+            audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
+            sr = 22050
+            mock_load.return_value = (audio, sr)
+            mock_beat.return_value = (120.0, np.array([0, 5512, 11025]))
+            mock_pyin.return_value = (
+                np.array([440.0] * 100),
+                np.array([True] * 100),
+                np.array([0.9] * 100),
+            )
+            mock_onset.return_value = np.array([0, 5512, 11025])
+
+            result = await audio_tools.call_tool(
+                "compare_to_reference",
+                audio_file_id=audio_file_id,
+                reference_type="invalid_type",
+                reference_params={},
+            )
+
+            assert "error" in result
+            assert result["error"] is True
+
+
 class TestToolSchemas:
     """Tests for tool schema generation"""
 
@@ -665,12 +924,14 @@ class TestToolSchemas:
         schemas = audio_tools.get_tool_schemas()
 
         assert isinstance(schemas, list)
-        assert len(schemas) == 8
+        assert len(schemas) == 10
 
         tool_names = [s["function"]["name"] for s in schemas]
         assert "analyze_tempo" in tool_names
         assert "detect_pitch" in tool_names
         assert "analyze_rhythm" in tool_names
+        assert "compare_audio" in tool_names
+        assert "compare_to_reference" in tool_names
 
         for schema in schemas:
             assert "type" in schema

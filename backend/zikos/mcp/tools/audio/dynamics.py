@@ -42,13 +42,26 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
             for time, rms_db_val in zip(frame_times[::10], rms_db[::10], strict=False)
         ]
 
+        peaks = []
+        if len(amplitude_envelope) > 0:
+            max_rms = max(env["rms"] for env in amplitude_envelope)
+            for env in amplitude_envelope:
+                if env["rms"] >= max_rms * 0.9:
+                    peaks.append({"time": env["time"], "amplitude": env["rms"]})
+
+        is_consistent = dynamic_consistency > 0.75
+
         return {
             "average_rms": average_rms,
+            "average_loudness": average_rms,
             "peak_amplitude": peak_amplitude,
             "dynamic_range_db": dynamic_range_db,
+            "dynamic_range": dynamic_range_db,
             "lufs": average_rms,
             "amplitude_envelope": amplitude_envelope,
             "dynamic_consistency": dynamic_consistency,
+            "is_consistent": is_consistent,
+            "peaks": peaks,
         }
     except FileNotFoundError:
         return {
