@@ -185,9 +185,12 @@ class TestPitchDetection:
         """Test pitch detection when key detection fails"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch("librosa.pyin") as mock_pyin, patch(
-            "librosa.onset.onset_detect"
-        ) as mock_onset, patch("librosa.feature.chroma_stft") as mock_chroma:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+            patch("librosa.feature.chroma_stft") as mock_chroma,
+        ):
             mock_load.return_value = (audio, sr)
             f0 = np.array([440.0] * 100)
             voiced_flag = np.array([True] * 100)
@@ -208,9 +211,11 @@ class TestPitchDetection:
         """Test pitch detection when no notes are segmented"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch("librosa.pyin") as mock_pyin, patch(
-            "librosa.onset.onset_detect"
-        ) as mock_onset:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
             mock_load.return_value = (audio, sr)
             f0 = np.array([440.0] * 100)
             voiced_flag = np.array([True] * 100)
@@ -267,9 +272,11 @@ class TestPitchDetection:
         """Test note segmentation"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch("librosa.pyin") as mock_pyin, patch(
-            "librosa.onset.onset_detect"
-        ) as mock_onset:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.pyin") as mock_pyin,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
             mock_load.return_value = (audio, sr)
             f0 = np.array([440.0] * 100)
             voiced_flag = np.array([True] * 100)
@@ -341,9 +348,11 @@ class TestRhythmAnalysis:
         """Test rhythm analysis when onsets are out of bounds"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch(
-            "librosa.onset.onset_strength"
-        ) as mock_strength, patch("librosa.onset.onset_detect") as mock_onset:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
             mock_load.return_value = (audio, sr)
             mock_strength.return_value = np.array([0.9] * 100)  # Small array
             mock_onset.return_value = np.array([200, 300])  # Out of bounds
@@ -358,9 +367,11 @@ class TestRhythmAnalysis:
         """Test basic rhythm analysis"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch(
-            "librosa.onset.onset_strength"
-        ) as mock_strength, patch("librosa.onset.onset_detect") as mock_onset:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
             mock_load.return_value = (audio, sr)
             # Create onset_strength array large enough for the onsets
             mock_strength.return_value = np.array([0.9] * 20000)
@@ -378,9 +389,11 @@ class TestRhythmAnalysis:
         """Test onset detection"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch(
-            "librosa.onset.onset_strength"
-        ) as mock_strength, patch("librosa.onset.onset_detect") as mock_onset:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
             mock_load.return_value = (audio, sr)
             onset_times = np.array([0.0, 0.5, 1.0, 1.5])
             onset_frames = (onset_times * sr).astype(int)
@@ -403,11 +416,12 @@ class TestRhythmAnalysis:
         """Test timing accuracy calculation"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch(
-            "librosa.onset.onset_strength"
-        ) as mock_strength, patch("librosa.onset.onset_detect") as mock_onset, patch(
-            "librosa.beat.beat_track"
-        ) as mock_beat:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+            patch("librosa.beat.beat_track") as mock_beat,
+        ):
             mock_load.return_value = (audio, sr)
             # Perfect quarter notes at 120 BPM (0.5s intervals)
             perfect_onsets = np.array([0, 11025, 22050, 33075])
@@ -428,11 +442,12 @@ class TestRhythmAnalysis:
         """Test beat deviation detection"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch(
-            "librosa.onset.onset_strength"
-        ) as mock_strength, patch("librosa.onset.onset_detect") as mock_onset, patch(
-            "librosa.beat.beat_track"
-        ) as mock_beat:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+            patch("librosa.beat.beat_track") as mock_beat,
+        ):
             mock_load.return_value = (audio, sr)
             # Onsets slightly early (rushing)
             onsets = np.array([0, 10800, 21600, 32400])  # 20ms early each time
@@ -459,9 +474,11 @@ class TestRhythmAnalysis:
         """Test rushing/dragging tendency detection"""
         audio, sr = mock_audio_data
 
-        with patch("librosa.load") as mock_load, patch(
-            "librosa.onset.onset_strength"
-        ) as mock_strength, patch("librosa.onset.onset_detect") as mock_onset:
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+        ):
             mock_load.return_value = (audio, sr)
             mock_strength.return_value = np.array([0.9] * 20000)
             mock_onset.return_value = np.array([0, 5512, 11025])

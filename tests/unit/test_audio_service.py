@@ -58,13 +58,11 @@ class TestAudioService:
         test_file = temp_dir / f"{audio_file_id}.wav"
         test_file.touch()
 
-        with patch.object(
-            audio_service.analysis_tools, "analyze_tempo"
-        ) as mock_tempo, patch.object(
-            audio_service.analysis_tools, "detect_pitch"
-        ) as mock_pitch, patch.object(
-            audio_service.analysis_tools, "analyze_rhythm"
-        ) as mock_rhythm:
+        with (
+            patch.object(audio_service.analysis_tools, "analyze_tempo") as mock_tempo,
+            patch.object(audio_service.analysis_tools, "detect_pitch") as mock_pitch,
+            patch.object(audio_service.analysis_tools, "analyze_rhythm") as mock_rhythm,
+        ):
             mock_tempo.return_value = {"bpm": 120.0}
             mock_pitch.return_value = {"notes": []}
             mock_rhythm.return_value = {"onsets": []}

@@ -69,7 +69,6 @@ coverage.xml
 
 # Node
 node_modules/
-package-lock.json
 
 # TypeScript
 frontend/dist/**/*.js
