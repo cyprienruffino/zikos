@@ -237,7 +237,11 @@ pytest tests/unit/test_config.py::test_settings_defaults --pdb
 
 ```
 zikos/
-├── src/zikos/          # Source code
+├── backend/
+│   └── zikos/          # Python backend code
+├── frontend/           # TypeScript/HTML frontend
+│   ├── src/            # TypeScript source
+│   └── dist/           # Compiled output
 ├── tests/              # Test code
 ├── .github/workflows/  # CI/CD
 ├── Makefile           # Common tasks

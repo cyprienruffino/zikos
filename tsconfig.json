@@ -3,8 +3,8 @@
     "target": "ES2020",
     "module": "ES2020",
     "lib": ["ES2020", "DOM"],
-    "outDir": "./static",
-    "rootDir": "./static/src",
+    "outDir": "./frontend/dist",
+    "rootDir": "./frontend/src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,6 +16,6 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["static/src/**/*"],
-  "exclude": ["node_modules", "static/**/*.js"]
+  "include": ["frontend/src/**/*"],
+  "exclude": ["node_modules", "frontend/dist/**/*.js"]
 }

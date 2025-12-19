@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.zikos.services.audio import AudioService
+from zikos.services.audio import AudioService
 
 
 @pytest.fixture
 def audio_service(temp_dir):
     """Create AudioService instance with temp directory"""
-    with patch("src.zikos.config.settings") as mock_settings:
+    with patch("zikos.config.settings") as mock_settings:
         mock_settings.audio_storage_path = temp_dir
         service = AudioService()
         service.storage_path = temp_dir

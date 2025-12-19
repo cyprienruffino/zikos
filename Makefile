@@ -17,7 +17,7 @@ test: ## Run tests (excludes expensive/slow tests)
 	pytest
 
 test-cov: ## Run tests with coverage (excludes expensive/slow tests)
-	pytest --cov=src/zikos --cov-report=term-missing --cov-report=html
+	pytest --cov=backend/zikos --cov-report=term-missing --cov-report=html
 
 test-fast: ## Run tests without coverage (faster, excludes expensive/slow tests)
 	pytest --no-cov -x
@@ -32,7 +32,7 @@ test-slow: ## Run slow tests
 	pytest -m "slow"
 
 lint: ## Run linters (ruff + eslint)
-	ruff check src tests
+	ruff check backend tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run lint; fi
 
 lint-js: ## Run TypeScript linter (eslint)
@@ -48,19 +48,19 @@ test-js: ## Run TypeScript tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run test; else echo "npm not found or package.json missing, skipping TS tests"; fi
 
 format-check: ## Check code formatting (black + prettier)
-	black --check src tests
+	black --check backend tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format:check; fi
 
 format: ## Format code (black + prettier)
-	black src tests
-	ruff check --fix src tests
+	black backend tests
+	ruff check --fix backend tests
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; fi
 
 format-js: ## Format TypeScript code (prettier)
 	@if command -v npm >/dev/null 2>&1 && [ -f package.json ]; then npm run format; else echo "npm not found or package.json missing, skipping TS format"; fi
 
 type-check: ## Run type checker (mypy)
-	mypy src
+	mypy backend
 
 check: lint format-check type-check ## Run all checks
 

@@ -1,0 +1,64 @@
+import { WebSocketMessage } from "./types";
+import { API_URL } from "./config";
+
+const messagesEl = document.getElementById("messages") as HTMLElement;
+
+export function addMessage(
+    text: string,
+    type: string = "assistant",
+    data: Partial<WebSocketMessage> | null = null
+): void {
+    const messageEl = document.createElement("div");
+    messageEl.className = `message ${type}`;
+
+    const textEl = document.createElement("div");
+    textEl.textContent = text;
+    messageEl.appendChild(textEl);
+
+    if (data?.audio_file_id) {
+        const audioEl = document.createElement("div");
+        audioEl.className = "audio-player";
+        audioEl.innerHTML = `<audio controls src="${API_URL}/api/audio/${data.audio_file_id}"></audio>`;
+        messageEl.appendChild(audioEl);
+    }
+
+    if (data?.notation_url) {
+        const notationEl = document.createElement("div");
+        notationEl.className = "notation";
+        notationEl.innerHTML = `<img src="${data.notation_url}" alt="Musical notation" />`;
+        messageEl.appendChild(notationEl);
+    }
+
+    messagesEl.appendChild(messageEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+export function addTypingIndicator(): void {
+    const existingIndicator = document.getElementById("typing-indicator");
+    if (existingIndicator) {
+        return;
+    }
+
+    const indicatorEl = document.createElement("div");
+    indicatorEl.id = "typing-indicator";
+    indicatorEl.className = "message assistant typing-indicator";
+    indicatorEl.innerHTML =
+        '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    messagesEl.appendChild(indicatorEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+export function removeTypingIndicator(): void {
+    const indicator = document.getElementById("typing-indicator");
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+export function updateStatus(text: string, className: string): void {
+    const statusEl = document.getElementById("status");
+    if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.className = `status ${className}`;
+    }
+}

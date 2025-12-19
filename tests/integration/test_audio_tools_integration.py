@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from src.zikos.mcp.tools.audio import AudioAnalysisTools
+from zikos.mcp.tools.audio import AudioAnalysisTools
 
 
 def generate_test_audio(

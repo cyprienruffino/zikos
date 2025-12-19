@@ -142,19 +142,25 @@ API will be available at `http://localhost:8000`
 
 ```
 zikos/
-├── src/zikos/
-│   ├── api/           # FastAPI routes
-│   ├── mcp/           # MCP tools and server
-│   ├── services/      # Business logic
-│   ├── config.py      # Configuration
-│   └── main.py        # FastAPI app
-├── DESIGN.md              # Architecture design
-├── TOOLS.md               # MCP tools specification
-├── SYSTEM_PROMPT.md       # LLM system prompt
+├── backend/
+│   └── zikos/          # Python backend code
+│       ├── api/        # FastAPI routes
+│       ├── mcp/        # MCP tools and server
+│       ├── services/   # Business logic
+│       ├── config.py   # Configuration
+│       └── main.py     # FastAPI app
+├── frontend/           # TypeScript/HTML frontend
+│   ├── src/            # TypeScript source files
+│   ├── dist/           # Compiled JavaScript (generated)
+│   └── index.html      # Main HTML file
+├── tests/              # Test code
+├── DESIGN.md           # Architecture design
+├── TOOLS.md            # MCP tools specification
+├── SYSTEM_PROMPT.md    # LLM system prompt
 ├── IMPLEMENTATION_NOTES.md  # Implementation details
 ├── AUDIO_ANALYSIS_TOOLS.md # Comprehensive audio analysis tools catalog
-├── FUTURE_FEATURES.md     # Future features and roadmap
-└── requirements.txt       # Python dependencies
+├── FUTURE_FEATURES.md  # Future features and roadmap
+└── requirements.txt    # Python dependencies
 ```
 
 ## Documentation

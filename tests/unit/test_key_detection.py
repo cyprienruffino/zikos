@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from src.zikos.mcp.tools.audio.key import detect_key
+from zikos.mcp.tools.audio.key import detect_key
 
 
 @pytest.fixture

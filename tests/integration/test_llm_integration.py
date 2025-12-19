@@ -20,7 +20,7 @@ class TestLLMServiceIntegration:
     @pytest.mark.asyncio
     async def test_llm_initialization(self):
         """Test LLM initialization with real model"""
-        from src.zikos.services.llm import LLMService
+        from zikos.services.llm import LLMService
 
         service = LLMService()
 
@@ -33,8 +33,8 @@ class TestLLMServiceIntegration:
     @pytest.mark.asyncio
     async def test_llm_generate_response(self):
         """Test LLM response generation (expensive)"""
-        from src.zikos.mcp.server import MCPServer
-        from src.zikos.services.llm import LLMService
+        from zikos.mcp.server import MCPServer
+        from zikos.services.llm import LLMService
 
         service = LLMService()
         mcp_server = MCPServer()

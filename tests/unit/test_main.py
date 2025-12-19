@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.zikos.main import app
+from zikos.main import app
 
 
 @pytest.fixture
@@ -31,3 +31,19 @@ class TestMain:
         assert response.status_code == 200
         data = response.json()
         assert "status" in data
+
+    def test_root_endpoint_no_index(self, client):
+        """Test root endpoint when index.html doesn't exist"""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with patch("zikos.main.frontend_dir") as mock_frontend_dir:
+            mock_index_path = mock_frontend_dir / "index.html"
+            mock_index_path.exists.return_value = False
+
+            response = client.get("/")
+            assert response.status_code == 200
+            data = response.json()
+            assert "message" in data
+            assert data["message"] == "Zikos API"
+            assert "version" in data

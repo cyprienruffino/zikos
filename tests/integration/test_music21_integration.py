@@ -34,7 +34,7 @@ class TestMusic21Integration:
     @pytest.mark.asyncio
     async def test_midi_validate_with_music21(self, temp_dir):
         """Test MIDI validation using music21 (when implemented)"""
-        from src.zikos.mcp.tools.midi import MidiTools
+        from zikos.mcp.tools.midi import MidiTools
 
         tools = MidiTools()
         result = await tools.validate_midi("[MIDI]C4[/MIDI]")
@@ -52,7 +52,7 @@ class TestMusic21Integration:
     @pytest.mark.asyncio
     async def test_midi_to_notation_with_music21(self, temp_dir):
         """Test MIDI to notation rendering using music21 (when implemented)"""
-        from src.zikos.mcp.tools.midi import MidiTools
+        from zikos.mcp.tools.midi import MidiTools
 
         tools = MidiTools()
         result = await tools.midi_to_notation("test_midi", "both")

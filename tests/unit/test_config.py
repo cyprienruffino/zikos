@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from src.zikos.config import Settings
+from zikos.config import Settings
 
 
 @pytest.mark.lightweight

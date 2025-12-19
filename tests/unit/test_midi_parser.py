@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.zikos.mcp.tools.midi_parser import (
+from zikos.mcp.tools.midi_parser import (
     MidiParseError,
     create_music21_stream,
     midi_text_to_file,

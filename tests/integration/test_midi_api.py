@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.zikos.main import app
+from zikos.main import app
 
 pytestmark = pytest.mark.integration
 
@@ -57,8 +57,8 @@ Track 1:
         """Test MIDI synthesis with real implementation"""
         from pathlib import Path
 
-        from src.zikos.config import settings
-        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.config import settings
+        from zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_synth"
@@ -97,8 +97,8 @@ Track 1:
         """Test notation rendering with real implementation"""
         from pathlib import Path
 
-        from src.zikos.config import settings
-        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.config import settings
+        from zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_notation"
@@ -150,8 +150,8 @@ Track 1:
         """Test getting MIDI file with real implementation"""
         from pathlib import Path
 
-        from src.zikos.config import settings
-        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.config import settings
+        from zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_get_midi"

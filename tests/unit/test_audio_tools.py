@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from src.zikos.config import settings
-from src.zikos.mcp.tools.audio import AudioAnalysisTools
+from zikos.config import settings
+from zikos.mcp.tools.audio import AudioAnalysisTools
 
 
 @pytest.fixture
@@ -229,7 +229,7 @@ class TestPitchDetection:
         self, audio_tools, sample_audio_file, mock_audio_data
     ):
         """Test pitch detection with zero frequencies"""
-        from src.zikos.mcp.tools.audio.pitch import frequency_to_cents, frequency_to_note
+        from zikos.mcp.tools.audio.pitch import frequency_to_cents, frequency_to_note
 
         note, octave = frequency_to_note(0.0)
         assert note == "C"
@@ -580,8 +580,8 @@ class TestUtils:
 
     def test_resolve_audio_path(self, temp_dir):
         """Test resolve_audio_path"""
-        from src.zikos.config import settings
-        from src.zikos.mcp.tools.audio.utils import resolve_audio_path
+        from zikos.config import settings
+        from zikos.mcp.tools.audio.utils import resolve_audio_path
 
         # Create a test file
         test_file = temp_dir / "test_audio.wav"
@@ -594,8 +594,8 @@ class TestUtils:
 
     def test_resolve_audio_path_not_found(self, temp_dir):
         """Test resolve_audio_path with non-existent file"""
-        from src.zikos.config import settings
-        from src.zikos.mcp.tools.audio.utils import resolve_audio_path
+        from zikos.config import settings
+        from zikos.mcp.tools.audio.utils import resolve_audio_path
 
         with patch.object(settings, "audio_storage_path", temp_dir):
             with pytest.raises(FileNotFoundError):
@@ -603,7 +603,7 @@ class TestUtils:
 
     def test_create_error_response(self):
         """Test create_error_response"""
-        from src.zikos.mcp.tools.audio.utils import create_error_response
+        from zikos.mcp.tools.audio.utils import create_error_response
 
         result = create_error_response("TEST_ERROR", "Test message")
         assert result["error"] is True
@@ -613,7 +613,7 @@ class TestUtils:
 
     def test_create_error_response_with_details(self):
         """Test create_error_response with details"""
-        from src.zikos.mcp.tools.audio.utils import create_error_response
+        from zikos.mcp.tools.audio.utils import create_error_response
 
         details = {"key": "value"}
         result = create_error_response("TEST_ERROR", "Test message", details)
@@ -622,7 +622,7 @@ class TestUtils:
 
     def test_validate_audio_duration_valid(self):
         """Test validate_audio_duration with valid duration"""
-        from src.zikos.mcp.tools.audio.utils import validate_audio_duration
+        from zikos.mcp.tools.audio.utils import validate_audio_duration
 
         audio = np.array([0.0] * 22050)  # 1 second at 22050 Hz
         is_valid, message = validate_audio_duration(audio, 22050, min_duration=0.5)
@@ -631,7 +631,7 @@ class TestUtils:
 
     def test_validate_audio_duration_too_short(self):
         """Test validate_audio_duration with too short audio"""
-        from src.zikos.mcp.tools.audio.utils import validate_audio_duration
+        from zikos.mcp.tools.audio.utils import validate_audio_duration
 
         audio = np.array([0.0] * 5000)  # ~0.23 seconds at 22050 Hz
         is_valid, message = validate_audio_duration(audio, 22050, min_duration=0.5)

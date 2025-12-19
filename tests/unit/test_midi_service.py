@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.zikos.services.midi import MidiService
+from zikos.services.midi import MidiService
 
 
 @pytest.fixture
@@ -12,7 +12,7 @@ def midi_service(temp_dir):
     """Create MidiService instance with temp directory"""
     from unittest.mock import patch
 
-    with patch("src.zikos.config.settings") as mock_settings:
+    with patch("zikos.config.settings") as mock_settings:
         mock_settings.midi_storage_path = temp_dir
         mock_settings.notation_storage_path = temp_dir
         mock_settings.audio_storage_path = temp_dir
@@ -71,7 +71,7 @@ Track 1:
   C4 velocity=60 duration=0.5
 [/MIDI]
 """
-        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_synth"
@@ -105,7 +105,7 @@ Track 1:
   E4 velocity=60 duration=0.5
 [/MIDI]
 """
-        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_notation"

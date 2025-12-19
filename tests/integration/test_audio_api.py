@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.zikos.main import app
+from zikos.main import app
 
 pytestmark = pytest.mark.integration
 
@@ -98,7 +98,7 @@ class TestAudioAPI:
         import wave
         from pathlib import Path
 
-        from src.zikos.config import settings
+        from zikos.config import settings
 
         audio_file_id = str(uuid.uuid4())
         audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
@@ -144,7 +144,7 @@ class TestAudioAPI:
         import wave
         from pathlib import Path
 
-        from src.zikos.config import settings
+        from zikos.config import settings
 
         audio_file_id = str(uuid.uuid4())
         audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"

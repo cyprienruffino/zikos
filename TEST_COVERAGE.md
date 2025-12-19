@@ -20,7 +20,7 @@
 
 ### Critical Components (No Tests)
 
-1. **LLMService** (`src/zikos/services/llm.py`)
+1. **LLMService** (`backend/zikos/services/llm.py`)
    - Tool call detection and execution loop
    - Conversation history management
    - System prompt loading
@@ -29,37 +29,37 @@
    - Error handling in tool execution
    - Maximum iterations handling
 
-2. **ChatService** (`src/zikos/services/chat.py`)
+2. **ChatService** (`backend/zikos/services/chat.py`)
    - `process_message()` - Message processing flow
    - `handle_audio_ready()` - Audio ready handling
    - Session creation and management
    - WebSocket disconnect handling
 
-3. **AudioService** (`src/zikos/services/audio.py`)
+3. **AudioService** (`backend/zikos/services/audio.py`)
    - `store_audio()` - Audio file storage
    - `run_baseline_analysis()` - Baseline analysis orchestration
    - `get_audio_info()` - Audio metadata retrieval
    - `get_audio_path()` - File path resolution
 
-4. **MidiService** (`src/zikos/services/midi.py`)
+4. **MidiService** (`backend/zikos/services/midi.py`)
    - `validate_midi()` - MIDI validation
    - `synthesize()` - MIDI to audio synthesis
    - `render_notation()` - MIDI to notation rendering
    - `get_midi_path()` - File path resolution
 
-5. **WebSocket Endpoint** (`src/zikos/api/chat.py`)
+5. **WebSocket Endpoint** (`backend/zikos/api/chat.py`)
    - WebSocket connection handling
    - Message type routing
    - Error handling
    - Disconnect handling
 
-6. **Audio API** (`src/zikos/api/audio.py`)
+6. **Audio API** (`backend/zikos/api/audio.py`)
    - Audio upload endpoint
    - Audio info endpoint
    - Audio file retrieval endpoint
    - Error handling
 
-7. **MIDI API** (`src/zikos/api/midi.py`)
+7. **MIDI API** (`backend/zikos/api/midi.py`)
    - MIDI validation endpoint
    - MIDI synthesis endpoint
    - Notation rendering endpoint

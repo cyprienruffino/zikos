@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.zikos.services.chat import ChatService
+from zikos.services.chat import ChatService
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ class TestChatService:
         import uuid
         from pathlib import Path
 
-        from src.zikos.config import settings
+        from zikos.config import settings
 
         audio_file_id = str(uuid.uuid4())
         audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
@@ -84,7 +84,7 @@ class TestChatService:
         import uuid
         from pathlib import Path
 
-        from src.zikos.config import settings
+        from zikos.config import settings
 
         audio_file_id = str(uuid.uuid4())
         audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"

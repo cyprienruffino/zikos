@@ -5,7 +5,7 @@ WORKDIR /build
 COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts || npm install --ignore-scripts
 
-COPY static/ ./static/
+COPY frontend/ ./frontend/
 COPY tsconfig.json ./
 RUN npm run build
 
@@ -31,7 +31,7 @@ COPY --chown=zikos:zikos pyproject.toml ./
 RUN pip install --upgrade pip setuptools wheel
 
 COPY --chown=zikos:zikos . .
-COPY --from=frontend-builder --chown=zikos:zikos /build/static ./static
+COPY --from=frontend-builder --chown=zikos:zikos /build/frontend ./frontend
 
 RUN pip install -e ".[ml,model-download]"
 

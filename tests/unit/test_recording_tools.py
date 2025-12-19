@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.zikos.mcp.tools.recording import RecordingTools
+from zikos.mcp.tools.recording import RecordingTools
 
 
 @pytest.fixture
