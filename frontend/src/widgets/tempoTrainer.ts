@@ -120,7 +120,7 @@ function startTempoTrainer(
                 audioContext.resume();
             }
             const intervalMs = (60 / currentBpm) * 1000;
-            function playBeat(beatIndex: number): void {
+            const playBeat = (beatIndex: number): void => {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
                 oscillator.connect(gainNode);
@@ -132,7 +132,7 @@ function startTempoTrainer(
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
                 oscillator.start(audioContext.currentTime);
                 oscillator.stop(audioContext.currentTime + 0.1);
-            }
+            };
             if (currentTrainer.metronome.intervalId) {
                 clearInterval(currentTrainer.metronome.intervalId);
             }

@@ -4,14 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-try:
-    from music21 import key, meter, note, stream, tempo
-except ImportError:
-    note = None
-    stream = None
-    tempo = None
-    meter = None
-    key = None
+from music21 import key, meter, note, stream, tempo
 
 
 class MidiParseError(Exception):
@@ -22,9 +15,6 @@ class MidiParseError(Exception):
 
 def parse_midi_text(midi_text: str) -> dict[str, Any]:
     """Parse simplified MIDI format to structured data"""
-    if not note or not stream:
-        raise MidiParseError("music21 not available")
-
     midi_block_pattern = r"\[MIDI\](.*?)\[/MIDI\]"
     match = re.search(midi_block_pattern, midi_text, re.DOTALL)
 
@@ -123,9 +113,6 @@ def parse_note_line(line: str) -> dict[str, Any] | None:
 
 def create_music21_stream(parsed_data: dict[str, Any]) -> Any:
     """Create music21 Stream from parsed MIDI data"""
-    if not stream or not note or not tempo or not meter or not key:
-        raise MidiParseError("music21 not available")
-
     metadata = parsed_data["metadata"]
     tracks = parsed_data["tracks"]
 

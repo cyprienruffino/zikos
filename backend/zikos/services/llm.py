@@ -1,6 +1,7 @@
 """LLM service"""
 
 import json
+from pathlib import Path
 from typing import Any
 
 try:
@@ -26,12 +27,28 @@ class LLMService:
         """Initialize LLM"""
         if Llama is None:
             return
-        if settings.llm_model_path:
+        if not settings.llm_model_path:
+            return
+
+        model_path = Path(settings.llm_model_path)
+        if not model_path.exists():
+            print(f"Warning: Model file not found at {model_path}")
+            print("The application will start but LLM features will be unavailable.")
+            print(
+                f"To download a model, run: python scripts/download_model.py llama-3.1-8b-instruct-q4 -o {model_path.parent}"
+            )
+            return
+
+        try:
             self.llm = Llama(
-                model_path=settings.llm_model_path,
+                model_path=str(model_path),
                 n_ctx=settings.llm_n_ctx,
                 n_gpu_layers=settings.llm_n_gpu_layers,
             )
+        except Exception as e:
+            print(f"Error initializing LLM: {e}")
+            print("The application will start but LLM features will be unavailable.")
+            self.llm = None
 
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
         """Get conversation history for session"""
@@ -51,7 +68,7 @@ class LLMService:
         if not self.llm:
             return {
                 "type": "response",
-                "message": "LLM not initialized. Please set LLM_MODEL_PATH in environment.",
+                "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
             }
 
         history = self._get_conversation_history(session_id)
