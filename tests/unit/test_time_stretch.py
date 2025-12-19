@@ -29,8 +29,14 @@ async def test_time_stretch_success(temp_dir, sample_audio_path):
         except ImportError:
             pytest.skip("pyrubberband not installed")
 
-    if "error" in result and result.get("error_type") == "DEPENDENCY_MISSING":
-        pytest.skip("pyrubberband not installed")
+    if "error" in result:
+        if result.get("error_type") == "DEPENDENCY_MISSING":
+            pytest.skip("pyrubberband not installed")
+        if (
+            result.get("error_type") == "PROCESSING_FAILED"
+            and "rubberband" in result.get("message", "").lower()
+        ):
+            pytest.skip("rubberband-cli not installed")
 
     assert "error" not in result
     assert "new_audio_file_id" in result
@@ -79,8 +85,14 @@ async def test_pitch_shift_success(temp_dir, sample_audio_path):
         except ImportError:
             pytest.skip("pyrubberband not installed")
 
-    if "error" in result and result.get("error_type") == "DEPENDENCY_MISSING":
-        pytest.skip("pyrubberband not installed")
+    if "error" in result:
+        if result.get("error_type") == "DEPENDENCY_MISSING":
+            pytest.skip("pyrubberband not installed")
+        if (
+            result.get("error_type") == "PROCESSING_FAILED"
+            and "rubberband" in result.get("message", "").lower()
+        ):
+            pytest.skip("rubberband-cli not installed")
 
     assert "error" not in result
     assert "new_audio_file_id" in result

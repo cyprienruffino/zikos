@@ -17,7 +17,19 @@ async def test_analyze_groove_success(temp_dir, sample_audio_path):
     """Test successful groove analysis"""
     sample_rate = 22050
     duration = 5.0
-    y = np.random.randn(int(sample_rate * duration)).astype(np.float32) * 0.5
+    beat_duration = 0.5
+
+    t = np.linspace(0, duration, int(sample_rate * duration))
+    y = np.zeros_like(t, dtype=np.float32)
+
+    for beat_time in np.arange(0, duration, beat_duration):
+        beat_start = int(beat_time * sample_rate)
+        beat_end = min(int((beat_time + 0.1) * sample_rate), len(y))
+        if beat_end > beat_start:
+            beat_samples = beat_end - beat_start
+            beat_t = np.linspace(0, 0.1, beat_samples)
+            beat_audio = np.sin(2 * np.pi * 440 * beat_t) * 0.5
+            y[beat_start:beat_end] = beat_audio[: beat_end - beat_start]
 
     sf.write(str(sample_audio_path), y, sample_rate)
 
@@ -74,7 +86,19 @@ async def test_analyze_groove_via_tools_class(temp_dir, sample_audio_path):
     """Test groove analysis via AudioAnalysisTools class"""
     sample_rate = 22050
     duration = 4.0
-    y = np.random.randn(int(sample_rate * duration)).astype(np.float32) * 0.5
+    beat_duration = 0.5
+
+    t = np.linspace(0, duration, int(sample_rate * duration))
+    y = np.zeros_like(t, dtype=np.float32)
+
+    for beat_time in np.arange(0, duration, beat_duration):
+        beat_start = int(beat_time * sample_rate)
+        beat_end = min(int((beat_time + 0.1) * sample_rate), len(y))
+        if beat_end > beat_start:
+            beat_samples = beat_end - beat_start
+            beat_t = np.linspace(0, 0.1, beat_samples)
+            beat_audio = np.sin(2 * np.pi * 440 * beat_t) * 0.5
+            y[beat_start:beat_end] = beat_audio[: beat_end - beat_start]
 
     sf.write(str(sample_audio_path), y, sample_rate)
 
