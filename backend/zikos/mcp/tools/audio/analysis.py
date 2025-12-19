@@ -6,12 +6,20 @@ from zikos.mcp.tools.audio import (
     articulation,
     chords,
     comparison,
+    comprehensive,
     dynamics,
+    groove,
     key,
+    phrase_segmentation,
     pitch,
+    repetition,
     rhythm,
+    segmentation,
     tempo,
     timbre,
+)
+from zikos.mcp.tools.audio import (
+    time_stretch as time_stretch_module,
 )
 from zikos.mcp.tools.audio.utils import resolve_audio_path
 
@@ -176,6 +184,117 @@ class AudioAnalysisTools:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "segment_audio",
+                    "description": "Extract a segment from audio file",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                            "start_time": {
+                                "type": "number",
+                                "description": "Start time in seconds",
+                            },
+                            "end_time": {"type": "number", "description": "End time in seconds"},
+                        },
+                        "required": ["audio_file_id", "start_time", "end_time"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "segment_phrases",
+                    "description": "Detect musical phrase boundaries",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                        },
+                        "required": ["audio_file_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "comprehensive_analysis",
+                    "description": "Run all analyses and provide structured summary with strengths, weaknesses, and recommendations",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                        },
+                        "required": ["audio_file_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "analyze_groove",
+                    "description": "Analyze microtiming patterns, swing, and groove feel",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                        },
+                        "required": ["audio_file_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "time_stretch",
+                    "description": "Time-stretch audio without changing pitch (slow down or speed up)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                            "rate": {
+                                "type": "number",
+                                "description": "Stretch rate (0.25-4.0). 1.0 = no change, 0.5 = half speed, 2.0 = double speed",
+                            },
+                        },
+                        "required": ["audio_file_id", "rate"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "pitch_shift",
+                    "description": "Pitch-shift audio without changing tempo (transpose)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                            "semitones": {
+                                "type": "number",
+                                "description": "Number of semitones to shift (-24 to 24). Positive = higher, negative = lower",
+                            },
+                        },
+                        "required": ["audio_file_id", "semitones"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "detect_repetitions",
+                    "description": "Detect repeated patterns and musical form",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {"type": "string"},
+                        },
+                        "required": ["audio_file_id"],
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
@@ -229,6 +348,46 @@ class AudioAnalysisTools:
                 resolved_path, reference_type, reference_params
             )
             return dict(result)
+        elif tool_name == "segment_audio":
+            audio_file_id = kwargs.get("audio_file_id")
+            start_time = kwargs.get("start_time")
+            end_time = kwargs.get("end_time")
+
+            if not audio_file_id or start_time is None or end_time is None:
+                return {
+                    "error": True,
+                    "error_type": "MISSING_PARAMETER",
+                    "message": "audio_file_id, start_time, and end_time are required",
+                }
+
+            result = await segmentation.segment_audio(audio_file_id, start_time, end_time)
+            return dict(result)
+        elif tool_name == "time_stretch":
+            audio_file_id = kwargs.get("audio_file_id")
+            rate = kwargs.get("rate")
+
+            if not audio_file_id or rate is None:
+                return {
+                    "error": True,
+                    "error_type": "MISSING_PARAMETER",
+                    "message": "audio_file_id and rate are required",
+                }
+
+            result = await time_stretch_module.time_stretch(audio_file_id, rate)
+            return dict(result)
+        elif tool_name == "pitch_shift":
+            audio_file_id = kwargs.get("audio_file_id")
+            semitones = kwargs.get("semitones")
+
+            if not audio_file_id or semitones is None:
+                return {
+                    "error": True,
+                    "error_type": "MISSING_PARAMETER",
+                    "message": "audio_file_id and semitones are required",
+                }
+
+            result = await time_stretch_module.pitch_shift(audio_file_id, semitones)
+            return dict(result)
 
         audio_file_id = kwargs.get("audio_file_id")
         audio_path = kwargs.get("audio_path")
@@ -274,6 +433,18 @@ class AudioAnalysisTools:
             return dict(result)
         elif tool_name == "detect_chords":
             result = await chords.detect_chords(resolved_path)
+            return dict(result)
+        elif tool_name == "segment_phrases":
+            result = await phrase_segmentation.segment_phrases(resolved_path)
+            return dict(result)
+        elif tool_name == "comprehensive_analysis":
+            result = await comprehensive.comprehensive_analysis(resolved_path)
+            return dict(result)
+        elif tool_name == "analyze_groove":
+            result = await groove.analyze_groove(resolved_path)
+            return dict(result)
+        elif tool_name == "detect_repetitions":
+            result = await repetition.detect_repetitions(resolved_path)
             return dict(result)
         else:
             return {
@@ -345,6 +516,41 @@ class AudioAnalysisTools:
         return await self.call_tool(
             "detect_chords", audio_file_id=audio_file_id, audio_path=audio_path
         )
+
+    async def segment_audio(
+        self, audio_file_id: str, start_time: float, end_time: float
+    ) -> dict[str, Any]:
+        """Segment audio"""
+        return await self.call_tool(
+            "segment_audio",
+            audio_file_id=audio_file_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+    async def segment_phrases(self, audio_file_id: str) -> dict[str, Any]:
+        """Segment phrases"""
+        return await self.call_tool("segment_phrases", audio_file_id=audio_file_id)
+
+    async def comprehensive_analysis(self, audio_file_id: str) -> dict[str, Any]:
+        """Comprehensive analysis"""
+        return await self.call_tool("comprehensive_analysis", audio_file_id=audio_file_id)
+
+    async def analyze_groove(self, audio_file_id: str) -> dict[str, Any]:
+        """Analyze groove"""
+        return await self.call_tool("analyze_groove", audio_file_id=audio_file_id)
+
+    async def time_stretch(self, audio_file_id: str, rate: float) -> dict[str, Any]:
+        """Time-stretch audio"""
+        return await self.call_tool("time_stretch", audio_file_id=audio_file_id, rate=rate)
+
+    async def pitch_shift(self, audio_file_id: str, semitones: float) -> dict[str, Any]:
+        """Pitch-shift audio"""
+        return await self.call_tool("pitch_shift", audio_file_id=audio_file_id, semitones=semitones)
+
+    async def detect_repetitions(self, audio_file_id: str) -> dict[str, Any]:
+        """Detect repetitions"""
+        return await self.call_tool("detect_repetitions", audio_file_id=audio_file_id)
 
     async def get_audio_info(
         self, audio_file_id: str | None = None, audio_path: str | None = None

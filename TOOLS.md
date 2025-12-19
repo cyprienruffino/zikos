@@ -141,18 +141,85 @@ These tools are automatically called for every audio submission to provide funda
 #### `segment_phrases(audio_file_id: str) -> dict`
 **Purpose**: Detect musical phrase boundaries
 
-**Status**: ⚠️ **Not yet implemented** - Documented for future use
-
-**Returns** (when implemented):
+**Returns**:
 ```json
 {
   "phrases": [
-    {"start": 0.0, "end": 4.0, "type": "melodic"},
-    {"start": 4.0, "end": 8.0, "type": "melodic"}
+    {"start": 0.0, "end": 4.0, "type": "melodic", "confidence": 0.92},
+    {"start": 4.0, "end": 8.0, "type": "melodic", "confidence": 0.89}
   ],
-  "phrase_count": 2
+  "phrase_count": 2,
+  "average_phrase_length": 4.0
 }
 ```
+
+#### `comprehensive_analysis(audio_file_id: str) -> dict`
+**Purpose**: Run all analyses and provide structured summary with strengths, weaknesses, and recommendations
+
+**Returns**:
+```json
+{
+  "timing": {
+    "tempo": {...},
+    "rhythm": {...}
+  },
+  "pitch": {...},
+  "dynamics": {...},
+  "frequency": {
+    "timbre": {...}
+  },
+  "musical_structure": {
+    "key": {...},
+    "chords": {...},
+    "phrases": {...}
+  },
+  "articulation": {...},
+  "overall_score": 0.87,
+  "strengths": ["timing", "intonation"],
+  "weaknesses": ["dynamic_consistency"],
+  "recommendations": ["Practice with metronome to improve tempo consistency"]
+}
+```
+
+**Note**: This tool runs all available analysis tools in parallel and provides a comprehensive summary. It's useful when you need a complete overview of the performance.
+
+#### `analyze_groove(audio_file_id: str) -> dict`
+**Purpose**: Analyze microtiming patterns, swing, and groove feel
+
+**Returns**:
+```json
+{
+  "groove_type": "straight",
+  "swing_ratio": 1.0,
+  "microtiming_pattern": "consistent",
+  "feel_score": 0.89,
+  "groove_consistency": 0.92,
+  "average_microtiming_deviation_ms": 8.5,
+  "microtiming_std_ms": 12.3
+}
+```
+
+**Note**: `groove_type` can be "straight", "swung", or "reverse_swing". `swing_ratio` of 1.0 means straight time, >1.3 indicates swing.
+
+#### `detect_repetitions(audio_file_id: str) -> dict`
+**Purpose**: Detect repeated patterns and identify musical form
+
+**Returns**:
+```json
+{
+  "repetitions": [
+    {
+      "pattern_start": 0.0,
+      "pattern_end": 4.0,
+      "repetition_times": [4.0, 8.0],
+      "similarity": 0.92
+    }
+  ],
+  "form": "A-A-B-A"
+}
+```
+
+**Note**: Identifies repeated patterns using chroma-based similarity analysis. Form labels (A, B, C, etc.) represent different patterns.
 
 #### `analyze_dynamics(audio_file_id: str) -> dict`
 **Purpose**: Volume/amplitude analysis
@@ -424,9 +491,12 @@ These tools are automatically called for every audio submission to provide funda
 #### `segment_audio(audio_file_id: str, start_time: float, end_time: float) -> dict`
 **Purpose**: Extract segment from audio
 
-**Status**: ⚠️ **Not yet implemented** - Documented for future use
+**Parameters**:
+- `audio_file_id`: Audio file ID to segment
+- `start_time`: Start time in seconds (must be >= 0)
+- `end_time`: End time in seconds (must be > start_time)
 
-**Returns** (when implemented):
+**Returns**:
 ```json
 {
   "new_audio_file_id": "audio_segmented_xyz",
@@ -436,6 +506,45 @@ These tools are automatically called for every audio submission to provide funda
   "duration": 3.0
 }
 ```
+
+#### `time_stretch(audio_file_id: str, rate: float) -> dict`
+**Purpose**: Time-stretch audio without changing pitch (slow down or speed up)
+
+**Parameters**:
+- `audio_file_id`: Audio file ID to stretch
+- `rate`: Stretch rate (0.25-4.0). 1.0 = no change, 0.5 = half speed, 2.0 = double speed
+
+**Returns**:
+```json
+{
+  "new_audio_file_id": "audio_stretched_xyz",
+  "original_audio_file_id": "audio_abc123",
+  "rate": 0.5,
+  "original_duration": 4.0,
+  "new_duration": 8.0
+}
+```
+
+**Note**: Requires `pyrubberband` library. Useful for practice (slow down difficult passages) or demonstration (speed up).
+
+#### `pitch_shift(audio_file_id: str, semitones: float) -> dict`
+**Purpose**: Pitch-shift audio without changing tempo (transpose)
+
+**Parameters**:
+- `audio_file_id`: Audio file ID to shift
+- `semitones`: Number of semitones to shift (-24 to 24). Positive = higher, negative = lower
+
+**Returns**:
+```json
+{
+  "new_audio_file_id": "audio_shifted_xyz",
+  "original_audio_file_id": "audio_abc123",
+  "semitones": 2.0,
+  "duration": 4.0
+}
+```
+
+**Note**: Requires `pyrubberband` library. Useful for transposition or demonstrating different keys.
 
 ## Tool Implementation Notes
 

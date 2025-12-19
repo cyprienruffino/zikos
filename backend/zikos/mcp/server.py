@@ -72,6 +72,13 @@ class MCPServer:
             "detect_chords",
             "compare_audio",
             "compare_to_reference",
+            "segment_audio",
+            "segment_phrases",
+            "comprehensive_analysis",
+            "analyze_groove",
+            "time_stretch",
+            "pitch_shift",
+            "detect_repetitions",
         ]
         if tool_name in audio_tool_names:
             result = await self.audio_tools.call_tool(tool_name, **kwargs)

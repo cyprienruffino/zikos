@@ -924,7 +924,7 @@ class TestToolSchemas:
         schemas = audio_tools.get_tool_schemas()
 
         assert isinstance(schemas, list)
-        assert len(schemas) == 10
+        assert len(schemas) == 17
 
         tool_names = [s["function"]["name"] for s in schemas]
         assert "analyze_tempo" in tool_names
