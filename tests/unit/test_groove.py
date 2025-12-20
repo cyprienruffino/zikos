@@ -13,6 +13,7 @@ from zikos.mcp.tools.audio.groove import analyze_groove
 
 
 @pytest.mark.asyncio
+@pytest.mark.slow
 async def test_analyze_groove_success(temp_dir, sample_audio_path):
     """Test successful groove analysis"""
     sample_rate = 22050
@@ -82,6 +83,7 @@ async def test_analyze_groove_insufficient_onsets(temp_dir, sample_audio_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.slow
 async def test_analyze_groove_via_tools_class(temp_dir, sample_audio_path):
     """Test groove analysis via AudioAnalysisTools class"""
     sample_rate = 22050

@@ -3,6 +3,8 @@
 import uuid
 from typing import Any
 
+from zikos.constants import RECORDING
+
 
 class RecordingTools:
     """Audio recording MCP tools"""
@@ -19,7 +21,10 @@ class RecordingTools:
                         "type": "object",
                         "properties": {
                             "prompt": {"type": "string"},
-                            "max_duration": {"type": "number", "default": 60.0},
+                            "max_duration": {
+                                "type": "number",
+                                "default": RECORDING.DEFAULT_MAX_DURATION,
+                            },
                         },
                         "required": ["prompt"],
                     },
@@ -32,7 +37,7 @@ class RecordingTools:
         if tool_name == "request_audio_recording":
             return await self.request_audio_recording(
                 kwargs["prompt"],
-                kwargs.get("max_duration", 60.0),
+                kwargs.get("max_duration", RECORDING.DEFAULT_MAX_DURATION),
             )
         else:
             raise ValueError(f"Unknown tool: {tool_name}")

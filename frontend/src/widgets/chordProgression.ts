@@ -1,4 +1,4 @@
-import { ChordProgressionState } from "../types";
+import { ChordProgressionState } from "../types.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 const chordProgressions = new Map<string, ChordProgressionState>();

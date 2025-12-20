@@ -1,4 +1,4 @@
-import { TempoTrainerState } from "../types";
+import { TempoTrainerState } from "../types.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 const tempoTrainers = new Map<string, TempoTrainerState>();

@@ -41,18 +41,31 @@ class ChatService:
         session_id: str | None,
     ) -> dict[str, Any]:
         """Handle audio ready notification"""
-        response = await self.llm_service.handle_audio_ready(
-            audio_file_id,
-            recording_id,
-            session_id,
-            self.mcp_server,
-        )
+        try:
+            response = await self.llm_service.handle_audio_ready(
+                audio_file_id,
+                recording_id,
+                session_id,
+                self.mcp_server,
+            )
 
-        return {
-            "type": "response",
-            "message": response,
-            "audio_file_id": audio_file_id,
-        }
+            # Ensure response has correct structure
+            if isinstance(response, dict) and "type" in response:
+                response["audio_file_id"] = audio_file_id
+                return response
+            else:
+                # Handle case where response is just a string
+                return {
+                    "type": "response",
+                    "message": str(response) if response else "Audio analysis complete.",
+                    "audio_file_id": audio_file_id,
+                }
+        except Exception as e:
+            return {
+                "type": "error",
+                "message": f"Error processing audio: {str(e)}",
+                "audio_file_id": audio_file_id,
+            }
 
     def _create_session(self) -> str:
         """Create new session"""

@@ -1,5 +1,5 @@
-import { addMessage } from "./ui";
-import { connect, sendMessage, getIsProcessing } from "./websocket";
+import { addMessage } from "./ui.js";
+import { connect, sendMessage, getIsProcessing } from "./websocket.js";
 
 const messageInput = document.getElementById("messageInput") as HTMLInputElement;
 const sendButton = document.getElementById("sendButton") as HTMLButtonElement;

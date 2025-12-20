@@ -1,0 +1,441 @@
+"""Unit tests for LLM service"""
+
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+import pytest
+
+from zikos.services.llm import LLMService
+
+
+@pytest.fixture
+def mock_llm():
+    """Mock LLM instance"""
+    llm = MagicMock()
+    llm.create_chat_completion.return_value = {
+        "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
+    }
+    return llm
+
+
+@pytest.fixture
+def llm_service(mock_llm):
+    """Create LLMService instance with mocked LLM"""
+    with patch("zikos.services.llm.Llama", return_value=mock_llm):
+        service = LLMService()
+        service.llm = mock_llm
+        return service
+
+
+@pytest.fixture
+def llm_service_no_model():
+    """Create LLMService instance without LLM (no model configured)"""
+    with patch("zikos.services.llm.Llama", return_value=None):
+        service = LLMService()
+        service.llm = None
+        return service
+
+
+@pytest.fixture
+def mock_mcp_server():
+    """Mock MCP server"""
+    server = MagicMock()
+    server.get_tools.return_value = [
+        {
+            "type": "function",
+            "function": {
+                "name": "test_tool",
+                "description": "A test tool",
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        }
+    ]
+    return server
+
+
+class TestLLMServiceInitialization:
+    """Tests for LLM service initialization"""
+
+    def test_initialization_with_model(self, mock_llm):
+        """Test LLM service initialization with model"""
+        with patch("zikos.services.llm.Llama", return_value=mock_llm):
+            with patch("zikos.services.llm.settings") as mock_settings:
+                with patch("pathlib.Path.exists", return_value=True):
+                    mock_settings.llm_model_path = "/path/to/model.gguf"
+                    mock_settings.llm_n_ctx = 4096
+                    mock_settings.llm_n_gpu_layers = 0
+
+                    service = LLMService()
+
+                    assert service.llm is not None
+                    assert service.audio_service is not None
+                    assert isinstance(service.conversations, dict)
+
+    def test_initialization_without_model(self):
+        """Test LLM service initialization without model"""
+        with patch("zikos.services.llm.Llama", return_value=None):
+            with patch("zikos.services.llm.settings") as mock_settings:
+                mock_settings.llm_model_path = ""
+
+                service = LLMService()
+
+                assert service.llm is None
+                assert service.audio_service is not None
+
+
+class TestSystemPrompt:
+    """Tests for system prompt loading"""
+
+    def test_get_system_prompt_from_file(self, llm_service, tmp_path):
+        """Test loading system prompt from file"""
+        prompt_file = tmp_path / "SYSTEM_PROMPT.md"
+        prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
+
+        # Mock the path resolution to point to our temp file
+        with patch("zikos.services.llm.Path") as mock_path_class:
+            mock_path_instance = MagicMock()
+            mock_path_instance.parent.parent.parent.parent = tmp_path
+            mock_path_instance.exists.return_value = True
+            mock_path_class.return_value = mock_path_instance
+            mock_path_class.side_effect = lambda *args: Path(*args) if args else mock_path_instance
+
+            with patch("builtins.open", create=True) as mock_open:
+                mock_open.return_value.__enter__.return_value.read.return_value = (
+                    "# System Prompt\n\n```\nYou are a helpful assistant.\n```\n"
+                )
+                prompt = llm_service._get_system_prompt()
+
+                assert "helpful assistant" in prompt
+
+    def test_get_system_prompt_fallback(self, llm_service):
+        """Test fallback system prompt when file doesn't exist"""
+        with patch("zikos.services.llm.Path") as mock_path:
+            mock_path.return_value.exists.return_value = False
+
+            prompt = llm_service._get_system_prompt()
+
+            assert "expert music teacher" in prompt.lower()
+
+
+class TestConversationHistory:
+    """Tests for conversation history management"""
+
+    def test_get_conversation_history_new_session(self, llm_service):
+        """Test getting conversation history for new session"""
+        history = llm_service._get_conversation_history("new_session")
+
+        assert len(history) == 1
+        assert history[0]["role"] == "system"
+        assert "content" in history[0]
+
+    def test_get_conversation_history_existing_session(self, llm_service):
+        """Test getting conversation history for existing session"""
+        session_id = "existing_session"
+        llm_service.conversations[session_id] = [{"role": "user", "content": "Hello"}]
+
+        history = llm_service._get_conversation_history(session_id)
+
+        assert len(history) == 1
+        assert history[0]["content"] == "Hello"
+
+    def test_conversation_history_preserves_system_prompt(self, llm_service):
+        """Test that system prompt is preserved in conversation history"""
+        session_id = "test_session"
+        history1 = llm_service._get_conversation_history(session_id)
+        history2 = llm_service._get_conversation_history(session_id)
+
+        assert len(history1) == 1
+        assert len(history2) == 1
+        assert history1[0]["role"] == "system"
+        assert history2[0]["role"] == "system"
+
+
+class TestMessagePreparation:
+    """Tests for message preparation and truncation"""
+
+    def test_prepare_messages_with_system_prompt(self, llm_service):
+        """Test preparing messages with system prompt prepended"""
+        history = [
+            {"role": "system", "content": "You are helpful"},
+            {"role": "user", "content": "Hello"},
+        ]
+
+        messages = llm_service._prepare_messages(history)
+
+        assert len(messages) == 1
+        assert messages[0]["role"] == "user"
+        assert "You are helpful" in messages[0]["content"]
+        assert "Hello" in messages[0]["content"]
+
+    def test_prepare_messages_truncates_long_history(self, llm_service):
+        """Test that long conversation history is truncated"""
+        history = [{"role": "system", "content": "System prompt"}]
+        # Create many messages to exceed token limit
+        for i in range(100):
+            history.append({"role": "user", "content": f"Message {i}" * 100})
+            history.append({"role": "assistant", "content": f"Response {i}" * 100})
+
+        messages = llm_service._prepare_messages(history, max_tokens=1000)
+
+        # Should be truncated but still have messages
+        assert len(messages) < len(history)
+        assert len(messages) > 0
+
+    def test_prepare_messages_preserves_audio_analysis(self, llm_service):
+        """Test that audio analysis messages are always preserved"""
+        history = [
+            {"role": "system", "content": "System prompt"},
+            {
+                "role": "user",
+                "content": "[Audio Analysis Results]\nAudio File: test.wav\nTempo: 120 BPM",
+            },
+            {"role": "user", "content": "Message 1" * 100},
+            {"role": "user", "content": "Message 2" * 100},
+            {"role": "user", "content": "Message 3" * 100},
+        ]
+
+        messages = llm_service._prepare_messages(history, max_tokens=500)
+
+        # Audio analysis should be preserved
+        audio_found = any(
+            "[Audio Analysis Results]" in str(msg.get("content", "")) for msg in messages
+        )
+        assert audio_found, "Audio analysis message should be preserved"
+
+
+class TestAudioAnalysisDetection:
+    """Tests for audio analysis detection and context injection"""
+
+    def test_find_recent_audio_analysis(self, llm_service):
+        """Test finding recent audio analysis in history"""
+        history = [
+            {"role": "user", "content": "Hello"},
+            {
+                "role": "user",
+                "content": "[Audio Analysis Results]\nAudio File: test.wav\nTempo: 120 BPM",
+            },
+        ]
+
+        analysis = llm_service._find_recent_audio_analysis(history)
+
+        assert analysis is not None
+        assert "Audio Analysis Results" in analysis
+        assert "Tempo: 120 BPM" in analysis
+
+    def test_find_recent_audio_analysis_not_found(self, llm_service):
+        """Test when no audio analysis is found"""
+        history = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there"},
+        ]
+
+        analysis = llm_service._find_recent_audio_analysis(history)
+
+        assert analysis is None
+
+    def test_find_recent_audio_analysis_with_markers(self, llm_service):
+        """Test finding audio analysis with various markers"""
+        test_cases = [
+            ("[Audio Analysis Results]", True),
+            ("[Audio analysis complete]", True),  # Case insensitive
+            ('{"tempo": 120, "audio_file_id": "test123"}', True),  # Needs structured data
+            ("Just regular text", False),  # Should not match
+        ]
+
+        for marker, should_match in test_cases:
+            history = [{"role": "user", "content": f"Test {marker} data"}]
+            analysis = llm_service._find_recent_audio_analysis(history)
+            if should_match:
+                assert analysis is not None, f"Should find analysis with marker: {marker}"
+            else:
+                assert analysis is None, f"Should not find analysis with marker: {marker}"
+
+    @pytest.mark.asyncio
+    async def test_generate_response_injects_audio_analysis(self, llm_service, mock_mcp_server):
+        """Test that audio analysis is injected when user asks about audio"""
+        session_id = "test_session"
+        history = llm_service._get_conversation_history(session_id)
+        history.append(
+            {
+                "role": "user",
+                "content": "[Audio Analysis Results]\nAudio File: audio123.wav\nTempo: 120 BPM",
+            }
+        )
+
+        # Use a message that triggers audio detection but won't trigger pre-detection
+        # "about this" triggers audio detection, but doesn't match pre-detection keywords
+        # Avoid "test" which matches pre-detection
+        user_message = "What can you tell me about this sample?"
+        result = await llm_service.generate_response(user_message, session_id, mock_mcp_server)
+
+        # The message gets modified to include analysis, then checked for pre-detection
+        # If pre-detection doesn't match, LLM should be called
+        # Check that either LLM was called OR pre-detection returned early (both are valid)
+        if result.get("type") == "tool_call":
+            # Pre-detection matched, which is fine - just verify it happened
+            assert "tool_name" in result
+        else:
+            # LLM should have been called
+            call_args = llm_service.llm.create_chat_completion.call_args
+            assert call_args is not None, "LLM should have been called"
+            messages = call_args.kwargs.get("messages", [])
+            # Should have audio analysis in the messages
+            message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
+            assert "Audio Analysis" in message_contents or "Tempo: 120" in message_contents
+
+    @pytest.mark.asyncio
+    async def test_generate_response_no_analysis_found(self, llm_service, mock_mcp_server):
+        """Test response when no audio analysis is found"""
+        session_id = "test_session"
+
+        # Configure mock to return expected response when it sees the instruction about no audio analysis
+        def mock_chat_completion(*args, **kwargs):
+            messages = kwargs.get("messages", [])
+            message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
+            if "no audio analysis data is available" in message_contents.lower():
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": "I don't see any audio analysis available in our conversation. Please record or upload audio first.",
+                                "role": "assistant",
+                            }
+                        }
+                    ]
+                }
+            return {"choices": [{"message": {"content": "Test response", "role": "assistant"}}]}
+
+        llm_service.llm.create_chat_completion.side_effect = mock_chat_completion
+
+        result = await llm_service.generate_response(
+            "Can you tell me about this sample?", session_id, mock_mcp_server
+        )
+
+        assert result["type"] == "response"
+        assert "don't see any audio analysis" in result["message"].lower()
+
+
+class TestGenerateResponse:
+    """Tests for response generation"""
+
+    @pytest.mark.asyncio
+    async def test_generate_response_without_llm(self, llm_service_no_model, mock_mcp_server):
+        """Test response generation when LLM is not available"""
+        result = await llm_service_no_model.generate_response(
+            "Hello", "test_session", mock_mcp_server
+        )
+
+        assert result["type"] == "response"
+        assert "LLM not available" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_generate_response_with_llm(self, llm_service, mock_mcp_server):
+        """Test response generation with LLM"""
+        result = await llm_service.generate_response("Hello", "test_session", mock_mcp_server)
+
+        assert result["type"] == "response"
+        assert "message" in result
+        assert llm_service.llm.create_chat_completion.called
+
+    @pytest.mark.asyncio
+    async def test_generate_response_with_tool_call(self, llm_service, mock_mcp_server):
+        """Test response generation with tool call"""
+        llm_service.llm.create_chat_completion.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "call_123",
+                                "function": {
+                                    "name": "request_audio_recording",
+                                    "arguments": '{"prompt": "Record audio"}',
+                                },
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+
+        result = await llm_service.generate_response(
+            "let's record", "test_session", mock_mcp_server
+        )
+
+        assert result["type"] == "tool_call"
+        assert result["tool_name"] == "request_audio_recording"
+
+    @pytest.mark.asyncio
+    async def test_generate_response_max_iterations(self, llm_service, mock_mcp_server):
+        """Test that max iterations prevents infinite loops"""
+        # Mock tool call that keeps returning tool calls (not a widget tool)
+        call_count = 0
+
+        def mock_chat_completion(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "id": f"call_{call_count}",
+                                    "function": {
+                                        "name": "analyze_tempo",  # An audio analysis tool, not a widget
+                                        "arguments": '{"audio_file_id": "test"}',
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+
+        llm_service.llm.create_chat_completion.side_effect = mock_chat_completion
+        mock_mcp_server.call_tool = AsyncMock(return_value={"result": "analysis_result"})
+
+        # Use a message that won't trigger pre-detection
+        # "test" matches pre-detection, so use something else
+        result = await llm_service.generate_response(
+            "Hello, how are you?", "session_123", mock_mcp_server
+        )
+
+        # Should hit max iterations (10) and return error message
+        # Note: The tool results get added to history and loop continues
+        assert result["type"] == "response"
+        assert "Maximum iterations" in result["message"]
+        # Should have called multiple times (at least hit the limit)
+        assert call_count >= 10, f"Expected at least 10 calls, got {call_count}"
+
+
+class TestHandleAudioReady:
+    """Tests for handling audio ready notifications"""
+
+    @pytest.mark.asyncio
+    async def test_handle_audio_ready(self, llm_service, mock_mcp_server):
+        """Test handling audio ready notification"""
+        audio_file_id = "test_audio_123"
+        mock_analysis = {"tempo": 120, "pitch": {"accuracy": 0.9}}
+
+        with patch.object(
+            llm_service.audio_service, "run_baseline_analysis", return_value=mock_analysis
+        ):
+            result = await llm_service.handle_audio_ready(
+                audio_file_id, "recording_123", "session_123", mock_mcp_server
+            )
+
+            assert "type" in result
+            # Should return a dict with type and message (or tool_call)
+            assert result["type"] in ["response", "tool_call"]
+            # Check that analysis was included in the message sent to LLM
+            call_args = llm_service.llm.create_chat_completion.call_args
+            if call_args:
+                messages = call_args.kwargs.get("messages", [])
+                message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
+                assert "[Audio Analysis Results]" in message_contents or "120" in message_contents

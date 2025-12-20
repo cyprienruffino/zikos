@@ -3,7 +3,10 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import BaseModel
+
+load_dotenv()
 
 
 class Settings(BaseModel):
@@ -16,7 +19,7 @@ class Settings(BaseModel):
 
     # LLM
     llm_model_path: str = ""
-    llm_n_ctx: int = 4096
+    llm_n_ctx: int = 32768
     llm_n_gpu_layers: int = 0
     llm_temperature: float = 0.7
     llm_top_p: float = 0.9
@@ -30,6 +33,9 @@ class Settings(BaseModel):
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 8001
 
+    # Debug
+    debug_tool_calls: bool = False
+
     @classmethod
     def from_env(cls) -> "Settings":
         """Load settings from environment variables"""
@@ -38,7 +44,7 @@ class Settings(BaseModel):
             api_port=int(os.getenv("API_PORT", "8000")),
             api_reload=os.getenv("API_RELOAD", "false").lower() == "true",
             llm_model_path=os.getenv("LLM_MODEL_PATH", ""),
-            llm_n_ctx=int(os.getenv("LLM_N_CTX", "4096")),
+            llm_n_ctx=int(os.getenv("LLM_N_CTX", "32768")),
             llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", "0")),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             llm_top_p=float(os.getenv("LLM_TOP_P", "0.9")),
@@ -47,6 +53,7 @@ class Settings(BaseModel):
             notation_storage_path=Path(os.getenv("NOTATION_STORAGE_PATH", "notation_storage")),
             mcp_server_host=os.getenv("MCP_SERVER_HOST", "localhost"),
             mcp_server_port=int(os.getenv("MCP_SERVER_PORT", "8001")),
+            debug_tool_calls=os.getenv("DEBUG_TOOL_CALLS", "false").lower() == "true",
         )
 
 

@@ -72,6 +72,9 @@ Pre-commit hooks automatically run checks before each commit:
 - Black formatting
 - Ruff linting
 - MyPy type checking
+- **Fast unit tests only** (excludes `slow`, `integration`, `expensive`, and `llama` tests)
+
+**Important**: The pre-commit hook runs only fast unit tests. Slow tests (like audio processing tests that do real analysis) are excluded to keep commit times reasonable. These tests are still run in CI and can be run manually with `pytest -m slow` or `pytest -m integration`.
 
 To run hooks manually:
 ```bash
@@ -139,22 +142,111 @@ Run specific test categories:
 ```bash
 pytest -m unit          # Only unit tests
 pytest -m "not slow"    # Skip slow tests
-pytest -m "not expensive and not llama"  # Skip expensive/LLM tests (default in CI)
+pytest -m "not expensive and not llama and not slow and not integration"  # Fast tests only (pre-commit default)
 pytest -m llama         # Run LLM tests (requires model file)
+pytest -m slow          # Run slow tests (audio processing with real analysis)
+pytest -m integration   # Run integration tests
 ```
 
-**Important**: LLM tests are marked as `expensive` and `llama` and are **excluded by default** in CI. These tests require:
-- `llama-cpp-python` installed
-- A valid LLM model file configured via `LLM_MODEL_PATH`
-- Significant computational resources
+**Important**:
+- **LLM tests** are marked as `expensive` and `llama` and are **excluded by default** in CI and pre-commit. These tests require:
+  - `llama-cpp-python` installed
+  - A valid LLM model file configured via `LLM_MODEL_PATH`
+  - Significant computational resources
+- **Audio processing tests** that do real audio analysis (e.g., `test_analyze_articulation_basic`, `test_comprehensive_analysis_success`) are marked as `slow` or `integration` and are **excluded from pre-commit hooks** to keep commit times reasonable (~26+ minutes otherwise). These tests are still run in CI.
+- LLM service code is intentionally excluded from coverage requirements due to the expense of running these tests.
 
-LLM service code is intentionally excluded from coverage requirements due to the expense of running these tests.
+### Running LLM Integration Tests
+
+LLM integration tests verify that the LLM can actually use tools correctly. These are **critical for catching tool calling bugs** that mocked tests miss.
+
+#### Why Run LLM Tests?
+
+- **Tool calling verification**: Tests verify the LLM can actually call MCP tools (metronome, recording, etc.)
+- **Real integration**: Tests use real LLM, real MCP server, and real tool schemas
+- **Bug detection**: Catches issues that mocked tests can't (e.g., tool schema format problems, LLM not calling tools)
+
+#### Prerequisites
+
+1. **Install llama-cpp-python**:
+   ```bash
+   pip install llama-cpp-python
+   ```
+
+2. **Download a model file**:
+   ```bash
+   python scripts/download_model.py llama-3.1-8b-instruct-q4 -o models/
+   ```
+
+3. **Configure model path** (via environment variable or `.env`):
+   ```bash
+   export LLM_MODEL_PATH=models/llama-3.1-8b-instruct-q4.gguf
+   ```
+
+#### How to Run
+
+```bash
+# Run all LLM tests
+pytest -m llama -v
+
+# Run only tool calling tests
+pytest tests/integration/test_llm_tool_calling.py -v
+
+# Run only basic LLM tests
+pytest tests/integration/test_llm_integration.py -v
+
+# Run with verbose output to see what's happening
+pytest -m llama -vv
+
+# Run specific test
+pytest tests/integration/test_llm_tool_calling.py::TestLLMToolCallingIntegration::test_llm_can_call_metronome_tool -v
+```
+
+#### When to Run LLM Tests
+
+Run these tests:
+- **Before releases**: Ensure tool calling works correctly
+- **When debugging tool issues**: If tools aren't working in the app, these tests help isolate the problem
+- **After LLM-related changes**: After modifying tool schemas, LLM service, or tool calling logic
+- **Periodically**: Run manually to catch regressions (they're too expensive for CI)
+
+#### What These Tests Cover
+
+**`test_llm_integration.py`**:
+- LLM initialization with real model
+- Basic response generation
+
+**`test_llm_tool_calling.py`** (most important):
+- LLM can call metronome tool when requested
+- LLM can call recording tool when requested
+- Tool schemas are properly formatted for the LLM
+- Tool calling loop works correctly
+- Error handling doesn't crash
+
+#### Troubleshooting
+
+**Tests skip with "LLM not initialized"**:
+- Check `LLM_MODEL_PATH` is set correctly
+- Verify model file exists at the specified path
+- Check model file is valid (not corrupted)
+
+**Tests are slow**:
+- This is expected - LLM inference is computationally expensive
+- Tests typically take 10-30 seconds each
+- Consider running specific tests instead of all at once
+
+**Tool calling tests fail**:
+- Check tool schemas are correctly formatted
+- Verify MCP server is working (`pytest tests/integration/test_mcp_tool_calling.py`)
+- Check LLM model supports function calling (Llama 3.1+ recommended)
 
 ### Coverage Requirements
 
-- **Minimum coverage**: 80%
+- **Minimum coverage**: 80% (for fast tests in pre-commit)
 - **Target coverage**: 90%+
 - Coverage reports generated in `htmlcov/` directory
+
+**Note**: Some audio analysis modules (`articulation.py`, `chords.py`, `comprehensive.py`, `dynamics.py`, `groove.py`, `key.py`, `timbre.py`) are excluded from coverage requirements because they are only tested by slow tests that do real audio processing. These tests are excluded from pre-commit hooks to keep commit times reasonable (~26+ minutes otherwise). These modules are still tested in CI and can be run manually with `pytest -m slow`.
 
 View coverage report:
 ```bash
@@ -231,6 +323,38 @@ pytest --pdb
 
 # Run specific test with pdb
 pytest tests/unit/test_config.py::test_settings_defaults --pdb
+```
+
+### Debugging Tool Calls
+
+To see detailed logging for all tool calls (useful for debugging tool invocation issues):
+
+**Via environment variable:**
+```bash
+export DEBUG_TOOL_CALLS=true
+python run.py
+```
+
+**Via .env file:**
+```
+DEBUG_TOOL_CALLS=true
+```
+
+When enabled, you'll see detailed logs for:
+- Every tool call with its name, ID, and arguments
+- Tool results (success or error)
+- Widget tools that are returned to the frontend
+- MCP server tool invocations
+
+Example output:
+```
+[TOOL CALL] request_audio_recording
+  Tool ID: call_abc123
+  Arguments: {
+    "prompt": "Please record audio",
+    "max_duration": 30.0
+  }
+[WIDGET TOOL] Returning request_audio_recording to frontend
 ```
 
 ## Project Structure

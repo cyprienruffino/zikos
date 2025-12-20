@@ -15,45 +15,77 @@ except ImportError:
 
 
 MODEL_CONFIGS = {
+    "qwen2.5-7b-instruct-q4": {
+        "repo_id": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+        "filename": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+        "description": "Qwen2.5 7B Instruct Q4_K_M (EXCELLENT function calling, recommended)",
+        "function_calling": "excellent",
+    },
+    "qwen2.5-7b-instruct-q5": {
+        "repo_id": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+        "filename": "Qwen2.5-7B-Instruct-Q5_K_M.gguf",
+        "description": "Qwen2.5 7B Instruct Q5_K_M (EXCELLENT function calling, higher quality)",
+        "function_calling": "excellent",
+    },
+    "qwen2.5-14b-instruct-q4": {
+        "repo_id": "bartowski/Qwen2.5-14B-Instruct-GGUF",
+        "filename": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+        "description": "Qwen2.5 14B Instruct Q4_K_M (EXCELLENT function calling, larger model)",
+        "function_calling": "excellent",
+    },
+    "mistral-7b-instruct-v0.3-q4": {
+        "repo_id": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
+        "filename": "mistral-7b-instruct-v0.3.Q4_K_M.gguf",
+        "description": "Mistral 7B Instruct v0.3 Q4_K_M (GOOD function calling)",
+        "function_calling": "good",
+    },
+    "mistral-7b-instruct-v0.3-q5": {
+        "repo_id": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
+        "filename": "mistral-7b-instruct-v0.3.Q5_K_M.gguf",
+        "description": "Mistral 7B Instruct v0.3 Q5_K_M (GOOD function calling, higher quality)",
+        "function_calling": "good",
+    },
+    "phi-3-mini-q4": {
+        "repo_id": "microsoft/Phi-3-mini-4k-instruct-gguf",
+        "filename": "Phi-3-mini-4k-instruct-q4.gguf",
+        "description": "Phi-3 Mini 4K Instruct Q4 (small, ~2.3GB, fast, limited function calling)",
+        "function_calling": "limited",
+    },
     "llama-3.1-8b-instruct-q4": {
-        "repo_id": "bartowski/Llama-3.1-8B-Instruct-GGUF",
-        "filename": "Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-        "description": "Llama 3.1 8B Instruct Q4_K_M (recommended balance)",
+        "repo_id": "TheBloke/Llama-3.1-8B-Instruct-GGUF",
+        "filename": "llama-3.1-8b-instruct.Q4_K_M.gguf",
+        "description": "Llama 3.1 8B Instruct Q4_K_M (moderate function calling)",
+        "function_calling": "moderate",
     },
     "llama-3.1-8b-instruct-q5": {
         "repo_id": "bartowski/Llama-3.1-8B-Instruct-GGUF",
         "filename": "Llama-3.1-8B-Instruct-Q5_K_M.gguf",
-        "description": "Llama 3.1 8B Instruct Q5_K_M (higher quality)",
-    },
-    "llama-3.1-8b-instruct-q8": {
-        "repo_id": "bartowski/Llama-3.1-8B-Instruct-GGUF",
-        "filename": "Llama-3.1-8B-Instruct-Q8_0.gguf",
-        "description": "Llama 3.1 8B Instruct Q8_0 (very high quality)",
+        "description": "Llama 3.1 8B Instruct Q5_K_M (moderate function calling, higher quality)",
+        "function_calling": "moderate",
     },
     "llama-3.2-8b-instruct-q4": {
         "repo_id": "bartowski/Llama-3.2-8B-Instruct-GGUF",
         "filename": "Llama-3.2-8B-Instruct-Q4_K_M.gguf",
-        "description": "Llama 3.2 8B Instruct Q4_K_M (recommended balance)",
+        "description": "Llama 3.2 8B Instruct Q4_K_M (better function calling than 3.1)",
+        "function_calling": "good",
     },
     "llama-3.2-8b-instruct-q5": {
         "repo_id": "bartowski/Llama-3.2-8B-Instruct-GGUF",
         "filename": "Llama-3.2-8B-Instruct-Q5_K_M.gguf",
-        "description": "Llama 3.2 8B Instruct Q5_K_M (higher quality)",
+        "description": "Llama 3.2 8B Instruct Q5_K_M (better function calling than 3.1, higher quality)",
+        "function_calling": "good",
     },
     "llama-3.3-70b-instruct-q4": {
         "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
         "filename": "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
         "description": "Llama 3.3 70B Instruct Q4_K_M (large model, requires significant RAM)",
+        "function_calling": "excellent",
     },
     "llama-3.3-70b-instruct-q5": {
         "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
         "filename": "Llama-3.3-70B-Instruct-Q5_K_M.gguf",
         "description": "Llama 3.3 70B Instruct Q5_K_M (large model, requires significant RAM)",
-    },
-    "llama-3.3-70b-instruct-q6": {
-        "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
-        "filename": "Llama-3.3-70B-Instruct-Q6_K.gguf",
-        "description": "Llama 3.3 70B Instruct Q6_K (large model, very high quality)",
+        "function_calling": "excellent",
     },
 }
 
@@ -130,9 +162,23 @@ def download_model(
     if model_key not in MODEL_CONFIGS:
         print(f"Error: Unknown model '{model_key}'")
         print("\nAvailable models:")
-        print("\n8B Models (recommended for most systems):")
+        print("\n⭐ RECOMMENDED for Function Calling (7B-14B):")
         for key, config in MODEL_CONFIGS.items():
-            if "8b" in key.lower():
+            if config.get("function_calling") == "excellent" and (
+                "7b" in key.lower() or "14b" in key.lower()
+            ):
+                print(f"  {key}: {config['description']}")
+        print("\nGood Function Calling (7B-8B):")
+        for key, config in MODEL_CONFIGS.items():
+            if config.get("function_calling") == "good" and (
+                "7b" in key.lower() or "8b" in key.lower()
+            ):
+                print(f"  {key}: {config['description']}")
+        print("\nOther 7B-8B Models:")
+        for key, config in MODEL_CONFIGS.items():
+            if ("7b" in key.lower() or "8b" in key.lower()) and config.get(
+                "function_calling"
+            ) not in ["excellent", "good"]:
                 print(f"  {key}: {config['description']}")
         print("\n70B Models (requires significant RAM/VRAM, 16GB+ recommended):")
         for key, config in MODEL_CONFIGS.items():
@@ -170,16 +216,25 @@ def download_model(
         output_path.unlink()
 
     try:
+        # Try huggingface_hub first (handles auth and redirects better)
         if HAS_HF_HUB:
-            output_path = download_with_hf_hub(
-                config["repo_id"], config["filename"], output_dir, token
-            )
+            try:
+                output_path = download_with_hf_hub(
+                    config["repo_id"], config["filename"], output_dir, token
+                )
+            except Exception as hf_error:
+                # Fallback to requests if hf_hub fails
+                print(f"huggingface_hub failed: {hf_error}")
+                print("Trying direct download...")
+                output_path = download_with_requests(
+                    config["repo_id"], config["filename"], output_dir, token
+                )
         else:
             output_path = download_with_requests(
                 config["repo_id"], config["filename"], output_dir, token
             )
 
-        print(f"\n✓ Model downloaded successfully to: {output_path}")
+        print(f"\nModel downloaded successfully to: {output_path}")
         print("\nTo use this model, set the environment variable:")
         print(f"  export LLM_MODEL_PATH={output_path}")
         print("\nOr add it to your .env file:")
@@ -188,7 +243,33 @@ def download_model(
         return output_path
 
     except Exception as e:
-        print(f"\n✗ Error downloading model: {e}")
+        print(f"\nError downloading model: {e}")
+        if "404" in str(e) or "Not Found" in str(e):
+            print("\n⚠️  The model file may not be available at the expected location.")
+            print("This could mean:")
+            print("  1. The model hasn't been converted to GGUF format yet")
+            print("  2. The filename or repository path has changed")
+            print("  3. The model requires authentication")
+            print("\nTry:")
+            print(
+                "  - Check the repository on HuggingFace: https://huggingface.co/"
+                + config["repo_id"]
+            )
+            print("  - Try an alternative model like 'mistral-7b-instruct-v0.3-q4'")
+            print("  - Or use 'llama-3.2-8b-instruct-q4' as a fallback")
+        elif "401" in str(e) or "Unauthorized" in str(e):
+            print("\n⚠️  Authentication error or repository not found.")
+            print("This could mean:")
+            print("  1. The repository doesn't exist or has been moved")
+            print("  2. The model isn't available in GGUF format yet")
+            print("  3. You need a HuggingFace token (unlikely for public models)")
+            print("\nTry:")
+            print("  - Check if the repository exists: https://huggingface.co/" + config["repo_id"])
+            print("  - Try an alternative model:")
+            print("    * 'mistral-7b-instruct-v0.3-q4' (GOOD function calling)")
+            print("    * 'llama-3.2-8b-instruct-q4' (GOOD function calling)")
+            print("  - Install huggingface_hub for better download handling:")
+            print("    pip install huggingface_hub")
         if output_path.exists():
             output_path.unlink()
         sys.exit(1)
@@ -197,18 +278,45 @@ def download_model(
 def list_models():
     """List available models"""
     print("Available models:\n")
-    print("8B Models (recommended for most systems):")
-    print("-" * 60)
+    print("⭐ RECOMMENDED for Function Calling (7B-14B):")
+    print("-" * 70)
     for key, config in MODEL_CONFIGS.items():
-        if "8b" in key.lower():
+        if config.get("function_calling") == "excellent" and (
+            "7b" in key.lower() or "14b" in key.lower()
+        ):
             print(f"  {key}")
             print(f"    {config['description']}")
             print(f"    Repository: {config['repo_id']}")
             print(f"    File: {config['filename']}")
             print()
 
-    print("\n70B Models (requires significant RAM/VRAM):")
-    print("-" * 60)
+    print("\nGood Function Calling (7B-8B):")
+    print("-" * 70)
+    for key, config in MODEL_CONFIGS.items():
+        if config.get("function_calling") == "good" and (
+            "7b" in key.lower() or "8b" in key.lower()
+        ):
+            print(f"  {key}")
+            print(f"    {config['description']}")
+            print(f"    Repository: {config['repo_id']}")
+            print(f"    File: {config['filename']}")
+            print()
+
+    print("\nOther 7B-8B Models:")
+    print("-" * 70)
+    for key, config in MODEL_CONFIGS.items():
+        if ("7b" in key.lower() or "8b" in key.lower()) and config.get("function_calling") not in [
+            "excellent",
+            "good",
+        ]:
+            print(f"  {key}")
+            print(f"    {config['description']}")
+            print(f"    Repository: {config['repo_id']}")
+            print(f"    File: {config['filename']}")
+            print()
+
+    print("\n70B Models (requires significant RAM/VRAM, 16GB+ recommended):")
+    print("-" * 70)
     for key, config in MODEL_CONFIGS.items():
         if "70b" in key.lower():
             print(f"  {key}")

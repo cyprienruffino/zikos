@@ -10,6 +10,7 @@ except ImportError:
     Llama = None
 
 from zikos.config import settings
+from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
 from zikos.services.audio import AudioService
 
@@ -23,6 +24,15 @@ class LLMService:
         self.conversations: dict[str, list[dict[str, Any]]] = {}
         self._initialize_llm()
 
+    def __del__(self):
+        """Cleanup LLM instance on deletion"""
+        if self.llm is not None:
+            try:
+                if hasattr(self.llm, "close"):
+                    self.llm.close()
+            except Exception:
+                pass
+
     def _initialize_llm(self):
         """Initialize LLM"""
         if Llama is None:
@@ -35,16 +45,21 @@ class LLMService:
             print(f"Warning: Model file not found at {model_path}")
             print("The application will start but LLM features will be unavailable.")
             print(
-                f"To download a model, run: python scripts/download_model.py llama-3.1-8b-instruct-q4 -o {model_path.parent}"
+                f"To download a model, run: python scripts/download_model.py qwen2.5-7b-instruct-q4 -o {model_path.parent}"
+            )
+            print(
+                "See MODEL_RECOMMENDATIONS.md for recommended models with better function calling support."
             )
             return
 
         try:
+            print(f"Initializing LLM with context window: {settings.llm_n_ctx} tokens")
             self.llm = Llama(
                 model_path=str(model_path),
                 n_ctx=settings.llm_n_ctx,
                 n_gpu_layers=settings.llm_n_gpu_layers,
             )
+            print(f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens")
         except Exception as e:
             print(f"Error initializing LLM: {e}")
             print("The application will start but LLM features will be unavailable.")
@@ -53,10 +68,93 @@ class LLMService:
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
         """Get conversation history for session"""
         if session_id not in self.conversations:
-            self.conversations[session_id] = [
-                {"role": "system", "content": self._get_system_prompt()}
-            ]
+            system_prompt = self._get_system_prompt()
+            self.conversations[session_id] = [{"role": "system", "content": system_prompt}]
         return self.conversations[session_id]
+
+    def _prepare_messages(
+        self, history: list[dict[str, Any]], max_tokens: int | None = None
+    ) -> list[dict[str, Any]]:
+        if max_tokens is None:
+            max_tokens = LLM.MAX_TOKENS_PREPARE_MESSAGES
+        """Prepare messages for LLM, ensuring system prompt is included
+
+        For models that don't properly handle system messages (like Phi3),
+        prepend the system prompt to the first user message and remove the system message.
+
+        Also truncates conversation history if it exceeds max_tokens to prevent context overflow.
+        IMPORTANT: Always preserves audio analysis messages even if they're older.
+        """
+        if not history:
+            return history
+
+        import tiktoken
+
+        enc = tiktoken.get_encoding("cl100k_base")
+
+        messages = []
+        system_prompt = None
+        system_prepended = False
+        total_tokens = 0
+
+        # First, find and preserve audio analysis messages (they're critical)
+        audio_analysis_messages = []
+        other_messages = []
+        for msg in history:
+            if msg.get("role") == "system":
+                system_prompt = msg.get("content", "")
+                continue
+            content = str(msg.get("content", ""))
+            # Check if this is an audio analysis message
+            if any(
+                marker in content
+                for marker in ["[Audio Analysis", "Audio analysis complete", "audio_file_id"]
+            ):
+                audio_analysis_messages.append(msg)
+            else:
+                other_messages.append(msg)
+
+        # Process other messages in reverse (keep most recent) to stay within token limit
+        # Reserve more space for audio analysis (can be large)
+        # Ensure we have at least some room for messages (handle case where max_tokens < reserve)
+        available_tokens = max(max_tokens - LLM.TOKENS_RESERVE_AUDIO_ANALYSIS, max_tokens // 2)
+
+        processed_messages: list[dict[str, Any]] = []
+        first_message_added = False
+        for msg in reversed(other_messages):
+            msg_tokens = len(enc.encode(str(msg.get("content", ""))))
+            if total_tokens + msg_tokens > available_tokens and first_message_added:
+                break
+
+            processed_messages.insert(0, msg)
+            total_tokens += msg_tokens
+            first_message_added = True
+
+        # Always include audio analysis messages (they're essential)
+        for msg in audio_analysis_messages:
+            processed_messages.append(msg)
+
+        # Now process in forward order
+        for msg in processed_messages:
+            if msg.get("role") == "user" and system_prompt and not system_prepended:
+                combined_content = f"{system_prompt}\n\n{msg['content']}"
+                messages.append({"role": "user", "content": combined_content})
+                system_prepended = True
+            elif msg.get("role") != "system":
+                messages.append(msg)
+
+        # Ensure at least one message is included (system prompt or first user message)
+        if not messages and system_prompt:
+            messages.append({"role": "user", "content": system_prompt})
+        elif not messages and other_messages:
+            first_msg = other_messages[0]
+            if system_prompt:
+                combined_content = f"{system_prompt}\n\n{first_msg.get('content', '')}"
+                messages.append({"role": "user", "content": combined_content})
+            else:
+                messages.append(first_msg)
+
+        return messages
 
     async def generate_response(
         self,
@@ -72,31 +170,159 @@ class LLMService:
             }
 
         history = self._get_conversation_history(session_id)
+
+        # Check if message already contains analysis (from handle_audio_ready)
+        # If so, the LLM should use it directly - no need for keyword detection
+        message_lower = message.lower()
+        has_analysis_marker = (
+            "[audio analysis results]" in message_lower or "audio analysis results" in message_lower
+        )
+
+        # Detect if user is asking about audio
+        audio_keywords = ["sample", "audio", "recording", "sound", "playback", "performance"]
+        is_asking_about_audio = any(keyword in message_lower for keyword in audio_keywords)
+
+        # If asking about audio but no analysis marker, try to find recent audio analysis in history
+        # This helps provide context when user asks follow-up questions about audio
+        if not has_analysis_marker:
+            recent_audio_analysis = self._find_recent_audio_analysis(history)
+            if recent_audio_analysis:
+                # Prepend the analysis context to help the LLM answer questions
+                message = f"[Audio Analysis Context - Use this data to answer the user's question]\n{recent_audio_analysis}\n\n[User Question]\n{message}\n\nIMPORTANT: Answer based ONLY on the audio analysis data provided above. Do not make up or hallucinate information. If the analysis data doesn't contain the information needed, say so explicitly."
+            elif is_asking_about_audio:
+                # User is asking about audio but no analysis is available
+                message = f"{message}\n\n[IMPORTANT: The user is asking about audio analysis, but no audio analysis data is available in the conversation history. Please inform them that you don't see any audio analysis available and suggest they record or upload audio first.]"
+
         history.append({"role": "user", "content": message})
 
+        messages = self._prepare_messages(history)
+
+        print(
+            f"DEBUG: Conversation history has {len(history)} messages, prepared {len(messages)} messages"
+        )
+        if history and history[0].get("role") == "system":
+            print(
+                f"DEBUG: System message present, length: {len(history[0].get('content', ''))} chars"
+            )
+
         tools = mcp_server.get_tools()
-        max_iterations = 10
+
+        max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
 
         while iteration < max_iterations:
             iteration += 1
+            current_messages = self._prepare_messages(
+                history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES
+            )
+
+            # Safety check: prevent context overflow
+            try:
+                import tiktoken
+
+                enc = tiktoken.get_encoding("cl100k_base")
+                total_tokens = sum(
+                    len(enc.encode(str(msg.get("content", "")))) for msg in current_messages
+                )
+                if total_tokens > LLM.MAX_TOKENS_SAFETY_CHECK:
+                    if settings.debug_tool_calls:
+                        print(
+                            f"[TOKEN WARNING] Conversation has {total_tokens} tokens, limit is {LLM.MAX_TOKENS_SAFETY_CHECK}"
+                        )
+                    return {
+                        "type": "response",
+                        "message": "The conversation is too long. Please start a new conversation or summarize what you need.",
+                    }
+            except Exception:
+                pass  # If tiktoken fails, continue anyway
+
             response = self.llm.create_chat_completion(
-                messages=history,
+                messages=current_messages,
                 tools=tools,
                 temperature=settings.llm_temperature,
                 top_p=settings.llm_top_p,
             )
 
             message_obj = response["choices"][0]["message"]
+
+            if settings.debug_tool_calls:
+                print("[LLM RESPONSE] Full response structure:")
+                print(f"  Response keys: {list(response.keys())}")
+                print(f"  Message object keys: {list(message_obj.keys())}")
+                print(f"  Content: {str(message_obj.get('content', 'None'))[:200]}")
+                print(f"  Tool calls: {message_obj.get('tool_calls', 'None')}")
+                print(f"  Role: {message_obj.get('role', 'None')}")
+                if "finish_reason" in response["choices"][0]:
+                    print(f"  Finish reason: {response['choices'][0].get('finish_reason', 'None')}")
+
+            # Safety check: detect gibberish/looping output
+            content = message_obj.get("content", "")
+            if content:
+                words = content.split()
+                # Check for very long responses (likely gibberish)
+                if len(words) > LLM.MAX_WORDS_RESPONSE:
+                    print(f"WARNING: Model generated unusually long response ({len(words)} words)")
+                    return {
+                        "type": "response",
+                        "message": "The model generated an unusually long response. Please try rephrasing your question.",
+                    }
+                # Check for excessive repetition (gibberish pattern)
+                if len(words) > 50:
+                    unique_ratio = len(set(words)) / len(words) if words else 0
+                    if unique_ratio < LLM.MIN_UNIQUE_WORD_RATIO:
+                        print(
+                            f"WARNING: Model generated repetitive output (unique ratio: {unique_ratio:.2f})"
+                        )
+                        return {
+                            "type": "response",
+                            "message": "The model seems to be repeating itself. Please try rephrasing your question.",
+                        }
+                    # Check for excessive single-character or number patterns (gibberish)
+                    if (
+                        len([w for w in words if len(w) == 1 or w.isdigit()])
+                        > len(words) * LLM.MAX_SINGLE_CHAR_RATIO
+                    ):
+                        print(
+                            "WARNING: Model generated suspicious pattern (too many single chars/numbers)"
+                        )
+                        return {
+                            "type": "response",
+                            "message": "The model generated an invalid response. Please try rephrasing your question.",
+                        }
+
             history.append(message_obj)
 
-            if "tool_calls" in message_obj and message_obj["tool_calls"]:
-                tool_calls = message_obj["tool_calls"]
+            # Check for tool calls in response
+            tool_calls = message_obj.get("tool_calls", [])
+
+            # Qwen2.5 uses XML-based tool calling format: <tool_call>{"name": "...", "arguments": {...}}</tool_call>
+            # Parse this if no structured tool_calls are present
+            if not tool_calls and content and "<tool_call>" in content:
+                tool_calls = self._parse_qwen_tool_calls(content)
+
+            if settings.debug_tool_calls:
+                if tool_calls:
+                    print(f"[TOOL CALLS FOUND] {len(tool_calls)} tool call(s)")
+                elif content and (
+                    "<tool_call>" in content or ("name" in content and "arguments" in content)
+                ):
+                    print(
+                        "[WARNING] Content contains tool-like content but no structured tool_calls field"
+                    )
+                    print(f"  Content snippet: {content[:500]}")
+
+            if tool_calls:
                 tool_results = []
 
                 for tool_call in tool_calls:
-                    tool_name = tool_call["function"]["name"]
-                    tool_args_str = tool_call["function"].get("arguments", "{}")
+                    # Handle native tool calls from LLM
+                    if isinstance(tool_call, dict) and "function" in tool_call:
+                        tool_name = tool_call["function"]["name"]
+                        tool_args_str = tool_call["function"].get("arguments", "{}")
+                    else:
+                        # Unexpected format - log and skip
+                        print(f"WARNING: Unexpected tool_call format: {tool_call}")
+                        continue
 
                     try:
                         tool_args = (
@@ -104,10 +330,18 @@ class LLMService:
                             if isinstance(tool_args_str, str)
                             else tool_args_str
                         )
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        print(f"WARNING: Failed to parse tool arguments: {e}")
                         tool_args = {}
 
+                    if settings.debug_tool_calls:
+                        print(f"[TOOL CALL] {tool_name}")
+                        print(f"  Tool ID: {tool_call.get('id', 'N/A')}")
+                        print(f"  Arguments: {json.dumps(tool_args, indent=2)}")
+
                     if tool_name == "request_audio_recording":
+                        if settings.debug_tool_calls:
+                            print(f"[WIDGET TOOL] Returning {tool_name} to frontend")
                         return {
                             "type": "tool_call",
                             "tool_name": tool_name,
@@ -116,6 +350,8 @@ class LLMService:
                         }
 
                     if tool_name == "create_metronome":
+                        if settings.debug_tool_calls:
+                            print(f"[WIDGET TOOL] Returning {tool_name} to frontend")
                         return {
                             "type": "tool_call",
                             "tool_name": tool_name,
@@ -131,6 +367,8 @@ class LLMService:
                         "create_practice_timer",
                     ]
                     if tool_name in widget_tools:
+                        if settings.debug_tool_calls:
+                            print(f"[WIDGET TOOL] Returning {tool_name} to frontend")
                         return {
                             "type": "tool_call",
                             "tool_name": tool_name,
@@ -140,6 +378,9 @@ class LLMService:
 
                     try:
                         result = await mcp_server.call_tool(tool_name, **tool_args)
+                        if settings.debug_tool_calls:
+                            print(f"[TOOL RESULT] {tool_name}")
+                            print(f"  Result: {json.dumps(result, indent=2, default=str)}")
                         tool_results.append(
                             {
                                 "role": "tool",
@@ -149,6 +390,9 @@ class LLMService:
                             }
                         )
                     except Exception as e:
+                        if settings.debug_tool_calls:
+                            print(f"[TOOL ERROR] {tool_name}")
+                            print(f"  Error: {str(e)}")
                         tool_results.append(
                             {
                                 "role": "tool",
@@ -161,14 +405,23 @@ class LLMService:
                 history.extend(tool_results)
                 continue
 
+            # No tool calls - return the response
+            response_content = message_obj.get("content", "")
+
+            # If we expected a tool call but didn't get one, log a warning
+            # (This helps diagnose function calling issues)
+            if iteration == 1 and not response_content:
+                print("WARNING: Model returned empty response on first iteration")
+
             return {
                 "type": "response",
-                "message": message_obj.get("content", ""),
+                "message": response_content
+                or "I'm not sure how to help with that. Could you rephrase your request?",
             }
 
         return {
             "type": "response",
-            "message": "Maximum iterations reached. Please try again.",
+            "message": "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts.",
         }
 
     async def handle_audio_ready(
@@ -179,9 +432,22 @@ class LLMService:
         mcp_server: MCPServer,
     ) -> dict[str, Any]:
         """Handle audio ready and generate response"""
-        analysis = await self.audio_service.run_baseline_analysis(audio_file_id)
+        try:
+            analysis = await self.audio_service.run_baseline_analysis(audio_file_id)
+        except Exception as e:
+            return {
+                "type": "response",
+                "message": f"Error analyzing audio: {str(e)}. The file may be corrupted or in an unsupported format.",
+            }
 
-        message = f"Audio analysis complete for {audio_file_id}. Analysis: {analysis}"
+        # Format analysis clearly for the LLM
+        import json
+
+        analysis_str = (
+            json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
+        )
+        # Use [Audio Analysis Results] marker to prevent re-detection
+        message = f"[Audio Analysis Results]\nAudio File: {audio_file_id}\n\n{analysis_str}\n\nPlease provide feedback on this musical performance based on the analysis above."
 
         return await self.generate_response(message, session_id or "default", mcp_server)
 
@@ -189,7 +455,7 @@ class LLMService:
         """Get system prompt"""
         from pathlib import Path
 
-        prompt_path = Path(__file__).parent.parent.parent / "SYSTEM_PROMPT.md"
+        prompt_path = Path(__file__).parent.parent.parent.parent / "SYSTEM_PROMPT.md"
 
         if prompt_path.exists():
             with open(prompt_path) as f:
@@ -197,6 +463,101 @@ class LLMService:
                 start = content.find("```")
                 end = content.find("```", start + 3)
                 if start != -1 and end != -1:
-                    return content[start + 3 : end].strip()
+                    prompt = content[start + 3 : end].strip()
+                    print(f"DEBUG: System prompt extracted, length: {len(prompt)} chars")
+                    return prompt
 
+        print("DEBUG: Using fallback system prompt")
         return "You are an expert music teacher AI assistant."
+
+    def _find_recent_audio_analysis(self, history: list[dict[str, Any]]) -> str | None:
+        """Find the most recent audio analysis in conversation history"""
+        # Look for messages containing audio analysis (both user messages with analysis context and tool results)
+        for msg in reversed(history):
+            content = str(msg.get("content", ""))
+
+            # Check for audio analysis markers (case insensitive)
+            content_lower = content.lower()
+            has_analysis_markers = any(
+                keyword in content_lower
+                for keyword in [
+                    "[audio analysis",
+                    "audio analysis",
+                    "analysis complete",
+                    "tempo",
+                    "pitch",
+                    "rhythm",
+                    "bpm",
+                    "intonation",
+                    "timing accuracy",
+                    "audio_file_id",
+                ]
+            )
+
+            # Check if it contains structured data (JSON-like)
+            has_structured_data = (
+                "{" in content or "[" in content or '"tempo"' in content or '"pitch"' in content
+            )
+
+            if has_analysis_markers and has_structured_data:
+                # Extract just the analysis portion if it's embedded in a longer message
+                if "[Audio Analysis Context]" in content:
+                    # Extract the analysis section
+                    parts = content.split("[Audio Analysis Context]")
+                    if len(parts) > 1:
+                        analysis_part = parts[1].split("[User Question]")[0].strip()
+                        return analysis_part
+                return content
+        return None
+
+    def _parse_qwen_tool_calls(self, content: str) -> list[dict[str, Any]]:
+        """Parse Qwen2.5's XML-based tool call format
+
+        Qwen2.5 wraps tool calls in <tool_call> tags:
+        <tool_call>
+        {"name": "tool_name", "arguments": {...}}
+        </tool_call>
+        """
+        import re
+
+        tool_calls: list[dict[str, Any]] = []
+
+        # Find all <tool_call>...</tool_call> blocks
+        pattern = r"<tool_call>\s*(.*?)\s*</tool_call>"
+        matches = re.finditer(pattern, content, re.DOTALL)
+
+        for match in matches:
+            try:
+                json_str = match.group(1).strip()
+                tool_obj = json.loads(json_str)
+
+                tool_name = tool_obj.get("name")
+                tool_args = tool_obj.get("arguments", {})
+
+                if tool_name:
+                    tool_calls.append(
+                        {
+                            "id": f"call_qwen_{len(tool_calls)}",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(tool_args)
+                                if isinstance(tool_args, dict)
+                                else str(tool_args),
+                            },
+                        }
+                    )
+
+                    if settings.debug_tool_calls:
+                        print(f"[PARSED QWEN TOOL CALL] {tool_name}")
+                        print(f"  Arguments: {tool_args}")
+            except json.JSONDecodeError as e:
+                if settings.debug_tool_calls:
+                    print(f"[PARSE ERROR] Failed to parse Qwen tool call JSON: {e}")
+                    print(f"  Content: {match.group(1)[:200]}")
+                continue
+            except Exception as e:
+                if settings.debug_tool_calls:
+                    print(f"[PARSE ERROR] Unexpected error parsing Qwen tool call: {e}")
+                continue
+
+        return tool_calls

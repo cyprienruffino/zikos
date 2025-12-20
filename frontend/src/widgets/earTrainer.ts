@@ -1,4 +1,4 @@
-import { EarTrainerState } from "../types";
+import { EarTrainerState } from "../types.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 const earTrainers = new Map<string, EarTrainerState>();

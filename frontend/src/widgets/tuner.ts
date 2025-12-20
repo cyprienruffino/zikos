@@ -1,5 +1,5 @@
-import { TunerState } from "../types";
-import { addMessage } from "../ui";
+import { TunerState } from "../types.js";
+import { addMessage } from "../ui.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 const tuners = new Map<string, TunerState>();

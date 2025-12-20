@@ -10,10 +10,17 @@ from zikos.config import Settings
 @pytest.mark.lightweight
 def test_settings_defaults():
     """Test default settings"""
-    settings = Settings.from_env()
-    assert settings.api_host == "0.0.0.0"
-    assert settings.api_port == 8000
-    assert settings.api_reload is False
+    # Temporarily remove API_RELOAD from environment to test defaults
+    api_reload_value = os.environ.pop("API_RELOAD", None)
+    try:
+        settings = Settings.from_env()
+        assert settings.api_host == "0.0.0.0"
+        assert settings.api_port == 8000
+        assert settings.api_reload is False
+    finally:
+        # Restore original value if it existed
+        if api_reload_value is not None:
+            os.environ["API_RELOAD"] = api_reload_value
 
 
 @pytest.mark.lightweight

@@ -45,7 +45,7 @@ class TestRecordingTools:
         """Test requesting audio recording with default duration via call_tool"""
         result = await recording_tools.call_tool("request_audio_recording", prompt="Play a scale")
 
-        assert result["max_duration"] == 60.0
+        assert result["max_duration"] == 30.0
 
     @pytest.mark.asyncio
     async def test_call_tool_request_audio_recording(self, recording_tools):

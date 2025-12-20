@@ -1,4 +1,4 @@
-import { addMessage, addTypingIndicator } from "../ui";
+import { addMessage, addTypingIndicator } from "../ui.js";
 
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];

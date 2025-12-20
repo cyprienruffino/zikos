@@ -1,7 +1,9 @@
 """MCP server"""
 
+import json
 from typing import Any
 
+from zikos.config import settings
 from zikos.mcp.tools import (
     chord_progression as chord_progression_tools,
 )
@@ -61,6 +63,10 @@ class MCPServer:
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
         """Call a tool by name"""
+        if settings.debug_tool_calls:
+            print(f"[MCP TOOL CALL] {tool_name}")
+            print(f"  Arguments: {json.dumps(kwargs, indent=2, default=str)}")
+
         audio_tool_names = [
             "analyze_tempo",
             "detect_pitch",
@@ -104,7 +110,7 @@ class MCPServer:
         elif tool_name == "create_tuner":
             result = await self.tuner_tools.call_tool(tool_name, **kwargs)
             return dict(result)
-        elif tool_name.startswith("recording_"):
+        elif tool_name == "request_audio_recording" or tool_name.startswith("recording_"):
             result = await self.recording_tools.call_tool(tool_name, **kwargs)
             return dict(result)
         else:

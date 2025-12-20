@@ -1,5 +1,5 @@
-import { WebSocketMessage } from "./types";
-import { API_URL } from "./config";
+import { WebSocketMessage } from "./types.js";
+import { API_URL } from "./config.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 
@@ -12,7 +12,8 @@ export function addMessage(
     messageEl.className = `message ${type}`;
 
     const textEl = document.createElement("div");
-    textEl.textContent = text;
+    textEl.className = "message-text";
+    textEl.innerHTML = text.replace(/\n/g, "<br>");
     messageEl.appendChild(textEl);
 
     if (data?.audio_file_id) {

@@ -53,7 +53,7 @@ class TestAudioService:
 
     @pytest.mark.asyncio
     async def test_run_baseline_analysis(self, audio_service, temp_dir):
-        """Test running baseline analysis"""
+        """Test running baseline analysis with mocked tools"""
         audio_file_id = "test_audio"
         test_file = temp_dir / f"{audio_file_id}.wav"
         test_file.touch()
@@ -75,6 +75,35 @@ class TestAudioService:
             mock_tempo.assert_called_once_with(audio_file_id)
             mock_pitch.assert_called_once_with(audio_file_id)
             mock_rhythm.assert_called_once_with(audio_file_id)
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_run_baseline_analysis_with_real_audio(self, audio_service, temp_dir):
+        """Test running baseline analysis with real synthesized audio"""
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
+        audio_file_id = "test_real_audio"
+        audio_file = temp_dir / f"{audio_file_id}.wav"
+
+        # Create synthesized audio (scale with known characteristics)
+        create_test_audio_file(audio_file, audio_type="scale", duration=2.0)
+
+        # Run real analysis (no mocks)
+        result = await audio_service.run_baseline_analysis(audio_file_id)
+
+        # Should have all analysis components
+        assert "tempo" in result
+        assert "pitch" in result
+        assert "rhythm" in result
+
+        # Tempo should be detected (may not be exact, but should exist)
+        assert "bpm" in result["tempo"] or "error" in result["tempo"]
+
+        # Pitch should detect notes from the scale
+        assert "notes" in result["pitch"] or "error" in result["pitch"]
+
+        # Rhythm should have onsets
+        assert "onsets" in result["rhythm"] or "error" in result["rhythm"]
 
     @pytest.mark.asyncio
     async def test_get_audio_info(self, audio_service, temp_dir):

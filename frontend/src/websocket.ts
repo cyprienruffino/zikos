@@ -1,18 +1,18 @@
-import { WebSocketMessage } from "./types";
-import { WS_URL } from "./config";
-import { addMessage, addTypingIndicator, removeTypingIndicator, updateStatus } from "./ui";
+import { WebSocketMessage } from "./types.js";
+import { WS_URL } from "./config.js";
+import { addMessage, addTypingIndicator, removeTypingIndicator, updateStatus } from "./ui.js";
 import {
     addRecordingWidget,
     removeRecordingWidget,
     setWebSocket,
     setSessionId,
-} from "./widgets/recording";
-import { addMetronomeWidget } from "./widgets/metronome";
-import { addTunerWidget } from "./widgets/tuner";
-import { addChordProgressionWidget } from "./widgets/chordProgression";
-import { addTempoTrainerWidget } from "./widgets/tempoTrainer";
-import { addEarTrainerWidget } from "./widgets/earTrainer";
-import { addPracticeTimerWidget } from "./widgets/practiceTimer";
+} from "./widgets/recording.js";
+import { addMetronomeWidget } from "./widgets/metronome.js";
+import { addTunerWidget } from "./widgets/tuner.js";
+import { addChordProgressionWidget } from "./widgets/chordProgression.js";
+import { addTempoTrainerWidget } from "./widgets/tempoTrainer.js";
+import { addEarTrainerWidget } from "./widgets/earTrainer.js";
+import { addPracticeTimerWidget } from "./widgets/practiceTimer.js";
 
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;

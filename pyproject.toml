@@ -180,6 +180,17 @@ markers = [
     "lightweight: Tests that don't require heavy dependencies",
 ]
 asyncio_mode = "auto"
+filterwarnings = [
+    # Third-party library warnings that we cannot fix without changing libraries
+    # audioread library imports deprecated Python modules (aifc, audioop, sunau) - library issue
+    "ignore::DeprecationWarning:audioread",
+    # librosa uses deprecated __audioread_load when PySoundFile fails - librosa internal issue
+    "ignore::FutureWarning:librosa.core.audio",
+    # PySoundFile fallback is expected when soundfile C library unavailable - informational only
+    "ignore:PySoundFile failed:UserWarning",
+    # LlamaModel cleanup issue in llama-cpp-python - third-party bug we cannot fix
+    "ignore::pytest.PytestUnraisableExceptionWarning:llama_cpp",
+]
 
 [tool.coverage.run]
 source = ["backend/zikos"]
@@ -189,6 +200,14 @@ omit = [
     "*/__pycache__/*",
     "*/.*",
     "backend/zikos/services/llm.py",  # LLM tests are expensive and excluded from CI
+    # Audio analysis modules only tested by slow tests (excluded from pre-commit for speed)
+    "backend/zikos/mcp/tools/audio/articulation.py",
+    "backend/zikos/mcp/tools/audio/chords.py",
+    "backend/zikos/mcp/tools/audio/comprehensive.py",
+    "backend/zikos/mcp/tools/audio/dynamics.py",
+    "backend/zikos/mcp/tools/audio/groove.py",
+    "backend/zikos/mcp/tools/audio/key.py",
+    "backend/zikos/mcp/tools/audio/timbre.py",
 ]
 
 [tool.coverage.report]

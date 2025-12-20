@@ -184,8 +184,10 @@ Run tests:
 ```bash
 make test-cov  # With coverage report (excludes LLM tests)
 make test      # Standard test run (excludes LLM tests)
-pytest -m llama  # Run LLM tests explicitly (requires model file)
+pytest -m llama  # Run LLM integration tests (requires model file)
 ```
+
+**Important**: LLM integration tests verify real tool calling functionality. These are critical for catching bugs that mocked tests miss. See [DEVELOPMENT.md](./DEVELOPMENT.md#running-llm-integration-tests) for detailed instructions on when and how to run them.
 
 ## Code Quality
 

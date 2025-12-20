@@ -1,5 +1,5 @@
-import { PracticeTimerState } from "../types";
-import { addMessage } from "../ui";
+import { PracticeTimerState } from "../types.js";
+import { addMessage } from "../ui.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 const practiceTimers = new Map<string, PracticeTimerState>();

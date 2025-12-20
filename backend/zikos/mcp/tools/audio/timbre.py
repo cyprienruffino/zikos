@@ -5,17 +5,19 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.constants import AUDIO
+
 
 async def analyze_timbre(audio_path: str) -> dict[str, Any]:
     """Analyze timbre and spectral characteristics"""
     try:
         y, sr = librosa.load(audio_path, sr=None)
 
-        if len(y) / sr < 0.5:
+        if len(y) / sr < AUDIO.MIN_AUDIO_DURATION:
             return {
                 "error": True,
                 "error_type": "TOO_SHORT",
-                "message": "Audio is too short (minimum 0.5 seconds required)",
+                "message": f"Audio is too short (minimum {AUDIO.MIN_AUDIO_DURATION} seconds required)",
             }
 
         spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
@@ -26,17 +28,23 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
         mean_rolloff = float(np.mean(spectral_rolloff))
         mean_bandwidth = float(np.mean(spectral_bandwidth))
 
-        brightness = float(min(1.0, mean_centroid / 5000.0))
+        brightness = float(min(1.0, mean_centroid / AUDIO.BRIGHTNESS_DIVISOR))
 
-        stft = librosa.stft(y, n_fft=2048)
+        stft = librosa.stft(y, n_fft=AUDIO.STFT_N_FFT)
         magnitude = np.abs(stft)
-        freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=AUDIO.STFT_N_FFT)
 
-        low_freq_mask = freqs < 2000
-        high_freq_mask = freqs >= 2000
+        low_freq_mask = freqs < AUDIO.LOW_FREQ_THRESHOLD
+        high_freq_mask = freqs >= AUDIO.HIGH_FREQ_THRESHOLD
 
-        low_freq_energy = float(np.sum(magnitude[low_freq_mask, :]))
-        high_freq_energy = float(np.sum(magnitude[high_freq_mask, :]))
+        low_freq_sum = np.sum(magnitude[low_freq_mask, :])
+        high_freq_sum = np.sum(magnitude[high_freq_mask, :])
+        low_freq_energy = float(
+            low_freq_sum.item() if hasattr(low_freq_sum, "item") else low_freq_sum
+        )
+        high_freq_energy = float(
+            high_freq_sum.item() if hasattr(high_freq_sum, "item") else high_freq_sum
+        )
         total_energy = low_freq_energy + high_freq_energy
 
         if total_energy > 0:
@@ -44,10 +52,10 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
         else:
             warmth = 0.5
 
-        sharpness = float(min(1.0, mean_rolloff / 8000.0))
+        sharpness = float(min(1.0, mean_rolloff / AUDIO.SHARPNESS_DIVISOR))
 
         centroid_std = float(np.std(spectral_centroids))
-        timbre_consistency = float(1.0 / (1.0 + centroid_std / 500.0))
+        timbre_consistency = float(1.0 / (1.0 + centroid_std / AUDIO.TIMBRE_CONSISTENCY_DIVISOR))
         timbre_consistency = max(0.0, min(1.0, timbre_consistency))
 
         onsets = librosa.onset.onset_detect(y=y, sr=sr)

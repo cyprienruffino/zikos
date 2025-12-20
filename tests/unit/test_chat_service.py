@@ -8,7 +8,15 @@ from zikos.services.chat import ChatService
 @pytest.fixture
 def chat_service():
     """Create ChatService instance"""
-    return ChatService()
+    service = ChatService()
+    yield service
+    # Cleanup: close LLM if it exists
+    if service.llm_service.llm is not None:
+        try:
+            if hasattr(service.llm_service.llm, "close"):
+                service.llm_service.llm.close()
+        except Exception:
+            pass
 
 
 class TestChatService:

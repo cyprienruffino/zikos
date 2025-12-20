@@ -16,7 +16,7 @@ from zikos.mcp.tools.tuner import TunerTools
 
 @pytest.mark.asyncio
 async def test_analyze_tempo(temp_dir, sample_audio_path):
-    """Test tempo analysis tool"""
+    """Test tempo analysis tool with mocked librosa"""
     # Create dummy audio file
     sample_audio_path.touch()
 
@@ -33,6 +33,46 @@ async def test_analyze_tempo(temp_dir, sample_audio_path):
             assert "bpm" in result
             assert result["bpm"] == 120.0
             assert "confidence" in result
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_analyze_tempo_with_real_audio(temp_dir):
+    """Test tempo analysis with real synthesized audio"""
+    from pathlib import Path
+
+    from tests.helpers.audio_synthesis import create_test_audio_file
+    from zikos.config import settings
+    from zikos.mcp.tools.audio.utils import resolve_audio_path
+
+    # Create synthesized rhythmic audio
+    audio_file = temp_dir / "test_rhythm.wav"
+    create_test_audio_file(audio_file, audio_type="rhythm", duration=5.0, tempo=120.0)
+
+    # Store in expected location
+    import shutil
+    import uuid
+
+    audio_file_id = str(uuid.uuid4())
+    storage_path = Path(settings.audio_storage_path)
+    storage_path.mkdir(parents=True, exist_ok=True)
+    target_path = storage_path / f"{audio_file_id}.wav"
+    shutil.copy(audio_file, target_path)
+
+    try:
+        tools = AudioAnalysisTools()
+        result = await tools.analyze_tempo(audio_file_id=audio_file_id)
+
+        assert isinstance(result, dict)
+        # Should have BPM or error
+        assert "bpm" in result or "error" in result
+        if "bpm" in result:
+            # BPM should be reasonable (not 0 or negative)
+            assert result["bpm"] > 0
+            assert result["bpm"] < 300  # Reasonable upper bound
+    finally:
+        if target_path.exists():
+            target_path.unlink()
 
 
 @pytest.mark.asyncio

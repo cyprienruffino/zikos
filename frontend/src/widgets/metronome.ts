@@ -1,4 +1,4 @@
-import { MetronomeState } from "../types";
+import { MetronomeState } from "../types.js";
 
 const messagesEl = document.getElementById("messages") as HTMLElement;
 const metronomes = new Map<string, MetronomeState>();
