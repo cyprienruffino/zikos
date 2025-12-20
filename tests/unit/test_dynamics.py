@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from zikos.mcp.tools.audio.dynamics import analyze_dynamics
+from zikos.mcp.tools.analysis.audio.dynamics import analyze_dynamics
 
 
 @pytest.fixture

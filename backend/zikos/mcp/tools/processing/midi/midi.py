@@ -5,63 +5,80 @@ from pathlib import Path
 from typing import Any
 
 from zikos.config import settings
-from zikos.mcp.tools.midi_parser import MidiParseError, midi_text_to_file
+from zikos.mcp.tool import Tool, ToolCategory
+from zikos.mcp.tools.base import ToolCollection
+from zikos.mcp.tools.processing.midi.midi_parser import MidiParseError, midi_text_to_file
 
 
-class MidiTools:
+class MidiTools(ToolCollection):
     """MIDI processing MCP tools"""
 
     def __init__(self):
         self.storage_path = Path(settings.midi_storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-    def get_tool_schemas(self) -> list[dict[str, Any]]:
-        """Get tool schemas for function calling"""
+    def get_tools(self) -> list[Tool]:
+        """Get Tool instances"""
         return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "validate_midi",
-                    "description": "Validate MIDI text",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "midi_text": {"type": "string"},
+            Tool(
+                name="validate_midi",
+                description="Validate MIDI text syntax and convert it to a MIDI file. Use this after generating MIDI in your response to ensure it's valid before synthesizing to audio or rendering notation. Returns validation errors if the MIDI syntax is invalid.",
+                category=ToolCategory.MIDI,
+                schema={
+                    "type": "function",
+                    "function": {
+                        "name": "validate_midi",
+                        "description": "Validate MIDI text syntax and convert it to a MIDI file. Use this after generating MIDI in your response to ensure it's valid before synthesizing to audio or rendering notation. Returns validation errors if the MIDI syntax is invalid.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "midi_text": {"type": "string"},
+                            },
+                            "required": ["midi_text"],
                         },
-                        "required": ["midi_text"],
                     },
                 },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "midi_to_audio",
-                    "description": "Synthesize MIDI to audio",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "midi_file_id": {"type": "string"},
-                            "instrument": {"type": "string", "default": "piano"},
+            ),
+            Tool(
+                name="midi_to_audio",
+                description="Synthesize MIDI file to playable audio. Converts a validated MIDI file into audio that can be played back. Use this after validate_midi to create audio examples for the student.",
+                category=ToolCategory.MIDI,
+                schema={
+                    "type": "function",
+                    "function": {
+                        "name": "midi_to_audio",
+                        "description": "Synthesize MIDI file to playable audio. Converts a validated MIDI file into audio that can be played back. Use this after validate_midi to create audio examples for the student.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "midi_file_id": {"type": "string"},
+                                "instrument": {"type": "string", "default": "piano"},
+                            },
+                            "required": ["midi_file_id"],
                         },
-                        "required": ["midi_file_id"],
                     },
                 },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "midi_to_notation",
-                    "description": "Render MIDI to notation",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "midi_file_id": {"type": "string"},
-                            "format": {"type": "string", "default": "both"},
+            ),
+            Tool(
+                name="midi_to_notation",
+                description="Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.",
+                category=ToolCategory.MIDI,
+                schema={
+                    "type": "function",
+                    "function": {
+                        "name": "midi_to_notation",
+                        "description": "Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "midi_file_id": {"type": "string"},
+                                "format": {"type": "string", "default": "both"},
+                            },
+                            "required": ["midi_file_id"],
                         },
-                        "required": ["midi_file_id"],
                     },
                 },
-            },
+            ),
         ]
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
@@ -84,7 +101,7 @@ class MidiTools:
         metadata: dict[str, Any] = {}
 
         try:
-            from zikos.mcp.tools.midi_parser import parse_midi_text
+            from zikos.mcp.tools.processing.midi.midi_parser import parse_midi_text
 
             parsed_data = parse_midi_text(midi_text)
             metadata = parsed_data.get("metadata", {})

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from zikos.config import settings
-from zikos.mcp.tools import midi as midi_tools_module
+from zikos.mcp.tools.processing import MidiTools
 
 
 class MidiService:
@@ -15,7 +15,7 @@ class MidiService:
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.notation_path = Path(settings.notation_storage_path)
         self.notation_path.mkdir(parents=True, exist_ok=True)
-        self.midi_tools = midi_tools_module.MidiTools()
+        self.midi_tools = MidiTools()
 
     async def validate_midi(self, midi_text: str) -> dict[str, Any]:
         """Validate MIDI text"""

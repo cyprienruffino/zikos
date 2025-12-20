@@ -55,6 +55,73 @@ export function addChordProgressionWidget(
     });
 }
 
+function parseChordName(chordName: string): number[] {
+    const noteToSemitones: Record<string, number> = {
+        C: 0,
+        "C#": 1,
+        Db: 1,
+        D: 2,
+        "D#": 3,
+        Eb: 3,
+        E: 4,
+        "E#": 5,
+        Fb: 4,
+        F: 5,
+        "F#": 6,
+        Gb: 6,
+        G: 7,
+        "G#": 8,
+        Ab: 8,
+        A: 9,
+        "A#": 10,
+        Bb: 10,
+        B: 11,
+        "B#": 0,
+        Cb: 11,
+    };
+
+    const match = chordName.match(/^([A-G][#b]?)/);
+    const baseNote = match ? match[1] : "C";
+    const semitones = noteToSemitones[baseNote] ?? 0;
+
+    const octave = 4;
+    const rootFreq = 440 * Math.pow(2, (semitones - 9 + (octave - 4) * 12) / 12);
+
+    const chordType = chordName.replace(baseNote, "").toLowerCase();
+    let intervals: number[];
+
+    if (chordType.includes("m") || chordType.includes("min")) {
+        intervals = [0, 3, 7];
+    } else if (chordType.includes("dim")) {
+        intervals = [0, 3, 6];
+    } else if (chordType.includes("aug")) {
+        intervals = [0, 4, 8];
+    } else if (chordType.includes("sus2")) {
+        intervals = [0, 2, 7];
+    } else if (chordType.includes("sus4") || chordType.includes("sus")) {
+        intervals = [0, 5, 7];
+    } else {
+        intervals = [0, 4, 7];
+    }
+
+    return intervals.map((interval) => rootFreq * Math.pow(2, interval / 12));
+}
+
+function playChordAudio(audioContext: AudioContext, frequencies: number[], duration: number): void {
+    frequencies.forEach((freq) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.frequency.value = freq;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.start();
+        osc.stop(audioContext.currentTime + duration);
+    });
+}
+
 function startChordProgression(
     progressionId: string,
     chords: string[],
@@ -94,6 +161,10 @@ function startChordProgression(
                 box.classList.remove("active");
             }
         });
+
+        const chordName = chords[chordIndex];
+        const frequencies = parseChordName(chordName);
+        playChordAudio(audioContext, frequencies, chordDuration);
     }
     playChord(progression.currentChordIndex);
     progression.intervalId = window.setInterval(() => {

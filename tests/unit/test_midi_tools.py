@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from zikos.mcp.tools.midi import MidiTools
+from zikos.mcp.tools.processing.midi import MidiTools
 
 
 @pytest.fixture
@@ -75,7 +75,7 @@ Track 1:
   C4 velocity=60 duration=0.5
 [/MIDI]
 """
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_text_to_file(midi_text, midi_path)
@@ -159,7 +159,7 @@ Track 1:
         from pathlib import Path
 
         from zikos.config import settings
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_notation_sheet"
@@ -188,7 +188,7 @@ Track 1:
         from pathlib import Path
 
         from zikos.config import settings
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_notation_tabs"

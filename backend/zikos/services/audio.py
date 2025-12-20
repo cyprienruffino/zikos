@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import UploadFile
 
 from zikos.config import settings
-from zikos.mcp.tools.audio import AudioAnalysisTools
+from zikos.mcp.tools.analysis import AudioAnalysisTools
 
 
 class AudioService:

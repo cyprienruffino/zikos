@@ -13,6 +13,7 @@ from zikos.config import settings
 from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
 from zikos.services.audio import AudioService
+from zikos.services.tool_providers import get_tool_provider
 
 
 class LLMService:
@@ -22,6 +23,7 @@ class LLMService:
         self.llm = None
         self.audio_service = AudioService()
         self.conversations: dict[str, list[dict[str, Any]]] = {}
+        self.tool_provider = None
         self._initialize_llm()
 
     def __del__(self):
@@ -59,11 +61,14 @@ class LLMService:
                 n_ctx=settings.llm_n_ctx,
                 n_gpu_layers=settings.llm_n_gpu_layers,
             )
+            self.tool_provider = get_tool_provider(str(model_path))
             print(f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens")
+            print(f"Using tool provider: {type(self.tool_provider).__name__}")
         except Exception as e:
             print(f"Error initializing LLM: {e}")
             print("The application will start but LLM features will be unavailable.")
             self.llm = None
+            self.tool_provider = get_tool_provider()
 
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
         """Get conversation history for session"""
@@ -205,7 +210,50 @@ class LLMService:
                 f"DEBUG: System message present, length: {len(history[0].get('content', ''))} chars"
             )
 
-        tools = mcp_server.get_tools()
+        tool_registry = mcp_server.get_tool_registry()
+        tools = tool_registry.get_all_tools()
+        tool_schemas = tool_registry.get_all_schemas()
+
+        if settings.debug_tool_calls:
+            print(f"[DEBUG] Total tools available: {len(tools)}")
+            if tools:
+                print(f"[DEBUG] Sample tool: {tools[0].name} ({tools[0].category.value})")
+
+        # Use tool provider to format and inject tools
+        if not self.tool_provider:
+            self.tool_provider = get_tool_provider()
+
+        if tools and self.tool_provider.should_inject_tools_as_text():
+            # Check if tools are already in the system prompt (avoid duplicates)
+            system_has_tools = False
+            if history and history[0].get("role") == "system":
+                system_content = history[0].get("content", "")
+                if "<tools>" in system_content or "# Available Tools" in system_content:
+                    system_has_tools = True
+
+            if not system_has_tools:
+                tool_instructions = self.tool_provider.format_tool_instructions()
+                tool_summary = self.tool_provider.generate_tool_summary(tools)
+                tool_schemas_text = self.tool_provider.format_tool_schemas(tools)
+                tool_examples = self.tool_provider.get_tool_call_examples()
+
+                tools_section = f"{tool_instructions}\n\n## Available Tools\n\n{tool_summary}\n\n{tool_schemas_text}\n\n{tool_examples}"
+
+                # Inject tools into the system prompt in the conversation history
+                if history and history[0].get("role") == "system":
+                    original_system = history[0].get("content", "")
+                    history[0]["content"] = f"{original_system}\n\n{tools_section}"
+                else:
+                    # If no system message, add one with tools
+                    system_prompt = self._get_system_prompt()
+                    history.insert(
+                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_section}"}
+                    )
+
+                if settings.debug_tool_calls:
+                    print(
+                        f"[DEBUG] Injected {len(tools)} tools into system prompt using {type(self.tool_provider).__name__}"
+                    )
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
@@ -236,9 +284,28 @@ class LLMService:
             except Exception:
                 pass  # If tiktoken fails, continue anyway
 
+            if settings.debug_tool_calls:
+                print(f"[DEBUG] Sending {len(tools)} tools to LLM")
+                print(
+                    f"[DEBUG] Tools list: {[t.get('function', {}).get('name', 'unknown') for t in tools[:5]]}..."
+                )
+                print(f"[DEBUG] Messages count: {len(current_messages)}")
+                if current_messages:
+                    print(
+                        f"[DEBUG] First message role: {current_messages[0].get('role', 'unknown')}"
+                    )
+                    print(
+                        f"[DEBUG] Last message role: {current_messages[-1].get('role', 'unknown')}"
+                    )
+
+            # Pass tools as parameter if provider supports it
+            tools_param = None
+            if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
+                tools_param = tool_schemas
+
             response = self.llm.create_chat_completion(
                 messages=current_messages,
-                tools=tools,
+                tools=tools_param,
                 temperature=settings.llm_temperature,
                 top_p=settings.llm_top_p,
             )
@@ -254,6 +321,11 @@ class LLMService:
                 print(f"  Role: {message_obj.get('role', 'None')}")
                 if "finish_reason" in response["choices"][0]:
                     print(f"  Finish reason: {response['choices'][0].get('finish_reason', 'None')}")
+                if message_obj.get("content"):
+                    content_preview = str(message_obj.get("content", ""))[:500]
+                    if "<tool_call>" in content_preview:
+                        print("  [FOUND] XML tool_call tag in content!")
+                        print(f"  Content preview: {content_preview}")
 
             # Safety check: detect gibberish/looping output
             content = message_obj.get("content", "")

@@ -8,8 +8,8 @@ import pytest
 import soundfile as sf
 
 from zikos.config import settings
-from zikos.mcp.tools.audio import AudioAnalysisTools
-from zikos.mcp.tools.audio.groove import analyze_groove
+from zikos.mcp.tools.analysis import AudioAnalysisTools
+from zikos.mcp.tools.analysis.audio.groove import analyze_groove
 
 
 @pytest.mark.asyncio

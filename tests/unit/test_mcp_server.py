@@ -33,6 +33,15 @@ class TestMCPServer:
         assert "create_ear_trainer" in tool_names
         assert "create_practice_timer" in tool_names
 
+    def test_get_tool_registry(self, mcp_server):
+        """Test getting the tool registry"""
+        registry = mcp_server.get_tool_registry()
+
+        assert registry is not None
+        from zikos.mcp.tool_registry import ToolRegistry
+
+        assert isinstance(registry, ToolRegistry)
+
     @pytest.mark.asyncio
     async def test_call_tool_audio_tool(self, mcp_server):
         """Test calling audio tool"""
@@ -50,10 +59,10 @@ class TestMCPServer:
         with patch.object(mcp_server.midi_tools, "call_tool") as mock_call:
             mock_call.return_value = {"valid": True}
 
-            result = await mcp_server.call_tool("midi_validate", midi_text="test")
+            result = await mcp_server.call_tool("validate_midi", midi_text="test")
 
             assert "valid" in result
-            mock_call.assert_called_once_with("midi_validate", midi_text="test")
+            mock_call.assert_called_once_with("validate_midi", midi_text="test")
 
     @pytest.mark.asyncio
     async def test_call_tool_metronome_tool(self, mcp_server):
@@ -131,10 +140,10 @@ class TestMCPServer:
         with patch.object(mcp_server.recording_tools, "call_tool") as mock_call:
             mock_call.return_value = {"status": "recording_requested"}
 
-            result = await mcp_server.call_tool("recording_request", prompt="test")
+            result = await mcp_server.call_tool("request_audio_recording", prompt="test")
 
             assert "status" in result
-            mock_call.assert_called_once_with("recording_request", prompt="test")
+            mock_call.assert_called_once_with("request_audio_recording", prompt="test")
 
     @pytest.mark.asyncio
     async def test_call_tool_unknown_tool(self, mcp_server):

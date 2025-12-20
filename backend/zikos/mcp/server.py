@@ -4,31 +4,18 @@ import json
 from typing import Any
 
 from zikos.config import settings
+from zikos.mcp.tool_registry import ToolRegistry
 from zikos.mcp.tools import (
-    chord_progression as chord_progression_tools,
+    AudioAnalysisTools,
+    ChordProgressionTools,
+    EarTrainerTools,
+    MetronomeTools,
+    MidiTools,
+    PracticeTimerTools,
+    RecordingTools,
+    TempoTrainerTools,
+    TunerTools,
 )
-from zikos.mcp.tools import (
-    ear_trainer as ear_trainer_tools,
-)
-from zikos.mcp.tools import (
-    metronome as metronome_tools,
-)
-from zikos.mcp.tools import (
-    midi as midi_tools,
-)
-from zikos.mcp.tools import (
-    practice_timer as practice_timer_tools,
-)
-from zikos.mcp.tools import (
-    recording as recording_tools,
-)
-from zikos.mcp.tools import (
-    tempo_trainer as tempo_trainer_tools,
-)
-from zikos.mcp.tools import (
-    tuner as tuner_tools,
-)
-from zikos.mcp.tools.audio import AudioAnalysisTools
 
 
 class MCPServer:
@@ -36,82 +23,48 @@ class MCPServer:
 
     def __init__(self):
         self.audio_tools = AudioAnalysisTools()
-        self.chord_progression_tools = chord_progression_tools.ChordProgressionTools()
-        self.ear_trainer_tools = ear_trainer_tools.EarTrainerTools()
-        self.midi_tools = midi_tools.MidiTools()
-        self.metronome_tools = metronome_tools.MetronomeTools()
-        self.practice_timer_tools = practice_timer_tools.PracticeTimerTools()
-        self.recording_tools = recording_tools.RecordingTools()
-        self.tempo_trainer_tools = tempo_trainer_tools.TempoTrainerTools()
-        self.tuner_tools = tuner_tools.TunerTools()
+        self.chord_progression_tools = ChordProgressionTools()
+        self.ear_trainer_tools = EarTrainerTools()
+        self.midi_tools = MidiTools()
+        self.metronome_tools = MetronomeTools()
+        self.practice_timer_tools = PracticeTimerTools()
+        self.recording_tools = RecordingTools()
+        self.tempo_trainer_tools = TempoTrainerTools()
+        self.tuner_tools = TunerTools()
+
+        self._registry = ToolRegistry()
+        self._registry.register_many(self.audio_tools.get_tools(), self.audio_tools)
+        self._registry.register_many(
+            self.chord_progression_tools.get_tools(), self.chord_progression_tools
+        )
+        self._registry.register_many(self.ear_trainer_tools.get_tools(), self.ear_trainer_tools)
+        self._registry.register_many(self.midi_tools.get_tools(), self.midi_tools)
+        self._registry.register_many(self.metronome_tools.get_tools(), self.metronome_tools)
+        self._registry.register_many(
+            self.practice_timer_tools.get_tools(), self.practice_timer_tools
+        )
+        self._registry.register_many(self.recording_tools.get_tools(), self.recording_tools)
+        self._registry.register_many(self.tempo_trainer_tools.get_tools(), self.tempo_trainer_tools)
+        self._registry.register_many(self.tuner_tools.get_tools(), self.tuner_tools)
 
     def get_tools(self) -> list[dict[str, Any]]:
         """Get all available tools as function schemas"""
-        tools = []
+        schemas: list[dict[str, Any]] = self._registry.get_all_schemas()
+        return schemas
 
-        tools.extend(self.audio_tools.get_tool_schemas())
-        tools.extend(self.chord_progression_tools.get_tool_schemas())
-        tools.extend(self.ear_trainer_tools.get_tool_schemas())
-        tools.extend(self.midi_tools.get_tool_schemas())
-        tools.extend(self.metronome_tools.get_tool_schemas())
-        tools.extend(self.practice_timer_tools.get_tool_schemas())
-        tools.extend(self.recording_tools.get_tool_schemas())
-        tools.extend(self.tempo_trainer_tools.get_tool_schemas())
-        tools.extend(self.tuner_tools.get_tool_schemas())
-
-        return tools
+    def get_tool_registry(self) -> ToolRegistry:
+        """Get the tool registry"""
+        return self._registry
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
-        """Call a tool by name"""
+        """Call a tool by name - routes to the appropriate ToolCollection"""
         if settings.debug_tool_calls:
             print(f"[MCP TOOL CALL] {tool_name}")
             print(f"  Arguments: {json.dumps(kwargs, indent=2, default=str)}")
 
-        audio_tool_names = [
-            "analyze_tempo",
-            "detect_pitch",
-            "analyze_rhythm",
-            "analyze_dynamics",
-            "analyze_articulation",
-            "analyze_timbre",
-            "detect_key",
-            "detect_chords",
-            "compare_audio",
-            "compare_to_reference",
-            "segment_audio",
-            "segment_phrases",
-            "comprehensive_analysis",
-            "analyze_groove",
-            "time_stretch",
-            "pitch_shift",
-            "detect_repetitions",
-        ]
-        if tool_name in audio_tool_names:
-            result = await self.audio_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name.startswith("midi_"):
-            result = await self.midi_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "create_metronome":
-            result = await self.metronome_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "create_chord_progression":
-            result = await self.chord_progression_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "create_tempo_trainer":
-            result = await self.tempo_trainer_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "create_ear_trainer":
-            result = await self.ear_trainer_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "create_practice_timer":
-            result = await self.practice_timer_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "create_tuner":
-            result = await self.tuner_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        elif tool_name == "request_audio_recording" or tool_name.startswith("recording_"):
-            result = await self.recording_tools.call_tool(tool_name, **kwargs)
-            return dict(result)
-        else:
+        collection = self._registry.get_collection_for_tool(tool_name)
+        if collection is None:
             raise ValueError(f"Unknown tool: {tool_name}")
+
+        result = await collection.call_tool(tool_name, **kwargs)
+        return dict(result)

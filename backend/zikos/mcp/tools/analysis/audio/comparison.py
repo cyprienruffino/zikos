@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from zikos.mcp.tools.audio import pitch, rhythm, tempo
-from zikos.mcp.tools.audio.utils import resolve_audio_path
+from zikos.mcp.tools.analysis.audio import pitch, rhythm, tempo
+from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
 
 
 async def compare_audio(
@@ -228,7 +228,7 @@ async def compare_to_reference(
                     "message": "midi_file_id is required for MIDI reference comparison",
                 }
 
-            from zikos.mcp.tools.midi import MidiTools
+            from zikos.mcp.tools.processing import MidiTools
 
             midi_tools = MidiTools()
             try:

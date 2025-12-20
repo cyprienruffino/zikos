@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from zikos.mcp.tools.audio.articulation import analyze_articulation
+from zikos.mcp.tools.analysis.audio.articulation import analyze_articulation
 
 
 @pytest.fixture

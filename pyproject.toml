@@ -201,13 +201,13 @@ omit = [
     "*/.*",
     "backend/zikos/services/llm.py",  # LLM tests are expensive and excluded from CI
     # Audio analysis modules only tested by slow tests (excluded from pre-commit for speed)
-    "backend/zikos/mcp/tools/audio/articulation.py",
-    "backend/zikos/mcp/tools/audio/chords.py",
-    "backend/zikos/mcp/tools/audio/comprehensive.py",
-    "backend/zikos/mcp/tools/audio/dynamics.py",
-    "backend/zikos/mcp/tools/audio/groove.py",
-    "backend/zikos/mcp/tools/audio/key.py",
-    "backend/zikos/mcp/tools/audio/timbre.py",
+    "backend/zikos/mcp/tools/analysis/audio/articulation.py",
+    "backend/zikos/mcp/tools/analysis/audio/chords.py",
+    "backend/zikos/mcp/tools/analysis/audio/comprehensive.py",
+    "backend/zikos/mcp/tools/analysis/audio/dynamics.py",
+    "backend/zikos/mcp/tools/analysis/audio/groove.py",
+    "backend/zikos/mcp/tools/analysis/audio/key.py",
+    "backend/zikos/mcp/tools/analysis/audio/timbre.py",
 ]
 
 [tool.coverage.report]

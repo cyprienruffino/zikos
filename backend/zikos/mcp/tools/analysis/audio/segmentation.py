@@ -8,7 +8,7 @@ import librosa
 import soundfile as sf
 
 from zikos.config import settings
-from zikos.mcp.tools.audio.utils import resolve_audio_path
+from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
 
 
 async def segment_audio(audio_file_id: str, start_time: float, end_time: float) -> dict[str, Any]:

@@ -4,14 +4,16 @@ from unittest.mock import patch
 
 import pytest
 
-from zikos.mcp.tools.audio import AudioAnalysisTools
-from zikos.mcp.tools.chord_progression import ChordProgressionTools
-from zikos.mcp.tools.ear_trainer import EarTrainerTools
-from zikos.mcp.tools.metronome import MetronomeTools
-from zikos.mcp.tools.practice_timer import PracticeTimerTools
-from zikos.mcp.tools.recording import RecordingTools
-from zikos.mcp.tools.tempo_trainer import TempoTrainerTools
-from zikos.mcp.tools.tuner import TunerTools
+from zikos.mcp.tools.analysis import AudioAnalysisTools
+from zikos.mcp.tools.interaction import (
+    ChordProgressionTools,
+    EarTrainerTools,
+    MetronomeTools,
+    PracticeTimerTools,
+    RecordingTools,
+    TempoTrainerTools,
+    TunerTools,
+)
 
 
 @pytest.mark.asyncio
@@ -43,7 +45,7 @@ async def test_analyze_tempo_with_real_audio(temp_dir):
 
     from tests.helpers.audio_synthesis import create_test_audio_file
     from zikos.config import settings
-    from zikos.mcp.tools.audio.utils import resolve_audio_path
+    from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
 
     # Create synthesized rhythmic audio
     audio_file = temp_dir / "test_rhythm.wav"

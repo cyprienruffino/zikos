@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from zikos.mcp.tools.audio import (
+from zikos.mcp.tool import Tool, ToolCategory
+from zikos.mcp.tools.analysis.audio import (
     articulation,
     chords,
     comparison,
@@ -18,17 +19,31 @@ from zikos.mcp.tools.audio import (
     tempo,
     timbre,
 )
-from zikos.mcp.tools.audio import (
+from zikos.mcp.tools.analysis.audio import (
     time_stretch as time_stretch_module,
 )
-from zikos.mcp.tools.audio.utils import resolve_audio_path
+from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
+from zikos.mcp.tools.base import ToolCollection
 
 
-class AudioAnalysisTools:
+class AudioAnalysisTools(ToolCollection):
     """Audio analysis MCP tools"""
 
-    def get_tool_schemas(self) -> list[dict[str, Any]]:
-        """Get tool schemas for function calling"""
+    def get_tools(self) -> list[Tool]:
+        """Get Tool instances"""
+        schemas = self._get_schema_dicts()
+        return [
+            Tool(
+                name=schema["function"]["name"],
+                description=schema["function"]["description"],
+                category=ToolCategory.AUDIO_ANALYSIS,
+                schema=schema,
+            )
+            for schema in schemas
+        ]
+
+    def _get_schema_dicts(self) -> list[dict[str, Any]]:
+        """Get tool schemas as dicts (internal helper)"""
         return [
             {
                 "type": "function",
@@ -104,7 +119,7 @@ class AudioAnalysisTools:
                 "type": "function",
                 "function": {
                     "name": "analyze_timbre",
-                    "description": "Analyze timbre and spectral characteristics",
+                    "description": "Analyze timbre and spectral characteristics to assess tone quality and identify instruments. Useful for evaluating tone production and technique.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -118,7 +133,7 @@ class AudioAnalysisTools:
                 "type": "function",
                 "function": {
                     "name": "detect_key",
-                    "description": "Detect musical key",
+                    "description": "Detect the musical key and mode (major/minor) of the audio. Useful for harmonic analysis and understanding the tonal center.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -132,7 +147,7 @@ class AudioAnalysisTools:
                 "type": "function",
                 "function": {
                     "name": "detect_chords",
-                    "description": "Detect chord progression",
+                    "description": "Detect chord progression with chord names and timing. Identifies which chords are played and when they occur in the audio.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -146,7 +161,7 @@ class AudioAnalysisTools:
                 "type": "function",
                 "function": {
                     "name": "compare_audio",
-                    "description": "Compare two audio recordings",
+                    "description": "Compare two audio recordings across tempo, pitch, rhythm, or overall performance. Useful for tracking progress between practice sessions or comparing different takes.",
                     "parameters": {
                         "type": "object",
                         "properties": {

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from zikos.mcp.tools.audio.timbre import analyze_timbre
+from zikos.mcp.tools.analysis.audio.timbre import analyze_timbre
 
 
 @pytest.fixture

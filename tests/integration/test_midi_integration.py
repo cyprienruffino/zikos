@@ -14,8 +14,8 @@ class TestMidiSynthesisIntegration:
     async def test_midi_to_audio_with_fluidsynth(self, temp_dir):
         """Test MIDI to audio synthesis with real FluidSynth"""
         from zikos.config import settings
-        from zikos.mcp.tools.midi import MidiTools
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi import MidiTools
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_tools = MidiTools()
@@ -62,8 +62,8 @@ Track 1:
     @pytest.mark.asyncio
     async def test_midi_to_audio_different_instruments(self, temp_dir):
         """Test MIDI synthesis with different instruments"""
-        from zikos.mcp.tools.midi import MidiTools
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi import MidiTools
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_tools = MidiTools()
@@ -102,8 +102,8 @@ class TestMidiNotationIntegration:
     async def test_midi_to_notation_sheet_music(self, temp_dir):
         """Test MIDI to notation rendering for sheet music"""
         from zikos.config import settings
-        from zikos.mcp.tools.midi import MidiTools
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi import MidiTools
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_tools = MidiTools()
@@ -154,8 +154,8 @@ Track 1:
     async def test_midi_to_notation_both_formats(self, temp_dir):
         """Test MIDI to notation rendering for both formats"""
         from zikos.config import settings
-        from zikos.mcp.tools.midi import MidiTools
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi import MidiTools
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_tools = MidiTools()
@@ -200,7 +200,7 @@ class TestMidiFullPipeline:
     async def test_full_midi_pipeline(self, temp_dir):
         """Test full pipeline: validate → synthesize → render"""
         from zikos.config import settings
-        from zikos.mcp.tools.midi import MidiTools
+        from zikos.mcp.tools.processing.midi import MidiTools
 
         try:
             midi_tools = MidiTools()
