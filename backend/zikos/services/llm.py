@@ -7,6 +7,7 @@ from typing import Any
 from zikos.config import settings
 from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
+from zikos.mcp.tool import ToolCategory
 from zikos.services.audio import AudioService
 from zikos.services.llm_backends import create_backend
 from zikos.services.tool_providers import get_tool_provider
@@ -98,8 +99,32 @@ class LLMService:
             self.conversations[session_id] = [{"role": "system", "content": system_prompt}]
         return self.conversations[session_id]
 
+    def _extract_thinking(self, content: str | None) -> tuple[str, str]:
+        """Extract thinking content from <thinking> tags
+
+        Returns:
+            tuple: (cleaned_content, thinking_content)
+        """
+        import re
+
+        if content is None:
+            return "", ""
+
+        thinking_parts = []
+        pattern = r"<thinking>(.*?)</thinking>"
+        matches = re.finditer(pattern, content, re.DOTALL)
+
+        for match in matches:
+            thinking_parts.append(match.group(1).strip())
+
+        cleaned_content = re.sub(pattern, "", content, flags=re.DOTALL).strip()
+
+        thinking_content = "\n\n".join(thinking_parts) if thinking_parts else ""
+
+        return cleaned_content, thinking_content
+
     def _prepare_messages(
-        self, history: list[dict[str, Any]], max_tokens: int | None = None
+        self, history: list[dict[str, Any]], max_tokens: int | None = None, for_user: bool = False
     ) -> list[dict[str, Any]]:
         if max_tokens is None:
             max_tokens = LLM.MAX_TOKENS_PREPARE_MESSAGES
@@ -110,6 +135,11 @@ class LLMService:
 
         Also truncates conversation history if it exceeds max_tokens to prevent context overflow.
         IMPORTANT: Always preserves audio analysis messages even if they're older.
+
+        Args:
+            history: Conversation history
+            max_tokens: Maximum tokens to include
+            for_user: If True, filters out thinking messages for user display
         """
         if not history:
             return history
@@ -129,6 +159,9 @@ class LLMService:
         for msg in history:
             if msg.get("role") == "system":
                 system_prompt = msg.get("content", "")
+                continue
+            # Filter thinking messages if preparing for user display
+            if for_user and msg.get("role") == "thinking":
                 continue
             content = str(msg.get("content", ""))
             # Check if this is an audio analysis message
@@ -284,8 +317,9 @@ class LLMService:
 
         while iteration < max_iterations:
             iteration += 1
+            # Prepare messages for LLM (include thinking messages for context)
             current_messages = self._prepare_messages(
-                history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES
+                history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
             )
 
             # Safety check: prevent context overflow
@@ -352,9 +386,10 @@ class LLMService:
                         print(f"  Content preview: {content_preview}")
 
             # Safety check: detect gibberish/looping output
-            content = message_obj.get("content", "")
-            if content:
-                words = content.split()
+            # Note: we'll extract thinking later, so check raw content here
+            raw_content_for_safety = message_obj.get("content", "")
+            if raw_content_for_safety:
+                words = raw_content_for_safety.split()
                 # Check for very long responses (likely gibberish)
                 if len(words) > LLM.MAX_WORDS_RESPONSE:
                     print(f"WARNING: Model generated unusually long response ({len(words)} words)")
@@ -386,6 +421,20 @@ class LLMService:
                             "message": "The model generated an invalid response. Please try rephrasing your question.",
                         }
 
+            # Extract thinking from content before processing
+            raw_content = message_obj.get("content", "")
+            cleaned_content, thinking_content = self._extract_thinking(raw_content)
+
+            # Store thinking as separate message if present
+            if thinking_content:
+                thinking_msg = {"role": "thinking", "content": thinking_content}
+                history.append(thinking_msg)
+                if settings.debug_tool_calls:
+                    print("[THINKING] Extracted thinking:")
+                    print(f"  {thinking_content[:500]}...")
+
+            # Update message_obj with cleaned content
+            message_obj["content"] = cleaned_content
             history.append(message_obj)
 
             # Check for tool calls in response
@@ -393,19 +442,21 @@ class LLMService:
 
             # Qwen2.5 uses XML-based tool calling format: <tool_call>{"name": "...", "arguments": {...}}</tool_call>
             # Parse this if no structured tool_calls are present
-            if not tool_calls and content and "<tool_call>" in content:
-                tool_calls = self._parse_qwen_tool_calls(content)
+            # Use raw_content (before thinking extraction) for tool call parsing
+            if not tool_calls and raw_content and "<tool_call>" in raw_content:
+                tool_calls = self._parse_qwen_tool_calls(raw_content)
 
             if settings.debug_tool_calls:
                 if tool_calls:
                     print(f"[TOOL CALLS FOUND] {len(tool_calls)} tool call(s)")
-                elif content and (
-                    "<tool_call>" in content or ("name" in content and "arguments" in content)
+                elif raw_content and (
+                    "<tool_call>" in raw_content
+                    or ("name" in raw_content and "arguments" in raw_content)
                 ):
                     print(
                         "[WARNING] Content contains tool-like content but no structured tool_calls field"
                     )
-                    print(f"  Content snippet: {content[:500]}")
+                    print(f"  Content snippet: {raw_content[:500]}")
 
             if tool_calls:
                 consecutive_tool_calls += 1
@@ -470,38 +521,24 @@ class LLMService:
                         print(f"  Tool ID: {tool_call.get('id', 'N/A')}")
                         print(f"  Arguments: {json.dumps(tool_args, indent=2)}")
 
-                    if tool_name == "request_audio_recording":
-                        if settings.debug_tool_calls:
-                            print(f"[WIDGET TOOL] Returning {tool_name} to frontend")
-                        return {
-                            "type": "tool_call",
-                            "tool_name": tool_name,
-                            "tool_id": tool_call.get("id"),
-                            "arguments": tool_args,
-                        }
+                    tool = tool_registry.get_tool(tool_name)
+                    is_widget = tool and tool.category in (
+                        ToolCategory.WIDGET,
+                        ToolCategory.RECORDING,
+                    )
 
-                    if tool_name == "create_metronome":
+                    if is_widget:
                         if settings.debug_tool_calls:
-                            print(f"[WIDGET TOOL] Returning {tool_name} to frontend")
+                            print(
+                                f"[WIDGET TOOL] Returning {tool_name} to frontend (pausing conversation)"
+                            )
+                        # Use cleaned_content (already has thinking stripped)
+                        widget_content = (
+                            self._strip_tool_call_tags(cleaned_content) if cleaned_content else ""
+                        )
                         return {
                             "type": "tool_call",
-                            "tool_name": tool_name,
-                            "tool_id": tool_call.get("id"),
-                            "arguments": tool_args,
-                        }
-
-                    widget_tools = [
-                        "create_tuner",
-                        "create_chord_progression",
-                        "create_tempo_trainer",
-                        "create_ear_trainer",
-                        "create_practice_timer",
-                    ]
-                    if tool_name in widget_tools:
-                        if settings.debug_tool_calls:
-                            print(f"[WIDGET TOOL] Returning {tool_name} to frontend")
-                        return {
-                            "type": "tool_call",
+                            "message": widget_content,
                             "tool_name": tool_name,
                             "tool_id": tool_call.get("id"),
                             "arguments": tool_args,
@@ -534,17 +571,25 @@ class LLMService:
                         )
 
                 history.extend(tool_results)
+
+                # After tool results, allow model to reason about the results
+                # This will be handled in the next iteration when the model generates a response
                 continue
 
             # No tool calls - reset counters and return the response
             consecutive_tool_calls = 0
             recent_tool_calls.clear()
-            response_content = message_obj.get("content", "")
+            response_content = cleaned_content
 
             # If we expected a tool call but didn't get one, log a warning
             # (This helps diagnose function calling issues)
             if iteration == 1 and not response_content:
                 print("WARNING: Model returned empty response on first iteration")
+
+            # Show thinking in debug mode
+            if settings.debug_tool_calls and thinking_content:
+                print("[THINKING] Final response thinking:")
+                print(f"  {thinking_content}")
 
             return {
                 "type": "response",
@@ -694,3 +739,10 @@ class LLMService:
                 continue
 
         return tool_calls
+
+    def _strip_tool_call_tags(self, content: str) -> str:
+        """Remove <tool_call> XML tags from content for display"""
+        import re
+
+        pattern = r"<tool_call>.*?</tool_call>"
+        return re.sub(pattern, "", content, flags=re.DOTALL).strip()

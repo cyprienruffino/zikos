@@ -173,6 +173,11 @@ class TransformersBackend(LLMBackend):
                 formatted_messages.append({"role": "user", "content": content})
             elif role == "assistant":
                 formatted_messages.append({"role": "assistant", "content": content})
+            elif role == "thinking":
+                # Treat thinking as assistant messages for context
+                formatted_messages.append(
+                    {"role": "assistant", "content": f"[Thinking: {content}]"}
+                )
             elif role == "tool":
                 tool_name = msg.get("name", "tool")
                 tool_content = msg.get("content", "")
@@ -256,6 +261,8 @@ class TransformersBackend(LLMBackend):
                 formatted_parts.append(f"User: {content}\n")
             elif role == "assistant":
                 formatted_parts.append(f"Assistant: {content}\n")
+            elif role == "thinking":
+                formatted_parts.append(f"Assistant [Thinking]: {content}\n")
             elif role == "tool":
                 tool_name = msg.get("name", "tool")
                 tool_content = msg.get("content", "")
