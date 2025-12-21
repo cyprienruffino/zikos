@@ -720,7 +720,7 @@ class LLMService:
         prompt_path = Path(__file__).parent.parent.parent.parent / "SYSTEM_PROMPT.md"
 
         if prompt_path.exists():
-            with open(prompt_path) as f:
+            with open(prompt_path, encoding="utf-8") as f:
                 content = f.read()
                 start = content.find("```")
                 end = content.find("```", start + 3)
