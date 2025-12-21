@@ -34,6 +34,12 @@ class ChatService:
         response["session_id"] = session_id
         return dict(response)
 
+    def get_thinking(self, session_id: str | None) -> dict[str, Any]:
+        """Get thinking messages for a session (for debugging)"""
+        if not session_id:
+            return {"error": "session_id required"}
+        return {"thinking": self.llm_service.get_thinking_for_session(session_id)}
+
     async def handle_audio_ready(
         self,
         audio_file_id: str,

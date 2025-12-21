@@ -1,6 +1,8 @@
 """LLM service"""
 
 import json
+import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,24 @@ from zikos.services.audio import AudioService
 from zikos.services.llm_backends import create_backend
 from zikos.services.tool_providers import get_tool_provider
 from zikos.utils.gpu import get_optimal_gpu_layers
+
+# Setup logger for thinking/reasoning logs
+_thinking_logger = logging.getLogger("zikos.thinking")
+_thinking_logger.setLevel(logging.DEBUG)
+
+# Create logs directory if it doesn't exist
+_logs_dir = Path("logs")
+_logs_dir.mkdir(exist_ok=True)
+
+# File handler for thinking logs
+_thinking_handler = logging.FileHandler(_logs_dir / "thinking.log", encoding="utf-8")
+_thinking_handler.setLevel(logging.DEBUG)
+_thinking_formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+)
+_thinking_handler.setFormatter(_thinking_formatter)
+_thinking_logger.addHandler(_thinking_handler)
+_thinking_logger.propagate = False
 
 
 class LLMService:
@@ -98,6 +118,44 @@ class LLMService:
             system_prompt = self._get_system_prompt()
             self.conversations[session_id] = [{"role": "system", "content": system_prompt}]
         return self.conversations[session_id]
+
+    def get_thinking_for_session(self, session_id: str) -> list[dict[str, Any]]:
+        """Get all thinking messages for a session (for debugging)
+
+        Returns list of thinking messages with their context (adjacent messages)
+        """
+        if session_id not in self.conversations:
+            return []
+
+        history = self.conversations[session_id]
+        thinking_messages = []
+
+        for i, msg in enumerate(history):
+            if msg.get("role") == "thinking":
+                context = {}
+                # Get adjacent messages for context
+                if i > 0:
+                    prev_msg = history[i - 1]
+                    context["before"] = {
+                        "role": prev_msg.get("role"),
+                        "content_preview": str(prev_msg.get("content", ""))[:200],
+                    }
+                if i < len(history) - 1:
+                    next_msg = history[i + 1]
+                    context["after"] = {
+                        "role": next_msg.get("role"),
+                        "content_preview": str(next_msg.get("content", ""))[:200],
+                    }
+
+                thinking_messages.append(
+                    {
+                        "thinking": msg.get("content", ""),
+                        "context": context,
+                        "position": i,
+                    }
+                )
+
+        return thinking_messages
 
     def _extract_thinking(self, content: str | None) -> tuple[str, str]:
         """Extract thinking content from <thinking> tags
@@ -429,6 +487,14 @@ class LLMService:
             if thinking_content:
                 thinking_msg = {"role": "thinking", "content": thinking_content}
                 history.append(thinking_msg)
+
+                # Log thinking to file
+                _thinking_logger.info(
+                    f"Session: {session_id}\n"
+                    f"Thinking (before tool calls):\n{thinking_content}\n"
+                    f"{'='*80}"
+                )
+
                 if settings.debug_tool_calls:
                     print("[THINKING] Extracted thinking:")
                     print(f"  {thinking_content[:500]}...")
@@ -585,6 +651,15 @@ class LLMService:
             # (This helps diagnose function calling issues)
             if iteration == 1 and not response_content:
                 print("WARNING: Model returned empty response on first iteration")
+
+            # Log final response thinking
+            if thinking_content:
+                _thinking_logger.info(
+                    f"Session: {session_id}\n"
+                    f"Final Response Thinking:\n{thinking_content}\n"
+                    f"Response: {response_content[:200]}...\n"
+                    f"{'='*80}"
+                )
 
             # Show thinking in debug mode
             if settings.debug_tool_calls and thinking_content:

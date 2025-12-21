@@ -54,6 +54,19 @@ async def websocket_endpoint(websocket: WebSocket):
                         }
                     )
 
+            elif data["type"] == "get_thinking":
+                try:
+                    response = chat_service.get_thinking(data.get("session_id"))
+                    await websocket.send_json(response)
+                except Exception as e:
+                    print(f"Error getting thinking: {e}")
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": f"Error getting thinking: {str(e)}",
+                        }
+                    )
+
             elif data["type"] == "cancel_recording":
                 await websocket.send_json(
                     {
