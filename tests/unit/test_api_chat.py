@@ -1,6 +1,6 @@
 """Unit tests for chat API endpoints"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,11 +20,10 @@ def client():
 @pytest.fixture
 def mock_chat_service():
     """Mock chat service"""
-    from unittest.mock import AsyncMock
-
     with patch("zikos.api.chat.chat_service") as mock:
         mock.process_message = AsyncMock()
         mock.handle_audio_ready = AsyncMock()
+        mock.get_thinking = Mock()
         mock.disconnect = AsyncMock()
         yield mock
 
@@ -103,3 +102,55 @@ class TestChatAPI:
             websocket.close()
 
         mock_chat_service.disconnect.assert_called_once()
+
+    def test_websocket_message_error_handling(self, client, mock_chat_service):
+        """Test error handling when process_message raises exception"""
+        mock_chat_service.process_message.side_effect = Exception("Processing error")
+
+        with client.websocket_connect("/api/chat/ws") as websocket:
+            websocket.send_json({"type": "message", "message": "Hello"})
+
+            response = websocket.receive_json()
+            assert response["type"] == "error"
+            assert "Error processing message" in response["message"]
+
+    def test_websocket_audio_ready_error_handling(self, client, mock_chat_service):
+        """Test error handling when handle_audio_ready raises exception"""
+        mock_chat_service.handle_audio_ready.side_effect = Exception("Audio error")
+
+        with client.websocket_connect("/api/chat/ws") as websocket:
+            websocket.send_json(
+                {
+                    "type": "audio_ready",
+                    "audio_file_id": "test_audio",
+                    "recording_id": "test_recording",
+                }
+            )
+
+            response = websocket.receive_json()
+            assert response["type"] == "error"
+            assert "Error handling audio" in response["message"]
+
+    def test_websocket_get_thinking(self, client, mock_chat_service):
+        """Test WebSocket get_thinking handling"""
+        mock_chat_service.get_thinking.return_value = {
+            "type": "thinking",
+            "thinking": [{"thinking": "Test thinking", "position": 0}],
+        }
+
+        with client.websocket_connect("/api/chat/ws") as websocket:
+            websocket.send_json({"type": "get_thinking", "session_id": "test_session"})
+
+            response = websocket.receive_json()
+            assert response["type"] == "thinking"
+
+    def test_websocket_get_thinking_error_handling(self, client, mock_chat_service):
+        """Test error handling when get_thinking raises exception"""
+        mock_chat_service.get_thinking.side_effect = Exception("Thinking error")
+
+        with client.websocket_connect("/api/chat/ws") as websocket:
+            websocket.send_json({"type": "get_thinking", "session_id": "test_session"})
+
+            response = websocket.receive_json()
+            assert response["type"] == "error"
+            assert "Error getting thinking" in response["message"]

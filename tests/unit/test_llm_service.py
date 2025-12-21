@@ -459,6 +459,78 @@ class TestHandleAudioReady:
                 message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
                 assert "[Audio Analysis Results]" in message_contents or "120" in message_contents
 
+    @pytest.mark.asyncio
+    async def test_handle_audio_ready_includes_interpretation_reminder(
+        self, llm_service, mock_mcp_server
+    ):
+        """Test that interpretation reminder is included when audio analysis is injected"""
+        audio_file_id = "test_audio_123"
+        mock_analysis = {"tempo": 120, "pitch": {"accuracy": 0.9}}
+
+        with patch.object(
+            llm_service.audio_service, "run_baseline_analysis", return_value=mock_analysis
+        ):
+            await llm_service.handle_audio_ready(
+                audio_file_id, "recording_123", "session_123", mock_mcp_server
+            )
+
+            # Check that interpretation reminder is included in the message
+            call_args = llm_service.backend.create_chat_completion.call_args
+            if call_args:
+                messages = call_args.kwargs.get("messages", [])
+                message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
+                assert "CRITICAL INSTRUCTIONS FOR PROVIDING FEEDBACK" in message_contents
+                assert "NEVER report raw metrics" in message_contents
+                assert "ALWAYS interpret metrics musically" in message_contents
+
+    @pytest.mark.asyncio
+    async def test_generate_response_includes_interpretation_reminder_for_audio_context(
+        self, llm_service, mock_mcp_server
+    ):
+        """Test that interpretation reminder is included when prepending audio analysis context"""
+        session_id = "test_session"
+        history = llm_service._get_conversation_history(session_id)
+        history.append(
+            {
+                "role": "user",
+                "content": "[Audio Analysis Results]\nAudio File: audio123.wav\nTempo: 120 BPM",
+            }
+        )
+
+        # Use a message that triggers audio detection
+        user_message = "What can you tell me about this sample?"
+        await llm_service.generate_response(user_message, session_id, mock_mcp_server)
+
+        # Check that interpretation reminder is included
+        call_args = llm_service.backend.create_chat_completion.call_args
+        if call_args:
+            messages = call_args.kwargs.get("messages", [])
+            message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
+            # Should have the reminder when audio context is prepended
+            if "Audio Analysis Context" in message_contents:
+                assert "CRITICAL:" in message_contents
+                assert (
+                    "NEVER report raw metrics" in message_contents
+                    or "interpret" in message_contents.lower()
+                )
+
+    @pytest.mark.asyncio
+    async def test_handle_audio_ready_error_handling(self, llm_service, mock_mcp_server):
+        """Test error handling when audio analysis fails"""
+        audio_file_id = "test_audio_123"
+
+        with patch.object(
+            llm_service.audio_service,
+            "run_baseline_analysis",
+            side_effect=Exception("Analysis failed"),
+        ):
+            result = await llm_service.handle_audio_ready(
+                audio_file_id, "recording_123", "session_123", mock_mcp_server
+            )
+
+            assert result["type"] == "response"
+            assert "Error analyzing audio" in result["message"]
+
 
 class TestThinkingMechanism:
     """Tests for thinking/chain of thought mechanism"""

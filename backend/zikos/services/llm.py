@@ -305,7 +305,8 @@ class LLMService:
             recent_audio_analysis = self._find_recent_audio_analysis(history)
             if recent_audio_analysis:
                 # Prepend the analysis context to help the LLM answer questions
-                message = f"[Audio Analysis Context - Use this data to answer the user's question]\n{recent_audio_analysis}\n\n[User Question]\n{message}\n\nIMPORTANT: Answer based ONLY on the audio analysis data provided above. Do not make up or hallucinate information. If the analysis data doesn't contain the information needed, say so explicitly."
+                interpretation_reminder = """CRITICAL: When referencing audio analysis data, NEVER report raw metrics or scores. Always interpret them musically. For example, say "your timing is inconsistent" not "timing_accuracy is 0.44". Use the metrics internally to understand the performance, then explain in musical terms."""
+                message = f"[Audio Analysis Context - Use this data to answer the user's question]\n{recent_audio_analysis}\n\n{interpretation_reminder}\n\n[User Question]\n{message}\n\nIMPORTANT: Answer based ONLY on the audio analysis data provided above. Do not make up or hallucinate information. If the analysis data doesn't contain the information needed, say so explicitly."
             elif is_asking_about_audio:
                 # User is asking about audio but no analysis is available
                 message = f"{message}\n\n[IMPORTANT: The user is asking about audio analysis, but no audio analysis data is available in the conversation history. Please inform them that you don't see any audio analysis available and suggest they record or upload audio first.]"
@@ -496,13 +497,22 @@ class LLMService:
                 )
             else:
                 # Log when no thinking is found (helps debug why model isn't using it)
-                content_preview = raw_content[:300] if raw_content else "(empty content)"
-                _thinking_logger.debug(
-                    f"Session: {session_id}\n"
-                    f"No thinking found in response.\n"
-                    f"Content preview: {content_preview}...\n"
-                    f"{'='*80}"
-                )
+                if settings.debug_tool_calls:
+                    content_to_log = raw_content if raw_content else "(empty content)"
+                    _thinking_logger.debug(
+                        f"Session: {session_id}\n"
+                        f"No thinking found in response.\n"
+                        f"Full content:\n{content_to_log}\n"
+                        f"{'='*80}"
+                    )
+                else:
+                    content_preview = raw_content[:300] if raw_content else "(empty content)"
+                    _thinking_logger.debug(
+                        f"Session: {session_id}\n"
+                        f"No thinking found in response.\n"
+                        f"Content preview: {content_preview}...\n"
+                        f"{'='*80}"
+                    )
 
                 if settings.debug_tool_calls:
                     print("[THINKING] Extracted thinking:")
@@ -709,7 +719,18 @@ class LLMService:
             json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
         )
         # Use [Audio Analysis Results] marker to prevent re-detection
-        message = f"[Audio Analysis Results]\nAudio File: {audio_file_id}\n\n{analysis_str}\n\nPlease provide feedback on this musical performance based on the analysis above."
+        # CRITICAL: Add strong reminder to interpret metrics, not report them
+        interpretation_reminder = """CRITICAL INSTRUCTIONS FOR PROVIDING FEEDBACK:
+
+- NEVER report raw metrics or scores (e.g., "timing_accuracy: 0.44", "BPM: 86.54", "average_deviation: 52.74 ms")
+- NEVER structure feedback as "Tempo Analysis:", "Pitch Analysis:", "Rhythm Analysis:" sections listing metrics
+- ALWAYS interpret metrics musically (e.g., "Your timing is inconsistent - you're rushing the beat" instead of "timing accuracy is 0.44")
+- Use scores internally to understand what's happening, then explain in musical terms
+- Be concise and actionable - get to the point quickly with specific advice
+
+The analysis data below contains scores and metrics FOR YOUR INTERNAL USE ONLY. Use them to understand the performance, then provide musical feedback without mentioning the raw numbers."""
+
+        message = f"[Audio Analysis Results]\nAudio File: {audio_file_id}\n\n{analysis_str}\n\n{interpretation_reminder}\n\nPlease provide feedback on this musical performance based on the analysis above."
 
         return await self.generate_response(message, session_id or "default", mcp_server)
 
