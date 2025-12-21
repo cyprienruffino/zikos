@@ -62,6 +62,7 @@ htmlcov/
 .coverage
 .coverage.*
 coverage.xml
+coverage/
 .pytest_cache/
 
 # Ruff
@@ -73,3 +74,5 @@ node_modules/
 # TypeScript
 frontend/dist/**/*.js
 frontend/dist/**/*.js.map
+
+.mypy_cache/
