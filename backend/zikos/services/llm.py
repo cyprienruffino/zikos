@@ -729,6 +729,36 @@ class LLMService:
                         print(f"[PARSED QWEN TOOL CALL] {tool_name}")
                         print(f"  Arguments: {tool_args}")
             except json.JSONDecodeError as e:
+                # Try to fix common JSON issues
+                json_str = match.group(1).strip()
+                fixed_json = self._fix_json_string(json_str)
+
+                if fixed_json != json_str:
+                    try:
+                        tool_obj = json.loads(fixed_json)
+                        tool_name = tool_obj.get("name")
+                        tool_args = tool_obj.get("arguments", {})
+
+                        if tool_name:
+                            tool_calls.append(
+                                {
+                                    "id": f"call_qwen_{len(tool_calls)}",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": json.dumps(tool_args)
+                                        if isinstance(tool_args, dict)
+                                        else str(tool_args),
+                                    },
+                                }
+                            )
+
+                            if settings.debug_tool_calls:
+                                print(f"[PARSED QWEN TOOL CALL] {tool_name} (after JSON fix)")
+                                print(f"  Arguments: {tool_args}")
+                            continue
+                    except Exception:
+                        pass
+
                 if settings.debug_tool_calls:
                     print(f"[PARSE ERROR] Failed to parse Qwen tool call JSON: {e}")
                     print(f"  Content: {match.group(1)[:200]}")
@@ -739,6 +769,45 @@ class LLMService:
                 continue
 
         return tool_calls
+
+    def _fix_json_string(self, json_str: str) -> str:
+        """Attempt to fix common JSON issues like unescaped newlines in strings
+
+        This handles cases where the model includes multi-line content
+        (like MIDI text) directly in JSON strings without proper escaping.
+        """
+        fixed = json_str
+        result = []
+        i = 0
+        in_string = False
+        escape_next = False
+
+        while i < len(fixed):
+            char = fixed[i]
+
+            if escape_next:
+                result.append(char)
+                escape_next = False
+            elif char == "\\":
+                result.append(char)
+                escape_next = True
+            elif char == '"' and not escape_next:
+                in_string = not in_string
+                result.append(char)
+            elif in_string and char in ["\n", "\r", "\t"]:
+                # Escape unescaped control characters in strings
+                if char == "\n":
+                    result.append("\\n")
+                elif char == "\r":
+                    result.append("\\r")
+                elif char == "\t":
+                    result.append("\\t")
+            else:
+                result.append(char)
+
+            i += 1
+
+        return "".join(result)
 
     def _strip_tool_call_tags(self, content: str) -> str:
         """Remove <tool_call> XML tags from content for display"""
