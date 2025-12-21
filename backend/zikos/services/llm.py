@@ -25,7 +25,7 @@ _logs_dir.mkdir(exist_ok=True)
 
 # File handler for thinking logs
 _thinking_handler = logging.FileHandler(_logs_dir / "thinking.log", encoding="utf-8")
-_thinking_handler.setLevel(logging.DEBUG)
+_thinking_handler.setLevel(logging.DEBUG)  # Log DEBUG level to see when thinking is missing
 _thinking_formatter = logging.Formatter(
     "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
@@ -483,7 +483,7 @@ class LLMService:
             raw_content = message_obj.get("content", "")
             cleaned_content, thinking_content = self._extract_thinking(raw_content)
 
-            # Store thinking as separate message if present
+            # Log whether thinking was found or not (for debugging)
             if thinking_content:
                 thinking_msg = {"role": "thinking", "content": thinking_content}
                 history.append(thinking_msg)
@@ -492,6 +492,15 @@ class LLMService:
                 _thinking_logger.info(
                     f"Session: {session_id}\n"
                     f"Thinking (before tool calls):\n{thinking_content}\n"
+                    f"{'='*80}"
+                )
+            else:
+                # Log when no thinking is found (helps debug why model isn't using it)
+                content_preview = raw_content[:300] if raw_content else "(empty content)"
+                _thinking_logger.debug(
+                    f"Session: {session_id}\n"
+                    f"No thinking found in response.\n"
+                    f"Content preview: {content_preview}...\n"
                     f"{'='*80}"
                 )
 
