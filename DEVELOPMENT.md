@@ -72,9 +72,9 @@ Pre-commit hooks automatically run checks before each commit:
 - Black formatting
 - Ruff linting
 - MyPy type checking
-- **Fast unit tests only** (excludes `slow`, `integration`, `expensive`, and `llama` tests)
+- **Fast unit tests only** (excludes `comprehensive` and `integration` tests)
 
-**Important**: The pre-commit hook runs only fast unit tests. Slow tests (like audio processing tests that do real analysis) are excluded to keep commit times reasonable. These tests are still run in CI and can be run manually with `pytest -m slow` or `pytest -m integration`.
+**Important**: The pre-commit hook runs only fast unit tests. Comprehensive tests (LLM inference, heavy audio processing) are excluded to keep commit times reasonable. These tests are still run in CI and can be run manually with `pytest -m comprehensive` or `pytest -m integration`.
 
 To run hooks manually:
 ```bash
@@ -125,35 +125,28 @@ def test_fast_unit_test():
 def test_api_endpoint():
     ...
 
-@pytest.mark.slow
-def test_long_running_test():
-    ...
-
-@pytest.mark.expensive
-def test_llm_inference():
-    ...
-
-@pytest.mark.llama
-def test_requires_llm_model():
+@pytest.mark.comprehensive
+def test_requires_resources():
+    """Test that requires LLM model, heavy audio processing, or long runtime"""
     ...
 ```
 
 Run specific test categories:
 ```bash
 pytest -m unit          # Only unit tests
-pytest -m "not slow"    # Skip slow tests
-pytest -m "not expensive and not llama and not slow and not integration"  # Fast tests only (pre-commit default)
-pytest -m llama         # Run LLM tests (requires model file)
-pytest -m slow          # Run slow tests (audio processing with real analysis)
+pytest -m "not comprehensive"    # Skip comprehensive tests
+pytest -m "not comprehensive and not integration"  # Fast tests only (pre-commit default)
+pytest -m comprehensive # Run comprehensive tests (LLM, heavy audio processing)
 pytest -m integration   # Run integration tests
 ```
 
 **Important**:
-- **LLM tests** are marked as `expensive` and `llama` and are **excluded by default** in CI and pre-commit. These tests require:
-  - `llama-cpp-python` installed
-  - A valid LLM model file configured via `LLM_MODEL_PATH`
-  - Significant computational resources
-- **Audio processing tests** that do real audio analysis (e.g., `test_analyze_articulation_basic`, `test_comprehensive_analysis_success`) are marked as `slow` or `integration` and are **excluded from pre-commit hooks** to keep commit times reasonable (~26+ minutes otherwise). These tests are still run in CI.
+- **Comprehensive tests** are marked as `comprehensive` and are **excluded by default** in CI and pre-commit. These tests include:
+  - LLM tests (require `llama-cpp-python` and model files)
+  - Heavy audio processing tests (real audio analysis with librosa)
+  - Full integration tests with real LLM calls
+  - These tests require significant computational resources and/or long runtime
+- Comprehensive tests are still run in CI but excluded from pre-commit hooks to keep commit times reasonable (~26+ minutes otherwise).
 - LLM service code is intentionally excluded from coverage requirements due to the expense of running these tests.
 
 ### Running LLM Integration Tests
@@ -186,17 +179,17 @@ LLM integration tests verify that the LLM can actually use tools correctly. Thes
 #### How to Run
 
 ```bash
-# Run all LLM tests
-pytest -m llama -v
+# Run all comprehensive tests (includes LLM tests)
+pytest -m comprehensive -v
 
-# Run only tool calling tests
+# Run only LLM tool calling tests
 pytest tests/integration/test_llm_tool_calling.py -v
 
 # Run only basic LLM tests
 pytest tests/integration/test_llm_integration.py -v
 
 # Run with verbose output to see what's happening
-pytest -m llama -vv
+pytest -m comprehensive -vv
 
 # Run specific test
 pytest tests/integration/test_llm_tool_calling.py::TestLLMToolCallingIntegration::test_llm_can_call_metronome_tool -v
@@ -246,7 +239,7 @@ Run these tests:
 - **Target coverage**: 90%+
 - Coverage reports generated in `htmlcov/` directory
 
-**Note**: Some audio analysis modules (`articulation.py`, `chords.py`, `comprehensive.py`, `dynamics.py`, `groove.py`, `key.py`, `timbre.py`) are excluded from coverage requirements because they are only tested by slow tests that do real audio processing. These tests are excluded from pre-commit hooks to keep commit times reasonable (~26+ minutes otherwise). These modules are still tested in CI and can be run manually with `pytest -m slow`.
+**Note**: Some audio analysis modules (`articulation.py`, `chords.py`, `comprehensive.py`, `dynamics.py`, `groove.py`, `key.py`, `timbre.py`) are excluded from coverage requirements because they are only tested by comprehensive tests that do real audio processing. These tests are excluded from pre-commit hooks to keep commit times reasonable (~26+ minutes otherwise). These modules are still tested in CI and can be run manually with `pytest -m comprehensive`.
 
 View coverage report:
 ```bash

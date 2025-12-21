@@ -25,6 +25,7 @@ class TestMCPServer:
 
         tool_names = [t["function"]["name"] for t in tools if "function" in t]
         assert "analyze_tempo" in tool_names
+        assert "get_audio_info" in tool_names
         assert "request_audio_recording" in tool_names
         assert "create_metronome" in tool_names
         assert "create_tuner" in tool_names
@@ -144,6 +145,26 @@ class TestMCPServer:
 
             assert "status" in result
             mock_call.assert_called_once_with("request_audio_recording", prompt="test")
+
+    @pytest.mark.asyncio
+    async def test_call_tool_get_audio_info(self, mcp_server):
+        """Test calling get_audio_info tool"""
+        with patch.object(mcp_server.audio_tools, "call_tool") as mock_call:
+            mock_call.return_value = {
+                "duration": 10.5,
+                "sample_rate": 44100,
+                "channels": 1,
+                "format": "WAV",
+                "file_size_bytes": 925440,
+            }
+
+            result = await mcp_server.call_tool("get_audio_info", audio_file_id="test")
+
+            assert "duration" in result
+            assert result["duration"] == 10.5
+            assert "sample_rate" in result
+            assert result["sample_rate"] == 44100
+            mock_call.assert_called_once_with("get_audio_info", audio_file_id="test")
 
     @pytest.mark.asyncio
     async def test_call_tool_unknown_tool(self, mcp_server):

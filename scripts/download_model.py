@@ -87,6 +87,34 @@ MODEL_CONFIGS = {
         "description": "Llama 3.3 70B Instruct Q5_K_M (large model, requires significant RAM)",
         "function_calling": "excellent",
     },
+    "qwen3-32b-instruct": {
+        "repo_id": "Qwen/Qwen3-32B-Instruct",
+        "filename": None,
+        "description": "Qwen3 32B Instruct (128K context, Transformers format, requires 80GB+ VRAM)",
+        "function_calling": "excellent",
+        "backend": "transformers",
+    },
+    "qwen3-14b-instruct": {
+        "repo_id": "Qwen/Qwen3-14B-Instruct",
+        "filename": None,
+        "description": "Qwen3 14B Instruct (128K context, Transformers format)",
+        "function_calling": "excellent",
+        "backend": "transformers",
+    },
+    "qwen3-8b-instruct": {
+        "repo_id": "Qwen/Qwen3-8B-Instruct",
+        "filename": None,
+        "description": "Qwen3 8B Instruct (32K context, extendable to 128K, Transformers format)",
+        "function_calling": "excellent",
+        "backend": "transformers",
+    },
+    "qwen3-30b-a3b-moe": {
+        "repo_id": "Qwen/Qwen3-30B-A3B",
+        "filename": None,
+        "description": "Qwen3 30B-A3B MoE (128K context, ~3.3B active params, Transformers format)",
+        "function_calling": "excellent",
+        "backend": "transformers",
+    },
 }
 
 
@@ -158,7 +186,7 @@ def download_model(
     output_dir: Path | None = None,
     token: str | None = None,
 ) -> Path:
-    """Download a Llama model"""
+    """Download a model (GGUF or HuggingFace Transformers)"""
     if model_key not in MODEL_CONFIGS:
         print(f"Error: Unknown model '{model_key}'")
         print("\nAvailable models:")
@@ -180,19 +208,24 @@ def download_model(
                 "function_calling"
             ) not in ["excellent", "good"]:
                 print(f"  {key}: {config['description']}")
-        print("\n70B Models (requires significant RAM/VRAM, 16GB+ recommended):")
+        print("\n70B+ Models (requires significant RAM/VRAM, 16GB+ recommended):")
         for key, config in MODEL_CONFIGS.items():
-            if "70b" in key.lower():
+            if any(x in key.lower() for x in ["70b", "72b", "32b", "30b"]):
                 print(f"  {key}: {config['description']}")
         sys.exit(1)
 
     config = MODEL_CONFIGS[model_key]
+    backend = config.get("backend", "llama_cpp")
 
-    if "70b" in model_key.lower():
-        print("⚠️  Warning: This is a 70B model which requires significant resources:")
-        print("   - RAM: 16GB+ recommended (32GB+ for Q6)")
-        print("   - VRAM: 8GB+ recommended if using GPU acceleration")
-        print("   - Model size: ~40-50GB (Q4) to ~60GB+ (Q6)")
+    if any(x in model_key.lower() for x in ["70b", "72b", "32b", "30b"]):
+        print("⚠️  Warning: This is a large model which requires significant resources:")
+        if backend == "transformers":
+            print("   - VRAM: 40GB+ recommended (80GB+ for 32B)")
+            print("   - Model size: ~20-70GB depending on model")
+        else:
+            print("   - RAM: 16GB+ recommended (32GB+ for Q6)")
+            print("   - VRAM: 8GB+ recommended if using GPU acceleration")
+            print("   - Model size: ~40-50GB (Q4) to ~60GB+ (Q6)")
         response = input("Continue with download? (y/N): ")
         if response.lower() != "y":
             print("Download cancelled.")
@@ -205,74 +238,112 @@ def download_model(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    output_path = output_dir / config["filename"]
+    if backend == "transformers":
+        if not HAS_HF_HUB:
+            print("Error: huggingface_hub is required for Transformers models")
+            print("Install it with: pip install huggingface_hub")
+            sys.exit(1)
 
-    if output_path.exists():
-        print(f"Model already exists at {output_path}")
-        response = input("Do you want to re-download it? (y/N): ")
-        if response.lower() != "y":
-            print(f"Using existing model at {output_path}")
-            return output_path
-        output_path.unlink()
+        output_path = output_dir / config["repo_id"].replace("/", "_")
 
-    try:
-        # Try huggingface_hub first (handles auth and redirects better)
-        if HAS_HF_HUB:
-            try:
-                output_path = download_with_hf_hub(
-                    config["repo_id"], config["filename"], output_dir, token
-                )
-            except Exception as hf_error:
-                # Fallback to requests if hf_hub fails
-                print(f"huggingface_hub failed: {hf_error}")
-                print("Trying direct download...")
-                output_path = download_with_requests(
-                    config["repo_id"], config["filename"], output_dir, token
-                )
-        else:
-            output_path = download_with_requests(
-                config["repo_id"], config["filename"], output_dir, token
-            )
+        if output_path.exists():
+            print(f"Model directory already exists at {output_path}")
+            response = input("Do you want to re-download it? (y/N): ")
+            if response.lower() != "y":
+                print(f"Using existing model at {output_path}")
+                return output_path
+
+        print(f"Downloading Transformers model from {config['repo_id']}...")
+        print("This may take a while depending on your connection speed...")
+
+        from huggingface_hub import snapshot_download
+
+        snapshot_download(
+            repo_id=config["repo_id"],
+            local_dir=str(output_path),
+            local_dir_use_symlinks=False,
+            token=token,
+        )
 
         print(f"\nModel downloaded successfully to: {output_path}")
         print("\nTo use this model, set the environment variable:")
         print(f"  export LLM_MODEL_PATH={output_path}")
+        print("  export LLM_BACKEND=transformers")
         print("\nOr add it to your .env file:")
         print(f"  LLM_MODEL_PATH={output_path}")
+        print("  LLM_BACKEND=transformers")
 
         return output_path
+    else:
+        output_path = output_dir / config["filename"]
 
-    except Exception as e:
-        print(f"\nError downloading model: {e}")
-        if "404" in str(e) or "Not Found" in str(e):
-            print("\n⚠️  The model file may not be available at the expected location.")
-            print("This could mean:")
-            print("  1. The model hasn't been converted to GGUF format yet")
-            print("  2. The filename or repository path has changed")
-            print("  3. The model requires authentication")
-            print("\nTry:")
-            print(
-                "  - Check the repository on HuggingFace: https://huggingface.co/"
-                + config["repo_id"]
-            )
-            print("  - Try an alternative model like 'mistral-7b-instruct-v0.3-q4'")
-            print("  - Or use 'llama-3.2-8b-instruct-q4' as a fallback")
-        elif "401" in str(e) or "Unauthorized" in str(e):
-            print("\n⚠️  Authentication error or repository not found.")
-            print("This could mean:")
-            print("  1. The repository doesn't exist or has been moved")
-            print("  2. The model isn't available in GGUF format yet")
-            print("  3. You need a HuggingFace token (unlikely for public models)")
-            print("\nTry:")
-            print("  - Check if the repository exists: https://huggingface.co/" + config["repo_id"])
-            print("  - Try an alternative model:")
-            print("    * 'mistral-7b-instruct-v0.3-q4' (GOOD function calling)")
-            print("    * 'llama-3.2-8b-instruct-q4' (GOOD function calling)")
-            print("  - Install huggingface_hub for better download handling:")
-            print("    pip install huggingface_hub")
         if output_path.exists():
+            print(f"Model already exists at {output_path}")
+            response = input("Do you want to re-download it? (y/N): ")
+            if response.lower() != "y":
+                print(f"Using existing model at {output_path}")
+                return output_path
             output_path.unlink()
-        sys.exit(1)
+
+        try:
+            if HAS_HF_HUB:
+                try:
+                    output_path = download_with_hf_hub(
+                        config["repo_id"], config["filename"], output_dir, token
+                    )
+                except Exception as hf_error:
+                    print(f"huggingface_hub failed: {hf_error}")
+                    print("Trying direct download...")
+                    output_path = download_with_requests(
+                        config["repo_id"], config["filename"], output_dir, token
+                    )
+            else:
+                output_path = download_with_requests(
+                    config["repo_id"], config["filename"], output_dir, token
+                )
+
+            print(f"\nModel downloaded successfully to: {output_path}")
+            print("\nTo use this model, set the environment variable:")
+            print(f"  export LLM_MODEL_PATH={output_path}")
+            print("\nOr add it to your .env file:")
+            print(f"  LLM_MODEL_PATH={output_path}")
+
+            return output_path
+
+        except Exception as e:
+            print(f"\nError downloading model: {e}")
+            if "404" in str(e) or "Not Found" in str(e):
+                print("\n⚠️  The model file may not be available at the expected location.")
+                print("This could mean:")
+                print("  1. The model hasn't been converted to GGUF format yet")
+                print("  2. The filename or repository path has changed")
+                print("  3. The model requires authentication")
+                print("\nTry:")
+                print(
+                    "  - Check the repository on HuggingFace: https://huggingface.co/"
+                    + config["repo_id"]
+                )
+                print("  - Try an alternative model like 'mistral-7b-instruct-v0.3-q4'")
+                print("  - Or use 'llama-3.2-8b-instruct-q4' as a fallback")
+            elif "401" in str(e) or "Unauthorized" in str(e):
+                print("\n⚠️  Authentication error or repository not found.")
+                print("This could mean:")
+                print("  1. The repository doesn't exist or has been moved")
+                print("  2. The model isn't available in GGUF format yet")
+                print("  3. You need a HuggingFace token (unlikely for public models)")
+                print("\nTry:")
+                print(
+                    "  - Check if the repository exists: https://huggingface.co/"
+                    + config["repo_id"]
+                )
+                print("  - Try an alternative model:")
+                print("    * 'mistral-7b-instruct-v0.3-q4' (GOOD function calling)")
+                print("    * 'llama-3.2-8b-instruct-q4' (GOOD function calling)")
+                print("  - Install huggingface_hub for better download handling:")
+                print("    pip install huggingface_hub")
+            if output_path.exists():
+                output_path.unlink()
+            sys.exit(1)
 
 
 def list_models():
@@ -315,15 +386,18 @@ def list_models():
             print(f"    File: {config['filename']}")
             print()
 
-    print("\n70B Models (requires significant RAM/VRAM, 16GB+ recommended):")
-    print("-" * 70)
-    for key, config in MODEL_CONFIGS.items():
-        if "70b" in key.lower():
-            print(f"  {key}")
-            print(f"    {config['description']}")
-            print(f"    Repository: {config['repo_id']}")
-            print(f"    File: {config['filename']}")
-            print()
+        print("\n70B+ Models (requires significant RAM/VRAM, 16GB+ recommended):")
+        print("-" * 70)
+        for key, config in MODEL_CONFIGS.items():
+            if any(x in key.lower() for x in ["70b", "72b", "32b", "30b"]):
+                print(f"  {key}")
+                print(f"    {config['description']}")
+                print(f"    Repository: {config['repo_id']}")
+                if config.get("filename"):
+                    print(f"    File: {config['filename']}")
+                if config.get("backend"):
+                    print(f"    Backend: {config['backend']}")
+                print()
 
 
 def main():

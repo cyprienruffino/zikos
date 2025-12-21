@@ -514,6 +514,31 @@ class TestAudioInfo:
             assert result["channels"] == 2
             assert "format" in result
 
+    @pytest.mark.asyncio
+    async def test_get_audio_info_via_call_tool(self, audio_tools, sample_audio_file):
+        """Test get_audio_info via call_tool (MCP tool exposure)"""
+        with patch("soundfile.info") as mock_info:
+            mock_info_obj = MagicMock()
+            mock_info_obj.duration = 8.3
+            mock_info_obj.samplerate = 48000
+            mock_info_obj.channels = 1
+            mock_info_obj.format = "WAV"
+            mock_info_obj.frames = 398400
+            mock_info.return_value = mock_info_obj
+
+            result = await audio_tools.call_tool(
+                "get_audio_info", audio_path=str(sample_audio_file)
+            )
+
+            assert "duration" in result
+            assert result["duration"] == 8.3
+            assert "sample_rate" in result
+            assert result["sample_rate"] == 48000
+            assert "channels" in result
+            assert result["channels"] == 1
+            assert "format" in result
+            assert "file_size_bytes" in result
+
 
 class TestErrorHandling:
     """Tests for error handling"""
@@ -924,7 +949,7 @@ class TestToolSchemas:
         schemas = audio_tools.get_tool_schemas()
 
         assert isinstance(schemas, list)
-        assert len(schemas) == 17
+        assert len(schemas) == 18
 
         tool_names = [s["function"]["name"] for s in schemas]
         assert "analyze_tempo" in tool_names

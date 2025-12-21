@@ -19,8 +19,9 @@ class Settings(BaseModel):
 
     # LLM
     llm_model_path: str = ""
-    llm_n_ctx: int = 32768
-    llm_n_gpu_layers: int = 0
+    llm_backend: str = "auto"
+    llm_n_ctx: int = 131072
+    llm_n_gpu_layers: int = -1
     llm_temperature: float = 0.7
     llm_top_p: float = 0.9
 
@@ -44,8 +45,9 @@ class Settings(BaseModel):
             api_port=int(os.getenv("API_PORT", "8000")),
             api_reload=os.getenv("API_RELOAD", "false").lower() == "true",
             llm_model_path=os.getenv("LLM_MODEL_PATH", ""),
-            llm_n_ctx=int(os.getenv("LLM_N_CTX", "32768")),
-            llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", "0")),
+            llm_backend=os.getenv("LLM_BACKEND", "auto"),
+            llm_n_ctx=int(os.getenv("LLM_N_CTX", "131072")),
+            llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", "-1")),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             llm_top_p=float(os.getenv("LLM_TOP_P", "0.9")),
             audio_storage_path=Path(os.getenv("AUDIO_STORAGE_PATH", "audio_storage")),

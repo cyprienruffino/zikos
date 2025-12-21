@@ -310,6 +310,23 @@ class AudioAnalysisTools(ToolCollection):
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_audio_info",
+                    "description": "Get basic audio file metadata (duration, sample rate, channels, format, file size)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "audio_file_id": {
+                                "type": "string",
+                                "description": "Audio file ID to get info for",
+                            },
+                        },
+                        "required": ["audio_file_id"],
+                    },
+                },
+            },
         ]
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
@@ -402,6 +419,11 @@ class AudioAnalysisTools(ToolCollection):
                 }
 
             result = await time_stretch_module.pitch_shift(audio_file_id, semitones)
+            return dict(result)
+        elif tool_name == "get_audio_info":
+            audio_file_id = kwargs.get("audio_file_id")
+            audio_path = kwargs.get("audio_path")
+            result = await self.get_audio_info(audio_file_id=audio_file_id, audio_path=audio_path)
             return dict(result)
 
         audio_file_id = kwargs.get("audio_file_id")

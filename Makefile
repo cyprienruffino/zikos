@@ -13,23 +13,20 @@ install-dev: ## Install development dependencies
 	pip install -e ".[dev]"
 	pre-commit install
 
-test: ## Run tests (excludes expensive/slow tests)
+test: ## Run tests (excludes comprehensive tests)
 	pytest
 
-test-cov: ## Run tests with coverage (excludes expensive/slow tests)
+test-cov: ## Run tests with coverage (excludes comprehensive tests)
 	pytest --cov=backend/zikos --cov-report=term-missing --cov-report=html
 
-test-fast: ## Run tests without coverage (faster, excludes expensive/slow tests)
+test-fast: ## Run tests without coverage (faster, excludes comprehensive tests)
 	pytest --no-cov -x
 
-test-all: ## Run all tests including expensive ones
+test-all: ## Run all tests including comprehensive ones
 	pytest -m ""
 
-test-expensive: ## Run only expensive tests (LLM, etc.)
-	pytest -m "expensive or llama"
-
-test-slow: ## Run slow tests
-	pytest -m "slow"
+test-comprehensive: ## Run comprehensive tests (LLM, heavy audio processing, etc.)
+	pytest -m comprehensive
 
 lint: ## Run linters (ruff + eslint)
 	ruff check backend tests

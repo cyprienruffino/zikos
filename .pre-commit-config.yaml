@@ -56,11 +56,11 @@ repos:
         pass_filenames: false
       - id: pytest-unit
         name: pytest unit tests with coverage
-        entry: python -m pytest
+        entry: bash -c 'if [ -f venv/Scripts/python.exe ]; then venv/Scripts/python.exe -m pytest "$@"; elif [ -f venv/bin/python ]; then venv/bin/python -m pytest "$@"; else python -m pytest "$@"; fi'
         args: [
           'tests/unit/',
           '-v',
-          '-m', 'not expensive and not llama and not slow and not integration',
+          '-m', 'not comprehensive and not integration',
           '-x',
           '--cov=backend/zikos',
           '--cov-config=pyproject.toml',

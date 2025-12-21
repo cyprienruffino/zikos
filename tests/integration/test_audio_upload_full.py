@@ -64,8 +64,13 @@ class TestAudioUploadFullFlow:
         assert "pitch" in data["analysis"]
         assert "rhythm" in data["analysis"]
 
+    @pytest.mark.comprehensive
     def test_websocket_audio_ready_with_real_audio(self, client, temp_dir):
-        """Test complete WebSocket flow with real audio upload and analysis"""
+        """Test complete WebSocket flow with real audio upload and analysis
+
+        This test makes real LLM calls which can take a very long time.
+        Marked as expensive to skip by default.
+        """
         # First upload real audio
         audio_file = create_test_audio_file(temp_dir, duration=1.0, frequency=440.0)
 

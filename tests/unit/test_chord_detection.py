@@ -34,7 +34,7 @@ class TestChordDetection:
     """Tests for chord detection with real audio"""
 
     @pytest.mark.asyncio
-    @pytest.mark.slow
+    @pytest.mark.comprehensive
     async def test_detect_chords_basic(self, chord_progression_audio):
         """Test basic chord detection"""
         result = await detect_chords(str(chord_progression_audio))
@@ -53,7 +53,7 @@ class TestChordDetection:
             assert 0.0 <= chord["confidence"] <= 1.0
 
     @pytest.mark.asyncio
-    @pytest.mark.slow
+    @pytest.mark.comprehensive
     async def test_detect_chords_progression(self, chord_progression_audio):
         """Test chord progression detection"""
         result = await detect_chords(str(chord_progression_audio))

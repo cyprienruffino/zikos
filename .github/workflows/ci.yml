@@ -48,11 +48,11 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=backend/zikos --cov-report=term-missing --cov-report=xml
+          pytest tests/unit/ -v -m "not comprehensive and not integration" --cov=backend/zikos --cov-report=term-missing --cov-report=xml
 
       - name: Run integration tests
         run: |
-          pytest tests/integration/ -v --no-cov -m "not expensive and not llama"
+          pytest tests/integration/ -v --no-cov -m "not comprehensive"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

@@ -7,9 +7,9 @@ All hardcoded constants should be defined here for easy configuration.
 class LLMConstants:
     """Constants for LLM service and conversation management"""
 
-    # Token limits (for 32K context window)
-    MAX_TOKENS_PREPARE_MESSAGES: int = 25000
-    MAX_TOKENS_SAFETY_CHECK: int = 28000
+    # Token limits (for 128K context window, dynamically adjusted based on model)
+    MAX_TOKENS_PREPARE_MESSAGES: int = 120000
+    MAX_TOKENS_SAFETY_CHECK: int = 125000
     TOKENS_RESERVE_RESPONSE: int = 4000
     TOKENS_RESERVE_AUDIO_ANALYSIS: int = 5000
 

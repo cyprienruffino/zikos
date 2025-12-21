@@ -1,4 +1,4 @@
-"""Qwen2.5 tool provider implementation"""
+"""Qwen2.5/Qwen3 tool provider implementation"""
 
 import json
 from typing import Any
@@ -8,7 +8,7 @@ from zikos.services.tool_provider import ToolProvider
 
 
 class QwenToolProvider(ToolProvider):
-    """Tool provider for Qwen2.5 models (XML-based tool calling)"""
+    """Tool provider for Qwen2.5 and Qwen3 models (XML-based tool calling)"""
 
     def format_tool_instructions(self) -> str:
         """Qwen-specific tool calling instructions"""
@@ -64,5 +64,5 @@ Your response should include:
         return True
 
     def should_pass_tools_as_parameter(self) -> bool:
-        """Qwen also supports structured format, but XML is more reliable"""
+        """Qwen3 supports structured format via chat template, Qwen2.5 uses XML in text"""
         return True

@@ -4,46 +4,46 @@ import json
 from pathlib import Path
 from typing import Any
 
-try:
-    from llama_cpp import Llama
-except ImportError:
-    Llama = None
-
 from zikos.config import settings
 from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
 from zikos.services.audio import AudioService
+from zikos.services.llm_backends import create_backend
 from zikos.services.tool_providers import get_tool_provider
+from zikos.utils.gpu import get_optimal_gpu_layers
 
 
 class LLMService:
     """Service for LLM interactions"""
 
     def __init__(self):
-        self.llm = None
+        self.backend = None
         self.audio_service = AudioService()
         self.conversations: dict[str, list[dict[str, Any]]] = {}
         self.tool_provider = None
         self._initialize_llm()
 
     def __del__(self):
-        """Cleanup LLM instance on deletion"""
-        if self.llm is not None:
+        """Cleanup LLM backend on deletion"""
+        if self.backend is not None:
             try:
-                if hasattr(self.llm, "close"):
-                    self.llm.close()
+                self.backend.close()
             except Exception:
                 pass
 
     def _initialize_llm(self):
-        """Initialize LLM"""
-        if Llama is None:
-            return
+        """Initialize LLM backend"""
         if not settings.llm_model_path:
             return
 
-        model_path = Path(settings.llm_model_path)
-        if not model_path.exists():
+        model_path_str = settings.llm_model_path
+        model_path = Path(model_path_str)
+
+        if (
+            not model_path.exists()
+            and not model_path_str.startswith("Qwen/")
+            and "/" not in model_path_str
+        ):
             print(f"Warning: Model file not found at {model_path}")
             print("The application will start but LLM features will be unavailable.")
             print(
@@ -55,19 +55,40 @@ class LLMService:
             return
 
         try:
-            print(f"Initializing LLM with context window: {settings.llm_n_ctx} tokens")
-            self.llm = Llama(
-                model_path=str(model_path),
+            backend_type = settings.llm_backend if settings.llm_backend != "auto" else None
+            self.backend = create_backend(model_path_str, backend_type)
+
+            if self.backend is None:
+                print("Warning: Could not create LLM backend")
+                return
+
+            n_gpu_layers = settings.llm_n_gpu_layers
+            if n_gpu_layers == -1:
+                n_gpu_layers = get_optimal_gpu_layers(model_path_str, backend_type or "auto")
+
+            print(f"Initializing LLM backend: {type(self.backend).__name__}")
+            print(f"Model path: {model_path_str}")
+            print(f"Context window: {settings.llm_n_ctx} tokens")
+            print(f"GPU layers: {n_gpu_layers}")
+
+            self.backend.initialize(
+                model_path=model_path_str,
                 n_ctx=settings.llm_n_ctx,
-                n_gpu_layers=settings.llm_n_gpu_layers,
+                n_gpu_layers=n_gpu_layers,
+                temperature=settings.llm_temperature,
+                top_p=settings.llm_top_p,
             )
-            self.tool_provider = get_tool_provider(str(model_path))
+
+            self.tool_provider = get_tool_provider(model_path_str)
             print(f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens")
             print(f"Using tool provider: {type(self.tool_provider).__name__}")
         except Exception as e:
             print(f"Error initializing LLM: {e}")
+            import traceback
+
+            traceback.print_exc()
             print("The application will start but LLM features will be unavailable.")
-            self.llm = None
+            self.backend = None
             self.tool_provider = get_tool_provider()
 
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -168,7 +189,7 @@ class LLMService:
         mcp_server: MCPServer,
     ) -> dict[str, Any]:
         """Generate LLM response, handling tool calls"""
-        if not self.llm:
+        if not self.backend or not self.backend.is_initialized():
             return {
                 "type": "response",
                 "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
@@ -257,6 +278,9 @@ class LLMService:
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
+        consecutive_tool_calls = 0
+        max_consecutive_tool_calls = 5
+        recent_tool_calls: list[str] = []
 
         while iteration < max_iterations:
             iteration += 1
@@ -287,7 +311,7 @@ class LLMService:
             if settings.debug_tool_calls:
                 print(f"[DEBUG] Sending {len(tools)} tools to LLM")
                 print(
-                    f"[DEBUG] Tools list: {[t.get('function', {}).get('name', 'unknown') for t in tools[:5]]}..."
+                    f"[DEBUG] Tools list: {[t.get('function', {}).get('name', 'unknown') for t in tool_schemas[:5]]}..."
                 )
                 print(f"[DEBUG] Messages count: {len(current_messages)}")
                 if current_messages:
@@ -303,7 +327,7 @@ class LLMService:
             if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
                 tools_param = tool_schemas
 
-            response = self.llm.create_chat_completion(
+            response = self.backend.create_chat_completion(
                 messages=current_messages,
                 tools=tools_param,
                 temperature=settings.llm_temperature,
@@ -384,6 +408,41 @@ class LLMService:
                     print(f"  Content snippet: {content[:500]}")
 
             if tool_calls:
+                consecutive_tool_calls += 1
+
+                # Track tool names to detect repetitive loops
+                current_tool_names = []
+                for tool_call in tool_calls:
+                    if isinstance(tool_call, dict) and "function" in tool_call:
+                        tool_name = tool_call["function"]["name"]
+                        current_tool_names.append(tool_name)
+
+                recent_tool_calls.extend(current_tool_names)
+                if len(recent_tool_calls) > 10:
+                    recent_tool_calls = recent_tool_calls[-10:]
+
+                # Check for repetitive tool calling pattern
+                if len(recent_tool_calls) >= 4:
+                    if len(set(recent_tool_calls[-4:])) == 1:
+                        print(
+                            f"WARNING: Detected repetitive tool calling pattern ({recent_tool_calls[-4:]}). "
+                            "Breaking loop to prevent infinite recursion."
+                        )
+                        return {
+                            "type": "response",
+                            "message": "The model appears to be stuck in a loop calling the same tool. Please try rephrasing your request.",
+                        }
+
+                if consecutive_tool_calls > max_consecutive_tool_calls:
+                    print(
+                        f"WARNING: Too many consecutive tool calls ({consecutive_tool_calls}). "
+                        "Breaking loop to prevent infinite recursion."
+                    )
+                    return {
+                        "type": "response",
+                        "message": "The model is making too many tool calls. Please try rephrasing your request or breaking it into smaller parts.",
+                    }
+
                 tool_results = []
 
                 for tool_call in tool_calls:
@@ -477,7 +536,9 @@ class LLMService:
                 history.extend(tool_results)
                 continue
 
-            # No tool calls - return the response
+            # No tool calls - reset counters and return the response
+            consecutive_tool_calls = 0
+            recent_tool_calls.clear()
             response_content = message_obj.get("content", "")
 
             # If we expected a tool call but didn't get one, log a warning

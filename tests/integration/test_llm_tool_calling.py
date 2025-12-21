@@ -1,18 +1,17 @@
 """Realistic integration tests for LLM tool calling
 
 These tests verify that the LLM can actually use tools correctly.
-Marked as expensive but uses real LLM and real MCP server.
+Marked as expensive and llm - uses real LLM and real MCP server.
 """
 
 import pytest
 
-pytestmark = pytest.mark.expensive
+pytestmark = pytest.mark.comprehensive
 
 
 class TestLLMToolCallingIntegration:
     """Integration tests for LLM tool calling with real components"""
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_can_call_metronome_tool(self):
         """Test that LLM can call the metronome tool when requested"""
@@ -52,7 +51,6 @@ class TestLLMToolCallingIntegration:
             # If it's a response, it should at least acknowledge the request
             assert len(message) > 0
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_can_call_recording_tool(self):
         """Test that LLM can call the recording tool when requested"""
@@ -85,7 +83,6 @@ class TestLLMToolCallingIntegration:
             message = result.get("message", "").lower()
             assert len(message) > 0
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_tool_schemas_are_valid(self):
         """Test that tool schemas are properly formatted for the LLM"""
@@ -129,7 +126,6 @@ class TestLLMToolCallingIntegration:
         assert "type" in result
         assert result["type"] in ["response", "tool_call"]
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_tool_calling_loop(self):
         """Test that tool calling loop works correctly"""
@@ -164,7 +160,6 @@ class TestLLMToolCallingIntegration:
         user_messages = [msg for msg in history if msg.get("role") == "user"]
         assert len(user_messages) > 0
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_handles_tool_errors_gracefully(self):
         """Test that LLM handles tool errors without crashing"""

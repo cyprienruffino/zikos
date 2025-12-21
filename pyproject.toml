@@ -154,6 +154,12 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+    "scripts.*",
+]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
@@ -169,14 +175,12 @@ addopts = [
     "--cov-report=xml",
     "--cov-fail-under=80",
     "-v",
-    "-m", "not expensive and not llama",
+    "-m", "not comprehensive and not integration",
 ]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
-    "slow: Slow running tests",
-    "expensive: Computationally expensive tests (e.g., LLM inference)",
-    "llama: Tests that require llama-cpp-python and model files",
+    "comprehensive: Comprehensive tests that require significant resources (LLM models, heavy audio processing, or long runtime)",
     "lightweight: Tests that don't require heavy dependencies",
 ]
 asyncio_mode = "auto"
@@ -199,8 +203,8 @@ omit = [
     "*/test_*.py",
     "*/__pycache__/*",
     "*/.*",
-    "backend/zikos/services/llm.py",  # LLM tests are expensive and excluded from CI
-    # Audio analysis modules only tested by slow tests (excluded from pre-commit for speed)
+    "backend/zikos/services/llm.py",  # LLM tests are comprehensive and excluded from CI
+    # Audio analysis modules only tested by comprehensive tests (excluded from pre-commit for speed)
     "backend/zikos/mcp/tools/analysis/audio/articulation.py",
     "backend/zikos/mcp/tools/analysis/audio/chords.py",
     "backend/zikos/mcp/tools/analysis/audio/comprehensive.py",

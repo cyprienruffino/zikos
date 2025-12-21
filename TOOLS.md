@@ -1,21 +1,46 @@
 # MCP Tools Specification
 
-## Tool Output Design Principles
+Complete reference for all MCP tools available in Zikos.
 
-All tools must return **LLM-interpretable** structured data. This means:
+## Design Principles
+
+### Tool Output Design
+
+All tools must return **LLM-interpretable** structured data:
 
 1. **Musical Context**: Metrics have clear musical meaning
-2. **Normalized Scores**: Use 0.0-1.0 scores where applicable (higher = better)
-3. **Musical Terminology**: Use note names, chord names, keys (not just frequencies)
-4. **Time References**: Include precise time locations for all events/issues
-5. **Severity Indicators**: Include severity levels for problems
-6. **Reference Ranges**: Document what "good" looks like (see SYSTEM_PROMPT.md)
+   - ✅ Good: `"timing_accuracy": 0.87` with interpretation guidelines
+   - ❌ Bad: Raw FFT coefficients or uninterpreted signal processing values
 
-See [AUDIO_ANALYSIS_TOOLS.md](./AUDIO_ANALYSIS_TOOLS.md) for detailed LLM-interpretability requirements.
+2. **Normalized Scores**: Use 0.0-1.0 scores where applicable (higher = better)
+   - Provide reference ranges: Excellent (>0.90), Good (0.80-0.90), Needs Work (0.70-0.80), Poor (<0.70)
+
+3. **Musical Terminology**: Use note names, chord names, keys (not just frequencies)
+   - ✅ Good: `"pitch": "C4", "chord": "Cmaj", "key": "C major"`
+   - ❌ Bad: `"frequency": 261.63` without note name (include both if needed)
+
+4. **Time References**: Include precise time locations for all events/issues
+   - ✅ Good: `{"time": 2.3, "issue": "wrong_note", "expected": "E4", "played": "F4"}`
+   - ❌ Bad: `{"issue": "wrong_note"}` without location
+
+5. **Severity Indicators**: Include severity levels for problems
+   - ✅ Good: `{"deviation_ms": -15, "severity": "minor"}`
+   - ❌ Bad: `{"deviation_ms": -15}` without context
+
+6. **Descriptive Fields**: Include both quantitative metrics and qualitative descriptions
+   - ✅ Good: `{"bpm": 120.5, "is_steady": true, "tempo_stability_score": 0.91}`
+   - ❌ Bad: `{"tempo": 120.5}` without context
+
+7. **Error Handling**: Return structured errors that LLMs can reason about
+   - ✅ Good: `{"error": true, "error_type": "TOO_SHORT", "message": "Audio is too short (minimum 0.5 seconds required)"}`
+   - ❌ Bad: Generic exceptions or unclear error messages
+
+See [SYSTEM_PROMPT.md](./SYSTEM_PROMPT.md) for metric interpretation guidelines.
 
 ## Tool Categories
 
 ### Baseline Tools (Always Run)
+
 These tools are automatically called for every audio submission to provide fundamental analysis.
 
 #### `analyze_tempo(audio_file_id: str) -> dict`
@@ -36,6 +61,8 @@ These tools are automatically called for every audio submission to provide funda
   "dragging_detected": false
 }
 ```
+
+**Implementation**: Uses librosa tempo detection and autocorrelation-based beat tracking.
 
 #### `detect_pitch(audio_file_id: str) -> dict`
 **Purpose**: Note-by-note pitch detection and intonation analysis
@@ -69,6 +96,8 @@ These tools are automatically called for every audio submission to provide funda
 }
 ```
 
+**Implementation**: Uses CREPE (deep learning) or PYIN for pitch tracking, with note segmentation via onset/offset detection.
+
 #### `analyze_rhythm(audio_file_id: str) -> dict`
 **Purpose**: Onset detection, timing accuracy, rhythmic patterns
 
@@ -91,6 +120,8 @@ These tools are automatically called for every audio submission to provide funda
 }
 ```
 
+**Implementation**: Uses librosa onset detection (spectral flux-based) and timing deviation analysis.
+
 ### Optional Analysis Tools (LLM Decides)
 
 #### `detect_key(audio_file_id: str) -> dict`
@@ -106,6 +137,8 @@ These tools are automatically called for every audio submission to provide funda
 }
 ```
 
+**Implementation**: Chroma-based key detection using librosa or music21 Krumhansl-Schmuckler algorithm.
+
 #### `detect_chords(audio_file_id: str) -> dict`
 **Purpose**: Chord progression analysis
 
@@ -119,6 +152,8 @@ These tools are automatically called for every audio submission to provide funda
   "progression": ["Cmaj", "Amin", "Fmaj", "Gmaj"]
 }
 ```
+
+**Implementation**: Chroma feature extraction with template matching or music21 chord recognition.
 
 #### `analyze_timbre(audio_file_id: str) -> dict`
 **Purpose**: Spectral characteristics, tone quality
@@ -138,6 +173,8 @@ These tools are automatically called for every audio submission to provide funda
 }
 ```
 
+**Implementation**: Spectral analysis using FFT/STFT, spectral centroid (brightness), rolloff, and harmonic-to-noise ratio.
+
 #### `segment_phrases(audio_file_id: str) -> dict`
 **Purpose**: Detect musical phrase boundaries
 
@@ -152,6 +189,8 @@ These tools are automatically called for every audio submission to provide funda
   "average_phrase_length": 4.0
 }
 ```
+
+**Implementation**: Energy-based segmentation with repetition detection and silence/pause analysis.
 
 #### `comprehensive_analysis(audio_file_id: str) -> dict`
 **Purpose**: Run all analyses and provide structured summary with strengths, weaknesses, and recommendations
@@ -181,7 +220,7 @@ These tools are automatically called for every audio submission to provide funda
 }
 ```
 
-**Note**: This tool runs all available analysis tools in parallel and provides a comprehensive summary. It's useful when you need a complete overview of the performance.
+**Note**: Runs all available analysis tools in parallel and provides a comprehensive summary.
 
 #### `analyze_groove(audio_file_id: str) -> dict`
 **Purpose**: Analyze microtiming patterns, swing, and groove feel
@@ -200,6 +239,8 @@ These tools are automatically called for every audio submission to provide funda
 ```
 
 **Note**: `groove_type` can be "straight", "swung", or "reverse_swing". `swing_ratio` of 1.0 means straight time, >1.3 indicates swing.
+
+**Implementation**: Microtiming histogram analysis and swing ratio calculation.
 
 #### `detect_repetitions(audio_file_id: str) -> dict`
 **Purpose**: Detect repeated patterns and identify musical form
@@ -220,6 +261,8 @@ These tools are automatically called for every audio submission to provide funda
 ```
 
 **Note**: Identifies repeated patterns using chroma-based similarity analysis. Form labels (A, B, C, etc.) represent different patterns.
+
+**Implementation**: Self-similarity matrix and pattern recognition via chroma features.
 
 #### `analyze_dynamics(audio_file_id: str) -> dict`
 **Purpose**: Volume/amplitude analysis
@@ -247,6 +290,8 @@ These tools are automatically called for every audio submission to provide funda
 
 **Note**: Both `average_rms`/`average_loudness` and `dynamic_range_db`/`dynamic_range` are provided for compatibility. `is_consistent` is derived from `dynamic_consistency` (threshold: 0.75).
 
+**Implementation**: RMS energy calculation, peak detection, and LUFS measurement.
+
 #### `analyze_articulation(audio_file_id: str) -> dict`
 **Purpose**: Staccato, legato, accents analysis
 
@@ -266,6 +311,8 @@ These tools are automatically called for every audio submission to provide funda
   ]
 }
 ```
+
+**Implementation**: Note duration vs. inter-note gap analysis, energy envelope analysis, and pattern classification.
 
 ### Comparison Tools
 
@@ -452,7 +499,7 @@ These tools are automatically called for every audio submission to provide funda
 }
 ```
 
-**Note**: For POC, uses FluidSynth. Future: neural synthesis for better timbre/technique demonstration.
+**Note**: Uses FluidSynth for synthesis. Future: neural synthesis for better timbre/technique demonstration.
 
 #### `midi_to_notation(midi_file_id: str, format: str) -> dict`
 **Purpose**: Render MIDI to sheet music/tabs
@@ -475,9 +522,7 @@ These tools are automatically called for every audio submission to provide funda
 #### `get_audio_info(audio_file_id: str) -> dict`
 **Purpose**: Get basic audio file metadata
 
-**Status**: ⚠️ **Not exposed as MCP tool** - Implemented internally but not available to LLM
-
-**Returns** (when exposed):
+**Returns**:
 ```json
 {
   "duration": 10.5,
@@ -546,9 +591,10 @@ These tools are automatically called for every audio submission to provide funda
 
 **Note**: Requires `pyrubberband` library. Useful for transposition or demonstrating different keys.
 
-## Tool Implementation Notes
+## Implementation Notes
 
 ### Error Handling
+
 All tools should return structured errors:
 ```json
 {
@@ -560,13 +606,28 @@ All tools should return structured errors:
 ```
 
 ### Performance Considerations
+
 - Tools should cache results when possible
 - Long-running tools should support async processing
 - Tools should validate input audio format and duration
 
+### Implementation Libraries
+
+**Core Libraries**:
+- **librosa**: Comprehensive audio analysis (tempo, pitch, onset, chroma, MFCCs)
+- **torchcrepe / crepe**: Deep learning pitch tracking (most accurate)
+- **music21**: Music theory analysis (key detection, chord recognition)
+- **pyrubberband**: Time-stretching and pitch-shifting
+- **soundfile**: Audio file I/O
+- **scipy**: Signal processing utilities
+- **numpy**: Numerical operations
+
 ### Tool Discovery
+
 Tools should provide metadata for LLM discovery:
 - Name and description
 - Required parameters
 - Return type schema
 - Example usage
+
+Tool schemas are generated dynamically from code and injected into the system prompt at runtime.

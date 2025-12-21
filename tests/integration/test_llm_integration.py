@@ -1,7 +1,7 @@
 """Integration tests for LLM service with real llama-cpp-python
 
-These tests are marked as expensive and will be skipped by default.
-Run them explicitly with: pytest -m "expensive" or pytest -m "llama"
+These tests are marked as comprehensive and will be skipped by default.
+Run them explicitly with: pytest -m comprehensive
 
 These tests require:
 - llama-cpp-python installed
@@ -10,13 +10,12 @@ These tests require:
 
 import pytest
 
-pytestmark = pytest.mark.expensive
+pytestmark = pytest.mark.comprehensive
 
 
 class TestLLMServiceIntegration:
     """Integration tests for LLM service with real llama-cpp-python"""
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_initialization(self):
         """Test LLM initialization with real model"""
@@ -29,10 +28,9 @@ class TestLLMServiceIntegration:
 
         assert service.llm is not None
 
-    @pytest.mark.llama
     @pytest.mark.asyncio
     async def test_llm_generate_response(self):
-        """Test LLM response generation (expensive)"""
+        """Test LLM response generation (comprehensive)"""
         from zikos.mcp.server import MCPServer
         from zikos.services.llm import LLMService
 

@@ -5,24 +5,28 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 ## Quick Overview
 
 - **Audio Input**: User recordings analyzed via signal processing tools
-- **LLM**: Llama 3.1/3.2 8B-Instruct (or Llama 3.3 70B) with function calling support
+- **LLM**: Qwen2.5/Qwen3 models with excellent function calling support (or Llama 3.3 70B)
 - **Output**: Text feedback + MIDI-generated musical examples with notation
-- **Architecture**: FastAPI backend + React/Vue frontend
+- **Architecture**: FastAPI backend + TypeScript frontend
+- **Backends**: Supports both llama-cpp-python (GGUF) and HuggingFace Transformers (safetensors)
 
 ## Key Technologies
 
-- **LLM**: Llama 3.1/3.2 8B-Instruct (or Llama 3.3 70B) via llama-cpp-python
+- **LLM**: Qwen2.5-7B/14B (recommended) or Qwen3-32B (for H100) via dual backend support
+  - **llama-cpp-python**: For GGUF models (Qwen2.5, Llama 3.3)
+  - **HuggingFace Transformers**: For safetensors models (Qwen3)
 - **Audio Processing**: librosa, torchaudio, soundfile
 - **MIDI**: Music21 for processing, FluidSynth for synthesis
 - **Backend**: FastAPI with WebSocket support
-- **Frontend**: React/Vue + Web Audio API (to be implemented)
+- **Frontend**: TypeScript + Web Audio API
 
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+
-- LLM model file (GGUF format) - see [Downloading Models](#downloading-models) below
+- LLM model file (GGUF or HuggingFace Transformers format) - see [Downloading Models](#downloading-models) below
+- GPU recommended (8GB+ VRAM) but CPU-only is supported - see [CONFIGURATION.md](./CONFIGURATION.md)
 
 ### Installation
 
@@ -48,49 +52,69 @@ pip install -e ".[ml]"
 pip install -e ".[dev,ml]"
 
 # Set environment variables
-cp .env.example .env
-# Edit .env with your settings
+# Choose based on your hardware (see CONFIGURATION.md for details):
+
+# Option 1: Use setup script (recommended)
+# Linux/Mac:
+./scripts/setup_env.sh cpu     # CPU-only (no GPU), super slow
+./scripts/setup_env.sh small   # For ~RTX 3060Ti / 8GB VRAM
+./scripts/setup_env.sh medium  # For ~RTX 4090 / 24GB VRAM
+./scripts/setup_env.sh large   # For ~H100 / 80GB VRAM
+
+# Windows PowerShell:
+.\scripts\setup_env.ps1 cpu
+.\scripts\setup_env.ps1 small
+.\scripts\setup_env.ps1 medium
+.\scripts\setup_env.ps1 large
+
+# Option 2: Manual setup
+# See CONFIGURATION.md for hardware-specific examples
+# Edit .env with your settings (especially LLM_MODEL_PATH)
 ```
 
 ### Downloading Models
 
-You can download Llama models using the provided helper script:
+You can download models using the provided helper script. See [MODEL_RECOMMENDATIONS.md](./MODEL_RECOMMENDATIONS.md) for detailed recommendations.
 
 ```bash
 # List available models
 python scripts/download_model.py --list
 
-# Download a model (recommended: 8B Q4_K_M for balance of quality and size)
-python scripts/download_model.py llama-3.1-8b-instruct-q4
+# Recommended models by hardware:
+# CPU-only or Small GPU (8GB VRAM):
+python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models
 
-# Or download Llama 3.3 70B (requires 16GB+ RAM, much larger but more capable)
-python scripts/download_model.py llama-3.3-70b-instruct-q4
+# Medium GPU (16-24GB VRAM):
+python scripts/download_model.py qwen2.5-14b-instruct-q4 -o ./models
 
-# Or use the Makefile target
-make download-model MODEL=llama-3.1-8b-instruct-q4
+# Large GPU (80GB+ VRAM, H100):
+python scripts/download_model.py qwen3-32b-instruct -o ./models
 
 # Download to a specific directory
-python scripts/download_model.py llama-3.1-8b-instruct-q4 -o ./models
+python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models
 
 # With Hugging Face token (for private models)
-python scripts/download_model.py llama-3.1-8b-instruct-q4 -t YOUR_TOKEN
+python scripts/download_model.py qwen3-32b-instruct -t YOUR_TOKEN
 ```
 
-The script will download the model to `~/.zikos/models/` by default. After downloading, set the `LLM_MODEL_PATH` environment variable or add it to your `.env` file:
+The script supports both GGUF (llama-cpp-python) and Transformers (HuggingFace) formats. After downloading, the `.env` file created by the setup script will be configured automatically, or you can set `LLM_MODEL_PATH` manually:
 
 ```bash
-export LLM_MODEL_PATH=~/.zikos/models/Llama-3.1-8B-Instruct-Q4_K_M.gguf
+# For GGUF models
+export LLM_MODEL_PATH=./models/Qwen2.5-7B-Instruct-Q4_K_M.gguf
+
+# For Transformers models (Qwen3)
+export LLM_MODEL_PATH=./models/Qwen_Qwen3-32B-Instruct
+export LLM_BACKEND=transformers
 ```
 
-**Note**: The script requires either `huggingface_hub` (recommended) or `requests`. Install with:
+**Note**: The script requires `huggingface_hub` for Transformers models. Install with:
 ```bash
 # Recommended: install model download helpers
 pip install -e ".[model-download]"
 
 # Or install individually
-pip install huggingface_hub  # Recommended
-# or
-pip install requests  # Fallback option
+pip install huggingface_hub
 ```
 
 ### Development
@@ -154,20 +178,21 @@ zikos/
 │   ├── dist/           # Compiled JavaScript (generated)
 │   └── index.html      # Main HTML file
 ├── tests/              # Test code
-├── DESIGN.md           # Architecture design
+├── scripts/            # Utility scripts (model download, env setup)
+├── CONFIGURATION.md    # Hardware-specific configuration guide (includes H100 optimization)
+├── MODEL_RECOMMENDATIONS.md # Model recommendations
+├── DESIGN.md           # Architecture design and future roadmap
 ├── TOOLS.md            # MCP tools specification
 ├── SYSTEM_PROMPT.md    # LLM system prompt
-├── AUDIO_ANALYSIS_TOOLS.md # Comprehensive audio analysis tools catalog
-├── FUTURE_FEATURES.md  # Future features and roadmap
 └── requirements.txt    # Python dependencies
 ```
 
 ## Documentation
 
-- [DESIGN.md](./DESIGN.md) - Architecture design and implementation decisions
-- [AUDIO_ANALYSIS_TOOLS.md](./AUDIO_ANALYSIS_TOOLS.md) - Comprehensive catalog of audio analysis tools and techniques
-- [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) - Future features roadmap and planned enhancements
-- [TOOLS.md](./TOOLS.md) - MCP tools specification
+- [CONFIGURATION.md](./CONFIGURATION.md) - **Hardware-specific configuration guide** (CPU, Small/Medium/Large GPU, including H100 optimization)
+- [MODEL_RECOMMENDATIONS.md](./MODEL_RECOMMENDATIONS.md) - Model recommendations and function calling support
+- [DESIGN.md](./DESIGN.md) - Architecture design, implementation decisions, and future roadmap
+- [TOOLS.md](./TOOLS.md) - MCP tools specification and API reference
 - [SYSTEM_PROMPT.md](./SYSTEM_PROMPT.md) - LLM system prompt
 
 ## Testing
@@ -178,13 +203,13 @@ This project follows Test-Driven Development (TDD) principles with comprehensive
 - **Integration tests**: Test API endpoints and service interactions
 - **Coverage target**: Minimum 80% code coverage
 
-**Note**: LLM service tests are excluded from coverage calculations and CI runs. These tests are marked as `expensive` and `llama` and require model files. See [DEVELOPMENT.md](./DEVELOPMENT.md) for details.
+**Note**: Comprehensive tests (LLM inference, heavy audio processing) are excluded from coverage calculations and CI runs. These tests are marked as `comprehensive` and require model files or significant resources. See [DEVELOPMENT.md](./DEVELOPMENT.md) for details.
 
 Run tests:
 ```bash
-make test-cov  # With coverage report (excludes LLM tests)
-make test      # Standard test run (excludes LLM tests)
-pytest -m llama  # Run LLM integration tests (requires model file)
+make test-cov  # With coverage report (excludes comprehensive tests)
+make test      # Standard test run (excludes comprehensive tests)
+pytest -m comprehensive  # Run comprehensive tests (requires model file for LLM tests)
 ```
 
 **Important**: LLM integration tests verify real tool calling functionality. These are critical for catching bugs that mocked tests miss. See [DEVELOPMENT.md](./DEVELOPMENT.md#running-llm-integration-tests) for detailed instructions on when and how to run them.
@@ -202,6 +227,17 @@ All checks can be run with:
 make check
 ```
 
+## Hardware Support
+
+Zikos supports a wide range of hardware configurations:
+
+- **CPU-only**: Works without GPU (slower, but functional)
+- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Qwen2.5-7B recommended
+- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Qwen2.5-14B or Llama 3.3 70B
+- **Large GPU (80GB+ VRAM)**: H100, A100, etc. - Qwen3-32B with 128K context window
+
+See [CONFIGURATION.md](./CONFIGURATION.md) for detailed setup instructions for each hardware profile.
+
 ## Status
 
-🚧 Early development - POC implementation
+🚧 Early development - POC implementation - Fully vibe-coded

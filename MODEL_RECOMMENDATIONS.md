@@ -1,91 +1,74 @@
-# LLM Model Recommendations for Function Calling
+# Model Recommendations
 
-## Current Situation
+Quick guide to choosing the right LLM model for your hardware.
 
-The current Llama 3.1/3.2 8B models are experiencing issues with function calling:
-- Models generate garbage text instead of calling tools
-- Keyword-based fallback detection is unreliable
-- Function calling support is limited in smaller Llama models
+## Quick Decision Guide
 
-## Recommended Models (Best to Good)
+**Choose based on your GPU VRAM:**
 
-### ⭐ **Qwen2.5-7B-Instruct** (HIGHLY RECOMMENDED)
-- **Function Calling**: Excellent - specifically trained for tool use
-- **Size**: ~4.5GB (Q4_K_M), ~5.5GB (Q5_K_M)
-- **Performance**: Best function calling among 7B models
+- **8GB VRAM or less** → Qwen2.5-7B-Instruct
+- **16GB VRAM** → Qwen2.5-14B-Instruct
+- **80GB VRAM (H100)** → Qwen3-32B-Instruct
+
+**No GPU?** → Qwen2.5-7B-Instruct (runs on CPU, slower)
+
+## Recommended Models
+
+### ⭐ Qwen2.5-7B-Instruct (Best for Most Users)
+- **Best for**: Standard GPUs (8GB VRAM), CPU-only setups
+- **Size**: ~4.5GB
+- **Performance**: Excellent function calling, fast responses
+- **Context**: 32K tokens (handles long conversations)
+- **Why choose this**: Best balance of quality, speed, and resource usage
+
+### Qwen2.5-14B-Instruct (If You Have More VRAM)
+- **Best for**: GPUs with 16GB+ VRAM
+- **Size**: ~8GB
+- **Performance**: Better quality than 7B, slightly slower
 - **Context**: 32K tokens
-- **Why**: Qwen models are specifically optimized for function calling and tool use, making them ideal for this use case
+- **Why choose this**: Better responses if you have the resources
 
-**Download**: `python scripts/download_model.py qwen2.5-7b-instruct-q4`
+### Qwen3-32B-Instruct (High-End GPUs Only)
+- **Best for**: H100 or similar high-VRAM GPUs (80GB+)
+- **Size**: ~65GB VRAM
+- **Performance**: Best quality, largest context window
+- **Context**: 128K tokens (handles very long conversations)
+- **Why choose this**: Maximum quality and context capacity
 
-### **Qwen2.5-14B-Instruct** (If you have more RAM)
-- **Function Calling**: Excellent
-- **Size**: ~8GB (Q4_K_M)
-- **Performance**: Even better than 7B, but requires more resources
-- **Context**: 32K tokens
+## Alternative Models
 
-**Download**: `python scripts/download_model.py qwen2.5-14b-instruct-q4`
-
-### **Mistral-7B-Instruct-v0.3** (Good Alternative)
-- **Function Calling**: Good - better than Llama 3.1/3.2
-- **Size**: ~4.5GB (Q4_K_M)
-- **Performance**: Reliable function calling, well-tested
+### Mistral-7B-Instruct-v0.3
+- **Best for**: If Qwen models aren't available
+- **Size**: ~4.5GB
+- **Performance**: Good function calling, reliable
 - **Context**: 8K tokens (smaller than Qwen)
+- **Note**: Smaller context window than Qwen models
 
-**Download**: `python scripts/download_model.py mistral-7b-instruct-v0.3-q4`
-
-### **Llama 3.2-8B-Instruct** (Better than 3.1)
-- **Function Calling**: Good - improved over 3.1
-- **Size**: ~4.5GB (Q4_K_M)
-- **Performance**: Better function calling than 3.1, but still not as good as Qwen
+### Llama 3.2-8B-Instruct
+- **Best for**: If you prefer Llama models
+- **Size**: ~4.5GB
+- **Performance**: Good, but not as good as Qwen for function calling
 - **Context**: 8K tokens
-
-**Download**: `python scripts/download_model.py llama-3.2-8b-instruct-q4`
+- **Note**: Qwen models are generally better for this use case
 
 ## Model Comparison
 
-| Model | Function Calling | Size (Q4) | Context | Speed | Recommendation |
-|-------|-----------------|-----------|---------|-------|----------------|
-| Qwen2.5-7B | ⭐⭐⭐⭐⭐ | 4.5GB | 32K | Fast | **Best choice** |
-| Qwen2.5-14B | ⭐⭐⭐⭐⭐ | 8GB | 32K | Medium | If you have RAM |
-| Mistral-7B v0.3 | ⭐⭐⭐⭐ | 4.5GB | 8K | Fast | Good alternative |
-| Llama 3.2-8B | ⭐⭐⭐ | 4.5GB | 8K | Fast | Better than 3.1 |
-| Llama 3.1-8B | ⭐⭐ | 4.5GB | 8K | Fast | Not recommended |
+| Model | Quality | Size | Context | Speed | Best For |
+|-------|---------|------|---------|-------|----------|
+| Qwen2.5-7B | ⭐⭐⭐⭐⭐ | 4.5GB | 32K | Fast | **Most users** |
+| Qwen2.5-14B | ⭐⭐⭐⭐⭐ | 8GB | 32K | Medium | More VRAM available |
+| Qwen3-32B | ⭐⭐⭐⭐⭐ | 65GB | 128K | Medium | H100 GPUs or better |
+| Mistral-7B | ⭐⭐⭐⭐ | 4.5GB | 8K | Fast | Alternative option |
+| Llama 3.2-8B | ⭐⭐⭐ | 4.5GB | 8K | Fast | Llama preference |
 
-## Why Qwen2.5 is Recommended
+## Why Qwen Models?
 
-1. **Purpose-built for function calling**: Qwen models are specifically trained and optimized for tool use
-2. **Larger context window**: 32K tokens vs 8K for Llama/Mistral
-3. **Better instruction following**: More reliable at following complex tool-calling instructions
-4. **Proven track record**: Widely used in agent applications
+Qwen models are specifically optimized for function calling and tool use, making them ideal for this application:
 
-## Migration Steps
+1. **Better function calling**: More reliable at using tools correctly
+2. **Larger context**: 32K tokens vs 8K for most alternatives
+3. **Better instruction following**: Handles complex requests more accurately
 
-1. **Download recommended model**:
-   ```bash
-   python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models
-   ```
+## Next Steps
 
-2. **Update environment variable**:
-   ```bash
-   export LLM_MODEL_PATH=./models/qwen2.5-7b-instruct-q4_k_m.gguf
-   ```
-   Or in `.env`:
-   ```
-   LLM_MODEL_PATH=./models/qwen2.5-7b-instruct-q4_k_m.gguf
-   ```
-
-3. **Test function calling**: The code changes (removing keyword spotting) will rely entirely on the model's native function calling capabilities.
-
-## Notes
-
-- All models listed are available in GGUF format compatible with llama-cpp-python
-- Q4_K_M quantization provides good balance of quality and size
-- Q5_K_M provides better quality but larger file size
-- For production, Qwen2.5-7B Q4_K_M is the sweet spot
-
-## Resources
-
-- Qwen models: https://huggingface.co/Qwen
-- Mistral models: https://huggingface.co/mistralai
-- Llama models: https://huggingface.co/meta-llama
+For setup and installation instructions, see [CONFIGURATION.md](./CONFIGURATION.md).

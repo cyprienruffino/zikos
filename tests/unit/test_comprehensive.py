@@ -13,7 +13,7 @@ from zikos.mcp.tools.analysis.audio.comprehensive import comprehensive_analysis
 
 
 @pytest.mark.asyncio
-@pytest.mark.slow
+@pytest.mark.comprehensive
 async def test_comprehensive_analysis_success(temp_dir, sample_audio_path):
     """Test successful comprehensive analysis"""
     sample_rate = 22050
@@ -52,7 +52,7 @@ async def test_comprehensive_analysis_file_not_found(temp_dir):
 
 
 @pytest.mark.asyncio
-@pytest.mark.slow
+@pytest.mark.comprehensive
 async def test_comprehensive_analysis_via_tools_class(temp_dir, sample_audio_path):
     """Test comprehensive analysis via AudioAnalysisTools class"""
     sample_rate = 22050
@@ -72,7 +72,7 @@ async def test_comprehensive_analysis_via_tools_class(temp_dir, sample_audio_pat
 
 
 @pytest.mark.asyncio
-@pytest.mark.slow
+@pytest.mark.comprehensive
 async def test_comprehensive_analysis_via_call_tool(temp_dir, sample_audio_path):
     """Test comprehensive analysis via call_tool method"""
     sample_rate = 22050

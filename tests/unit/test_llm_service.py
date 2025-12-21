@@ -10,31 +10,36 @@ from zikos.services.llm import LLMService
 
 
 @pytest.fixture
-def mock_llm():
-    """Mock LLM instance"""
-    llm = MagicMock()
-    llm.create_chat_completion.return_value = {
+def mock_backend():
+    """Mock LLM backend"""
+    backend = MagicMock()
+    backend.is_initialized.return_value = True
+    backend.create_chat_completion.return_value = {
         "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
     }
-    return llm
+    return backend
 
 
 @pytest.fixture
-def llm_service(mock_llm):
-    """Create LLMService instance with mocked LLM"""
-    with patch("zikos.services.llm.Llama", return_value=mock_llm):
-        service = LLMService()
-        service.llm = mock_llm
-        return service
+def llm_service(mock_backend):
+    """Create LLMService instance with mocked backend"""
+    with patch("zikos.services.llm.create_backend", return_value=mock_backend):
+        with patch("zikos.services.llm.settings") as mock_settings:
+            mock_settings.llm_model_path = "/path/to/model.gguf"
+            service = LLMService()
+            service.backend = mock_backend
+            return service
 
 
 @pytest.fixture
 def llm_service_no_model():
-    """Create LLMService instance without LLM (no model configured)"""
-    with patch("zikos.services.llm.Llama", return_value=None):
-        service = LLMService()
-        service.llm = None
-        return service
+    """Create LLMService instance without backend (no model configured)"""
+    with patch("zikos.services.llm.create_backend", return_value=None):
+        with patch("zikos.services.llm.settings") as mock_settings:
+            mock_settings.llm_model_path = ""
+            service = LLMService()
+            service.backend = None
+            return service
 
 
 @pytest.fixture
@@ -57,30 +62,33 @@ def mock_mcp_server():
 class TestLLMServiceInitialization:
     """Tests for LLM service initialization"""
 
-    def test_initialization_with_model(self, mock_llm):
+    def test_initialization_with_model(self, mock_backend):
         """Test LLM service initialization with model"""
-        with patch("zikos.services.llm.Llama", return_value=mock_llm):
+        with patch("zikos.services.llm.create_backend", return_value=mock_backend):
             with patch("zikos.services.llm.settings") as mock_settings:
                 with patch("pathlib.Path.exists", return_value=True):
                     mock_settings.llm_model_path = "/path/to/model.gguf"
                     mock_settings.llm_n_ctx = 4096
                     mock_settings.llm_n_gpu_layers = 0
+                    mock_settings.llm_backend = "auto"
+                    mock_settings.llm_temperature = 0.7
+                    mock_settings.llm_top_p = 0.9
 
                     service = LLMService()
 
-                    assert service.llm is not None
+                    assert service.backend is not None
                     assert service.audio_service is not None
                     assert isinstance(service.conversations, dict)
 
     def test_initialization_without_model(self):
         """Test LLM service initialization without model"""
-        with patch("zikos.services.llm.Llama", return_value=None):
+        with patch("zikos.services.llm.create_backend", return_value=None):
             with patch("zikos.services.llm.settings") as mock_settings:
                 mock_settings.llm_model_path = ""
 
                 service = LLMService()
 
-                assert service.llm is None
+                assert service.backend is None
                 assert service.audio_service is not None
 
 
@@ -277,7 +285,7 @@ class TestAudioAnalysisDetection:
             assert "tool_name" in result
         else:
             # LLM should have been called
-            call_args = llm_service.llm.create_chat_completion.call_args
+            call_args = llm_service.backend.create_chat_completion.call_args
             assert call_args is not None, "LLM should have been called"
             messages = call_args.kwargs.get("messages", [])
             # Should have audio analysis in the messages
@@ -306,7 +314,7 @@ class TestAudioAnalysisDetection:
                 }
             return {"choices": [{"message": {"content": "Test response", "role": "assistant"}}]}
 
-        llm_service.llm.create_chat_completion.side_effect = mock_chat_completion
+        llm_service.backend.create_chat_completion.side_effect = mock_chat_completion
 
         result = await llm_service.generate_response(
             "Can you tell me about this sample?", session_id, mock_mcp_server
@@ -336,12 +344,12 @@ class TestGenerateResponse:
 
         assert result["type"] == "response"
         assert "message" in result
-        assert llm_service.llm.create_chat_completion.called
+        assert llm_service.backend.create_chat_completion.called
 
     @pytest.mark.asyncio
     async def test_generate_response_with_tool_call(self, llm_service, mock_mcp_server):
         """Test response generation with tool call"""
-        llm_service.llm.create_chat_completion.return_value = {
+        llm_service.backend.create_chat_completion.return_value = {
             "choices": [
                 {
                     "message": {
@@ -397,7 +405,7 @@ class TestGenerateResponse:
                 ]
             }
 
-        llm_service.llm.create_chat_completion.side_effect = mock_chat_completion
+        llm_service.backend.create_chat_completion.side_effect = mock_chat_completion
         mock_mcp_server.call_tool = AsyncMock(return_value={"result": "analysis_result"})
 
         # Use a message that won't trigger pre-detection
@@ -406,12 +414,16 @@ class TestGenerateResponse:
             "Hello, how are you?", "session_123", mock_mcp_server
         )
 
-        # Should hit max iterations (10) and return error message
-        # Note: The tool results get added to history and loop continues
+        # Should hit repetitive tool calling detection (after 4 calls) or max iterations
+        # Note: The repetitive detection triggers first, preventing infinite loops
         assert result["type"] == "response"
-        assert "Maximum iterations" in result["message"]
-        # Should have called multiple times (at least hit the limit)
-        assert call_count >= 10, f"Expected at least 10 calls, got {call_count}"
+        assert (
+            "stuck in a loop" in result["message"]
+            or "Maximum iterations" in result["message"]
+            or "too many tool calls" in result["message"]
+        )
+        # Should have called multiple times (at least 4 for repetitive detection)
+        assert call_count >= 4, f"Expected at least 4 calls, got {call_count}"
 
 
 class TestHandleAudioReady:
@@ -434,7 +446,7 @@ class TestHandleAudioReady:
             # Should return a dict with type and message (or tool_call)
             assert result["type"] in ["response", "tool_call"]
             # Check that analysis was included in the message sent to LLM
-            call_args = llm_service.llm.create_chat_completion.call_args
+            call_args = llm_service.backend.create_chat_completion.call_args
             if call_args:
                 messages = call_args.kwargs.get("messages", [])
                 message_contents = " ".join(str(msg.get("content", "")) for msg in messages)

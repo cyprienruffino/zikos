@@ -1,22 +1,32 @@
 """Tests for Chat service"""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from zikos.services.chat import ChatService
 
 
 @pytest.fixture
-def chat_service():
-    """Create ChatService instance"""
-    service = ChatService()
-    yield service
-    # Cleanup: close LLM if it exists
-    if service.llm_service.llm is not None:
-        try:
-            if hasattr(service.llm_service.llm, "close"):
-                service.llm_service.llm.close()
-        except Exception:
-            pass
+def mock_backend():
+    """Mock LLM backend"""
+    backend = MagicMock()
+    backend.is_initialized.return_value = True
+    backend.create_chat_completion.return_value = {
+        "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
+    }
+    return backend
+
+
+@pytest.fixture
+def chat_service(mock_backend):
+    """Create ChatService instance with mocked LLM"""
+    with patch("zikos.services.llm.create_backend", return_value=mock_backend):
+        with patch("zikos.services.llm.settings") as mock_settings:
+            mock_settings.llm_model_path = ""
+            service = ChatService()
+            service.llm_service.backend = mock_backend
+            yield service
 
 
 class TestChatService:
