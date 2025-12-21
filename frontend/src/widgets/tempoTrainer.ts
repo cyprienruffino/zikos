@@ -1,6 +1,13 @@
 import { TempoTrainerState } from "../types.js";
 
-const messagesEl = document.getElementById("messages") as HTMLElement;
+function getMessagesEl(): HTMLElement {
+    const el = document.getElementById("messages");
+    if (!el) {
+        throw new Error("Messages element not found");
+    }
+    return el as HTMLElement;
+}
+
 const tempoTrainers = new Map<string, TempoTrainerState>();
 
 export function addTempoTrainerWidget(
@@ -34,6 +41,7 @@ export function addTempoTrainerWidget(
             <span class="tempo-trainer-status" id="status-${trainerId}">Stopped</span>
         </div>
     `;
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     const playBtn = widgetEl.querySelector(".play-btn");

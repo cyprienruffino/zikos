@@ -1,6 +1,13 @@
 import { MetronomeState } from "../types.js";
 
-const messagesEl = document.getElementById("messages") as HTMLElement;
+function getMessagesEl(): HTMLElement {
+    const el = document.getElementById("messages");
+    if (!el) {
+        throw new Error("Messages element not found");
+    }
+    return el as HTMLElement;
+}
+
 const metronomes = new Map<string, MetronomeState>();
 
 export function addMetronomeWidget(
@@ -34,6 +41,7 @@ export function addMetronomeWidget(
             <span class="metronome-status" id="status-${metronomeId}">Stopped</span>
         </div>
     `;
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     const playBtn = widgetEl.querySelector(".play-btn");

@@ -13,6 +13,11 @@ export function setSessionId(id: string | null): void {
     sessionId = id;
 }
 
+export function reset(): void {
+    audioChunks = [];
+    mediaRecorder = null;
+}
+
 export function addRecordingWidget(
     recordingId: string,
     prompt: string,

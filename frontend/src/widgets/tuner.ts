@@ -1,7 +1,14 @@
 import { TunerState } from "../types.js";
 import { addMessage } from "../ui.js";
 
-const messagesEl = document.getElementById("messages") as HTMLElement;
+function getMessagesEl(): HTMLElement {
+    const el = document.getElementById("messages");
+    if (!el) {
+        throw new Error("Messages element not found");
+    }
+    return el as HTMLElement;
+}
+
 const tuners = new Map<string, TunerState>();
 
 export function addTunerWidget(
@@ -32,6 +39,7 @@ export function addTunerWidget(
             <span class="tuner-status" id="status-${tunerId}">Stopped</span>
         </div>
     `;
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     const startBtn = widgetEl.querySelector(".start-btn");

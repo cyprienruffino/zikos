@@ -1,7 +1,13 @@
 import { WebSocketMessage } from "./types.js";
 import { API_URL } from "./config.js";
 
-const messagesEl = document.getElementById("messages") as HTMLElement;
+function getMessagesEl(): HTMLElement {
+    const el = document.getElementById("messages");
+    if (!el) {
+        throw new Error("Messages element not found");
+    }
+    return el as HTMLElement;
+}
 
 export function addMessage(
     text: string,
@@ -30,6 +36,7 @@ export function addMessage(
         messageEl.appendChild(notationEl);
     }
 
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(messageEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -45,6 +52,7 @@ export function addTypingIndicator(): void {
     indicatorEl.className = "message assistant typing-indicator";
     indicatorEl.innerHTML =
         '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(indicatorEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 }

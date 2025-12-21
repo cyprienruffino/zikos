@@ -1,0 +1,282 @@
+﻿
+> zikos@0.1.0 test
+> vitest run
+
+node.exe : [33mThe CJS build of Vite's Node API is deprecated. See
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+Au caractère Ligne:1 : 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+
+ RUN  v2.1.9 C:/Users/Cyprien/Documents/GitHub/zikos
+
+ Ô£ô frontend/src/app.test.ts (8 tests) 120ms
+ Ô£ô frontend/src/ui.test.ts (31 tests) 167ms
+ Ô£ô frontend/src/widgets/metronome.test.ts (14 tests) 190ms
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts (27 tests | 7 failed) 297ms
+   ├ù Practice Timer Widget > Start Practice Timer > should start interval when started 20ms
+     ÔåÆ [Function setInterval] is not a spy or a call to a spy!
+   ├ù Practice Timer Widget > Pause Practice Timer > should clear interval when paused 6ms
+     ÔåÆ [Function clearInterval] is not a spy or a call to a spy!
+   ├ù Practice Timer Widget > Stop Practice Timer > should clear interval when stopped 7ms
+     ÔåÆ [Function clearInterval] is not a spy or a call to a spy!
+   ├ù Practice Timer Widget > Duration Completion > should stop when duration is reached 14ms
+     ÔåÆ expected 'Running' to be 'Complete!' // Object.is equality
+   ├ù Practice Timer Widget > Duration Completion > should show completion message when duration is reached 8ms
+     ÔåÆ expected "addMessage" to be called with arguments: [ 'Practice session complete!', ÔÇª(1) ]
+
+Received:
+
+
+
+Number of calls: 0
+
+   ├ù Practice Timer Widget > Break Intervals > should set up break interval when provided 7ms
+     ÔåÆ [Function setInterval] is not a spy or a call to a spy!
+   ├ù Practice Timer Widget > Break Intervals > should clear break interval when paused 9ms
+     ÔåÆ [Function clearInterval] is not a spy or a call to a spy!
+ Ô£ô frontend/src/widgets/earTrainer.test.ts (21 tests) 309ms
+ ÔØ» frontend/src/widgets/tempoTrainer.test.ts (25 tests | 5 failed) 321ms
+   ├ù Tempo Trainer Widget > Start Tempo Trainer > should update tempo display over time 15ms
+     ÔåÆ [Function setTimeout] is not a spy or a call to a spy!
+   ├ù Tempo Trainer Widget > Pause Tempo Trainer > should clear metronome interval when paused 9ms
+     ÔåÆ [Function clearInterval] is not a spy or a call to a spy!
+   ├ù Tempo Trainer Widget > Tempo Ramping > should use linear ramp by default 9ms
+     ÔåÆ [Function setTimeout] is not a spy or a call to a spy!
+   ├ù Tempo Trainer Widget > Tempo Ramping > should use exponential ramp when specified 8ms
+     ÔåÆ [Function setTimeout] is not a spy or a call to a spy!
+   ├ù Tempo Trainer Widget > Tempo Ramping > should update metronome BPM as tempo changes 11ms
+     ÔåÆ [Function setInterval] is not a spy or a call to a spy!
+ Ô£ô frontend/src/widgets/chordProgression.test.ts (26 tests) 316ms
+ ÔØ» frontend/src/widgets/tuner.test.ts (23 tests | 1 failed) 680ms
+   ├ù Tuner Widget > Frequency Detection > should only display frequencies in valid range (80-2000 Hz) 37ms
+     ÔåÆ expected '1076.7 Hz' to be '-- Hz' // Object.is equality
+stderr | frontend/src/websocket.test.ts > WebSocket Module > Error Handling > should handle WebSocket errors
+WebSocket error: Event { isTrusted: [Getter] }
+
+ ÔØ» frontend/src/widgets/recording.test.ts (27 tests | 1 failed) 951ms
+   ├ù Recording Widget > Send Recording Flow > should show error when no audio recorded 25ms
+     ÔåÆ expected "addMessage" to be called with arguments: [ 'No audio recorded', 'error' ]
+
+Received:
+
+
+
+Number of calls: 0
+
+ Ô£ô frontend/src/websocket.test.ts (40 tests) 2875ms
+   Ô£ô WebSocket Module > Error Handling > should cap reconnection delay at 30 seconds 1429ms
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ» Failed Tests 14 ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Start Practice Timer > should start
+interval when started
+TypeError: [Function setInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:118:47
+    116|             startBtn.click();
+    117|
+    118|             expect(global.window.setInterval).toHaveBeenCalled();
+       |                                               ^
+    119|         });
+    120|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[1/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Pause Practice Timer > should clear
+interval when paused
+TypeError: [Function clearInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:184:49
+    182|             pauseBtn.click();
+    183|
+    184|             expect(global.window.clearInterval).toHaveBeenCalled();
+       |                                                 ^
+    185|         });
+    186|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[2/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Stop Practice Timer > should clear
+interval when stopped
+TypeError: [Function clearInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:251:49
+    249|             stopBtn.click();
+    250|
+    251|             expect(global.window.clearInterval).toHaveBeenCalled();
+       |                                                 ^
+    252|         });
+    253|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[3/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Duration Completion > should stop when
+duration is reached
+AssertionError: expected 'Running' to be 'Complete!' // Object.is equality
+
+Expected: "Complete!"
+Received: "Running"
+
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:281:43
+    279|
+    280|             const statusEl = document.getElementById("status-timer_123ÔÇª
+    281|             expect(statusEl?.textContent).toBe("Complete!");
+       |                                           ^
+    282|         });
+    283|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[4/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Duration Completion > should show
+completion message when duration is reached
+AssertionError: expected "addMessage" to be called with arguments: [ 'Practice session complete!', ÔÇª(1) ]
+
+Received:
+
+
+
+Number of calls: 0
+
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:296:35
+    294|             vi.advanceTimersByTime(1000);
+    295|
+    296|             expect(ui.addMessage).toHaveBeenCalledWith(
+       |                                   ^
+    297|                 "Practice session complete!",
+    298|                 "assistant"
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[5/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Break Intervals > should set up break
+interval when provided
+TypeError: [Function setInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:311:47
+    309|             startBtn.click();
+    310|
+    311|             expect(global.window.setInterval).toHaveBeenCalledTimes(2);
+       |                                               ^
+    312|         });
+    313|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[6/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/practiceTimer.test.ts > Practice Timer Widget > Break Intervals > should clear break
+interval when paused
+TypeError: [Function clearInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/practiceTimer.test.ts:337:49
+    335|             pauseBtn.click();
+    336|
+    337|             expect(global.window.clearInterval).toHaveBeenCalledTimes(ÔÇª
+       |                                                 ^
+    338|         });
+    339|     });
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[7/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/recording.test.ts > Recording Widget > Send Recording Flow > should show error when no
+audio recorded
+AssertionError: expected "addMessage" to be called with arguments: [ 'No audio recorded', 'error' ]
+
+Received:
+
+
+
+Number of calls: 0
+
+ ÔØ» frontend/src/widgets/recording.test.ts:292:35
+    290|             await new Promise((resolve) => setTimeout(resolve, 10));
+    291|
+    292|             expect(ui.addMessage).toHaveBeenCalledWith("No audio recorÔÇª
+       |                                   ^
+    293|         });
+    294|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[8/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/tempoTrainer.test.ts > Tempo Trainer Widget > Start Tempo Trainer > should update tempo
+display over time
+TypeError: [Function setTimeout] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/tempoTrainer.test.ts:194:46
+    192|             playBtn.click();
+    193|
+    194|             expect(global.window.setTimeout).toHaveBeenCalled();
+       |                                              ^
+    195|         });
+    196|     });
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[9/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/tempoTrainer.test.ts > Tempo Trainer Widget > Pause Tempo Trainer > should clear metronome
+interval when paused
+TypeError: [Function clearInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/tempoTrainer.test.ts:234:49
+    232|             pauseBtn.click();
+    233|
+    234|             expect(global.window.clearInterval).toHaveBeenCalled();
+       |                                                 ^
+    235|         });
+    236|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[10/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/tempoTrainer.test.ts > Tempo Trainer Widget > Tempo Ramping > should use linear ramp by
+default
+TypeError: [Function setTimeout] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/tempoTrainer.test.ts:316:46
+    314|             playBtn.click();
+    315|
+    316|             expect(global.window.setTimeout).toHaveBeenCalled();
+       |                                              ^
+    317|         });
+    318|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[11/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/tempoTrainer.test.ts > Tempo Trainer Widget > Tempo Ramping > should use exponential ramp
+when specified
+TypeError: [Function setTimeout] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/tempoTrainer.test.ts:326:46
+    324|             playBtn.click();
+    325|
+    326|             expect(global.window.setTimeout).toHaveBeenCalled();
+       |                                              ^
+    327|         });
+    328|
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[12/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/tempoTrainer.test.ts > Tempo Trainer Widget > Tempo Ramping > should update metronome BPM
+as tempo changes
+TypeError: [Function setInterval] is not a spy or a call to a spy!
+ ÔØ» frontend/src/widgets/tempoTrainer.test.ts:336:47
+    334|             playBtn.click();
+    335|
+    336|             expect(global.window.setInterval).toHaveBeenCalled();
+       |                                               ^
+    337|         });
+    338|     });
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[13/14]ÔÄ»
+
+ FAIL  frontend/src/widgets/tuner.test.ts > Tuner Widget > Frequency Detection > should only display frequencies in
+valid range (80-2000 Hz)
+AssertionError: expected '1076.7 Hz' to be '-- Hz' // Object.is equality
+
+Expected: "-- Hz"
+Received: "1076.7 Hz"
+
+ ÔØ» frontend/src/widgets/tuner.test.ts:369:41
+ Test Files  4 failed | 6 passed (10)
+    367|
+    368|             const freqEl = document.getElementById("freq-tuner_123");
+    369|             expect(freqEl?.textContent).toBe("-- Hz");
+       |                                         ^
+    370|         });
+    371|     });
+      Tests  14 failed | 228 passed (242)
+   Start at  19:12:11
+   Duration  5.27s (transform 979ms, setup 0ms, collect 1.88s, tests 6.23s, environment 15.17s, prepare 2.34s)
+
+
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»[14/14]ÔÄ»

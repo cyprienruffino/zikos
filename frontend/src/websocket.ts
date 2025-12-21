@@ -207,3 +207,14 @@ export function sendMessage(message: string): boolean {
 export function getIsProcessing(): boolean {
     return isProcessing;
 }
+
+export function reset(): void {
+    ws = null;
+    sessionId = null;
+    isProcessing = false;
+    reconnectAttempts = 0;
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+}

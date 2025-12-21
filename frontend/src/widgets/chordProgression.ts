@@ -1,6 +1,13 @@
 import { ChordProgressionState } from "../types.js";
 
-const messagesEl = document.getElementById("messages") as HTMLElement;
+function getMessagesEl(): HTMLElement {
+    const el = document.getElementById("messages");
+    if (!el) {
+        throw new Error("Messages element not found");
+    }
+    return el as HTMLElement;
+}
+
 const chordProgressions = new Map<string, ChordProgressionState>();
 
 export function addChordProgressionWidget(
@@ -32,6 +39,7 @@ export function addChordProgressionWidget(
             <span class="chord-progression-status" id="status-${progressionId}">Stopped</span>
         </div>
     `;
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     const playBtn = widgetEl.querySelector(".play-btn");

@@ -1,6 +1,13 @@
 import { EarTrainerState } from "../types.js";
 
-const messagesEl = document.getElementById("messages") as HTMLElement;
+function getMessagesEl(): HTMLElement {
+    const el = document.getElementById("messages");
+    if (!el) {
+        throw new Error("Messages element not found");
+    }
+    return el as HTMLElement;
+}
+
 const earTrainers = new Map<string, EarTrainerState>();
 
 export function addEarTrainerWidget(
@@ -50,6 +57,7 @@ export function addEarTrainerWidget(
         </div>
         <div class="ear-trainer-result" id="result-${trainerId}" style="display:none;"></div>
     `;
+    const messagesEl = getMessagesEl();
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     const playBtn = widgetEl.querySelector(".play-btn");

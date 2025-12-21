@@ -50,9 +50,9 @@ repos:
         pass_filenames: false
       - id: typescript-test
         name: typescript test
-        entry: bash -c 'if command -v npm >/dev/null 2>&1 && [ -f package.json ] && find frontend/src -name "*.test.ts" -o -name "*.spec.ts" | grep -q .; then npm run test; else exit 0; fi'
+        entry: bash -c 'if command -v npm >/dev/null 2>&1 && [ -f package.json ] && find tests/frontend -name "*.test.ts" -o -name "*.spec.ts" | grep -q .; then npm run test; else exit 0; fi'
         language: system
-        files: ^frontend/src/.*\.ts$
+        files: ^(frontend/src/|tests/frontend/).*\.ts$
         pass_filenames: false
       - id: pytest-unit
         name: pytest unit tests with coverage
