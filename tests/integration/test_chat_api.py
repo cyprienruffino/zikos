@@ -35,7 +35,7 @@ class TestChatWebSocket:
     def test_websocket_message_with_session(self, client):
         """Test sending message with existing session"""
         with client.websocket_connect("/api/chat/ws") as websocket:
-            session_id = "test_session_123"
+            session_id = "test_session"
 
             websocket.send_json({"type": "message", "message": "Hello", "session_id": session_id})
 

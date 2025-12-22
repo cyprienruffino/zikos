@@ -139,7 +139,7 @@ class TestConversationHistory:
 
     def test_get_conversation_history_existing_session(self, llm_service):
         """Test getting conversation history for existing session"""
-        session_id = "existing_session"
+        session_id = "test_session"
         llm_service.conversations[session_id] = [{"role": "user", "content": "Hello"}]
 
         history = llm_service._get_conversation_history(session_id)
@@ -418,7 +418,7 @@ class TestGenerateResponse:
         # Use a message that won't trigger pre-detection
         # "test" matches pre-detection, so use something else
         result = await llm_service.generate_response(
-            "Hello, how are you?", "session_123", mock_mcp_server
+            "Hello, how are you?", "test_session", mock_mcp_server
         )
 
         # Should hit repetitive tool calling detection (after 4 calls) or max iterations
@@ -446,7 +446,7 @@ class TestHandleAudioReady:
             llm_service.audio_service, "run_baseline_analysis", return_value=mock_analysis
         ):
             result = await llm_service.handle_audio_ready(
-                audio_file_id, "recording_123", "session_123", mock_mcp_server
+                audio_file_id, "recording_123", "test_session", mock_mcp_server
             )
 
             assert "type" in result
@@ -525,7 +525,7 @@ class TestHandleAudioReady:
             side_effect=Exception("Analysis failed"),
         ):
             result = await llm_service.handle_audio_ready(
-                audio_file_id, "recording_123", "session_123", mock_mcp_server
+                audio_file_id, "recording_123", "test_session", mock_mcp_server
             )
 
             assert result["type"] == "response"

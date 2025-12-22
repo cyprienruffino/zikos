@@ -214,11 +214,11 @@ describe("WebSocket Module", () => {
             const message = {
                 type: "response",
                 message: "Test",
-                session_id: "session_123",
+                session_id: "test_session",
             };
             ws.onmessage?.(new MessageEvent("message", { data: JSON.stringify(message) }));
 
-            expect(recording.setSessionId).toHaveBeenCalledWith("session_123");
+            expect(recording.setSessionId).toHaveBeenCalledWith("test_session");
         });
 
         it("should handle request_audio_recording tool_call", () => {

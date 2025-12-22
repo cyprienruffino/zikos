@@ -25,7 +25,7 @@ class TestLLMToolCallingIntegration:
             pytest.skip("LLM not initialized (no model file configured)")
 
         # Clear any existing conversation
-        session_id = "test_metronome_session"
+        session_id = "test_session"
         service.conversations.clear()
 
         # Request metronome - should trigger tool call
@@ -63,7 +63,7 @@ class TestLLMToolCallingIntegration:
         if service.llm is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
-        session_id = "test_recording_session"
+        session_id = "test_session"
         service.conversations.clear()
 
         # Request recording - should trigger tool call
@@ -113,7 +113,7 @@ class TestLLMToolCallingIntegration:
 
         # Test that LLM can accept these tools
         # Create a simple test message
-        session_id = "test_schema_session"
+        session_id = "test_session"
         service.conversations.clear()
 
         # This should not crash even if LLM doesn't call tools
@@ -138,7 +138,7 @@ class TestLLMToolCallingIntegration:
         if service.llm is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
-        session_id = "test_loop_session"
+        session_id = "test_session"
         service.conversations.clear()
 
         # Request something that should trigger a tool call
@@ -172,7 +172,7 @@ class TestLLMToolCallingIntegration:
         if service.llm is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
-        session_id = "test_error_session"
+        session_id = "test_session"
         service.conversations.clear()
 
         # Try to call a tool with invalid arguments (if LLM tries)
