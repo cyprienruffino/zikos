@@ -154,9 +154,8 @@ class TestConversationHistory:
         history2 = llm_service._get_conversation_history(session_id)
 
         assert len(history1) == 1
-        assert len(history2) == 1
         assert history1[0]["role"] == "system"
-        assert history2[0]["role"] == "system"
+        assert history1 == history2
 
 
 class TestMessagePreparation:
