@@ -153,7 +153,11 @@ class MidiTools(ToolCollection):
         midi_path = self.storage_path / f"{midi_file_id}.mid"
 
         if not midi_path.exists():
-            raise FileNotFoundError(f"MIDI file {midi_file_id} not found")
+            raise FileNotFoundError(
+                f"MIDI file '{midi_file_id}' not found. "
+                "You must first call 'validate_midi' with MIDI text to create a MIDI file. "
+                "The validate_midi tool will return a midi_file_id that you can then use with midi_to_audio."
+            )
 
         soundfont_path = self._find_soundfont()
         if not soundfont_path:
@@ -308,7 +312,11 @@ class MidiTools(ToolCollection):
         midi_path = self.storage_path / f"{midi_file_id}.mid"
 
         if not midi_path.exists():
-            raise FileNotFoundError(f"MIDI file {midi_file_id} not found")
+            raise FileNotFoundError(
+                f"MIDI file '{midi_file_id}' not found. "
+                "You must first call 'validate_midi' with MIDI text to create a MIDI file. "
+                "The validate_midi tool will return a midi_file_id that you can then use with midi_to_notation."
+            )
 
         try:
             from music21 import midi

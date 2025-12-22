@@ -642,6 +642,32 @@ class LLMService:
                                 "tool_call_id": tool_call.get("id"),
                             }
                         )
+                    except FileNotFoundError as e:
+                        error_msg = str(e)
+                        if (
+                            tool_name in ("midi_to_audio", "midi_to_notation")
+                            and "not found" in error_msg.lower()
+                        ):
+                            enhanced_error = (
+                                f"Error: {error_msg}\n\n"
+                                "To fix this: First generate MIDI text in your response, then call 'validate_midi' "
+                                "with that MIDI text. The validate_midi tool will return a midi_file_id that you "
+                                "can use with midi_to_audio or midi_to_notation."
+                            )
+                        else:
+                            enhanced_error = f"Error: {error_msg}"
+
+                        if settings.debug_tool_calls:
+                            print(f"[TOOL ERROR] {tool_name}")
+                            print(f"  Error: {error_msg}")
+                        tool_results.append(
+                            {
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": enhanced_error,
+                                "tool_call_id": tool_call.get("id"),
+                            }
+                        )
                     except Exception as e:
                         if settings.debug_tool_calls:
                             print(f"[TOOL ERROR] {tool_name}")
