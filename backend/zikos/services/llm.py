@@ -288,6 +288,9 @@ class LLMService:
 
         history = self._get_conversation_history(session_id)
 
+        # Store original message for logging
+        original_message = message
+
         # Check if message already contains analysis (from handle_audio_ready)
         # If so, the LLM should use it directly - no need for keyword detection
         message_lower = message.lower()
@@ -312,6 +315,11 @@ class LLMService:
                 message = f"{message}\n\n[IMPORTANT: The user is asking about audio analysis, but no audio analysis data is available in the conversation history. Please inform them that you don't see any audio analysis available and suggest they record or upload audio first.]"
 
         history.append({"role": "user", "content": message})
+
+        # Log user prompt
+        _thinking_logger.info(
+            f"Session: {session_id}\n" f"User Prompt:\n{original_message}\n" f"{'='*80}"
+        )
 
         messages = self._prepare_messages(history)
 
@@ -564,9 +572,16 @@ class LLMService:
                             f"WARNING: Detected repetitive tool calling pattern ({recent_tool_calls[-4:]}). "
                             "Breaking loop to prevent infinite recursion."
                         )
+                        error_message = "The model appears to be stuck in a loop calling the same tool. Please try rephrasing your request."
+                        _thinking_logger.warning(
+                            f"Session: {session_id}\n"
+                            f"Repetitive tool calling detected: {recent_tool_calls[-4:]}\n"
+                            f"Response: {error_message}\n"
+                            f"{'='*80}"
+                        )
                         return {
                             "type": "response",
-                            "message": "The model appears to be stuck in a loop calling the same tool. Please try rephrasing your request.",
+                            "message": error_message,
                         }
 
                 if consecutive_tool_calls > max_consecutive_tool_calls:
@@ -574,9 +589,16 @@ class LLMService:
                         f"WARNING: Too many consecutive tool calls ({consecutive_tool_calls}). "
                         "Breaking loop to prevent infinite recursion."
                     )
+                    error_message = "The model is making too many tool calls. Please try rephrasing your request or breaking it into smaller parts."
+                    _thinking_logger.warning(
+                        f"Session: {session_id}\n"
+                        f"Too many consecutive tool calls: {consecutive_tool_calls}\n"
+                        f"Response: {error_message}\n"
+                        f"{'='*80}"
+                    )
                     return {
                         "type": "response",
-                        "message": "The model is making too many tool calls. Please try rephrasing your request or breaking it into smaller parts.",
+                        "message": error_message,
                     }
 
                 tool_results = []
@@ -621,6 +643,13 @@ class LLMService:
                         widget_content = (
                             self._strip_tool_call_tags(cleaned_content) if cleaned_content else ""
                         )
+                        _thinking_logger.info(
+                            f"Session: {session_id}\n"
+                            f"Tool Call (Widget): {tool_name}\n"
+                            f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
+                            f"Message: {widget_content}\n"
+                            f"{'='*80}"
+                        )
                         return {
                             "type": "tool_call",
                             "message": widget_content,
@@ -629,11 +658,27 @@ class LLMService:
                             "arguments": tool_args,
                         }
 
+                    # Log tool call
+                    _thinking_logger.info(
+                        f"Session: {session_id}\n"
+                        f"Tool Call: {tool_name}\n"
+                        f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
+                        f"{'='*80}"
+                    )
+
                     try:
                         result = await mcp_server.call_tool(tool_name, **tool_args)
                         if settings.debug_tool_calls:
                             print(f"[TOOL RESULT] {tool_name}")
                             print(f"  Result: {json.dumps(result, indent=2, default=str)}")
+
+                        # Log tool result
+                        _thinking_logger.info(
+                            f"Session: {session_id}\n"
+                            f"Tool Result: {tool_name}\n"
+                            f"Result: {json.dumps(result, indent=2, default=str)}\n"
+                            f"{'='*80}"
+                        )
                         tool_results.append(
                             {
                                 "role": "tool",
@@ -697,12 +742,18 @@ class LLMService:
             if iteration == 1 and not response_content:
                 print("WARNING: Model returned empty response on first iteration")
 
-            # Log final response thinking
+            # Log final response thinking and full response
             if thinking_content:
                 _thinking_logger.info(
                     f"Session: {session_id}\n"
                     f"Final Response Thinking:\n{thinking_content}\n"
-                    f"Response: {response_content[:200]}...\n"
+                    f"Response:\n{response_content}\n"
+                    f"{'='*80}"
+                )
+            else:
+                _thinking_logger.info(
+                    f"Session: {session_id}\n"
+                    f"Response (no thinking):\n{response_content}\n"
                     f"{'='*80}"
                 )
 
@@ -717,9 +768,16 @@ class LLMService:
                 or "I'm not sure how to help with that. Could you rephrase your request?",
             }
 
+        error_message = "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts."
+        _thinking_logger.warning(
+            f"Session: {session_id}\n"
+            f"Maximum iterations reached\n"
+            f"Response: {error_message}\n"
+            f"{'='*80}"
+        )
         return {
             "type": "response",
-            "message": "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts.",
+            "message": error_message,
         }
 
     async def handle_audio_ready(
