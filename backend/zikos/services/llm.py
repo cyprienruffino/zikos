@@ -49,6 +49,9 @@ _thinking_handler.setFormatter(_thinking_formatter)
 _thinking_logger.addHandler(_thinking_handler)
 _thinking_logger.propagate = False
 
+# Setup logger for LLM service
+_logger = logging.getLogger("zikos.services.llm")
+
 
 class LLMService:
     """Service for LLM interactions"""
@@ -100,12 +103,12 @@ class LLMService:
             and not model_path_str.startswith("Qwen/")
             and "/" not in model_path_str
         ):
-            print(f"Warning: Model file not found at {model_path}")
-            print("The application will start but LLM features will be unavailable.")
-            print(
+            _logger.warning(f"Model file not found at {model_path}")
+            _logger.warning("The application will start but LLM features will be unavailable.")
+            _logger.info(
                 f"To download a model, run: python scripts/download_model.py qwen2.5-7b-instruct-q4 -o {model_path.parent}"
             )
-            print(
+            _logger.info(
                 "See MODEL_RECOMMENDATIONS.md for recommended models with better function calling support."
             )
             return
@@ -115,17 +118,17 @@ class LLMService:
             self.backend = create_backend(model_path_str, backend_type)
 
             if self.backend is None:
-                print("Warning: Could not create LLM backend")
+                _logger.warning("Could not create LLM backend")
                 return
 
             n_gpu_layers = settings.llm_n_gpu_layers
             if n_gpu_layers == -1:
                 n_gpu_layers = get_optimal_gpu_layers(model_path_str, backend_type or "auto")
 
-            print(f"Initializing LLM backend: {type(self.backend).__name__}")
-            print(f"Model path: {model_path_str}")
-            print(f"Context window: {settings.llm_n_ctx} tokens")
-            print(f"GPU layers: {n_gpu_layers}")
+            _logger.info(f"Initializing LLM backend: {type(self.backend).__name__}")
+            _logger.info(f"Model path: {model_path_str}")
+            _logger.info(f"Context window: {settings.llm_n_ctx} tokens")
+            _logger.info(f"GPU layers: {n_gpu_layers}")
 
             self.backend.initialize(
                 model_path=model_path_str,
@@ -136,14 +139,11 @@ class LLMService:
             )
 
             self.tool_provider = get_tool_provider(model_path_str)
-            print(f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens")
-            print(f"Using tool provider: {type(self.tool_provider).__name__}")
+            _logger.info(f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens")
+            _logger.info(f"Using tool provider: {type(self.tool_provider).__name__}")
         except Exception as e:
-            print(f"Error initializing LLM: {e}")
-            import traceback
-
-            traceback.print_exc()
-            print("The application will start but LLM features will be unavailable.")
+            _logger.error(f"Error initializing LLM: {e}", exc_info=True)
+            _logger.warning("The application will start but LLM features will be unavailable.")
             self.backend = None
             self.tool_provider = get_tool_provider()
 
@@ -212,9 +212,9 @@ class LLMService:
         )
 
         if settings.debug_tool_calls:
-            print(f"[DEBUG] Total tools available: {len(tools)}")
+            _logger.debug(f"Total tools available: {len(tools)}")
             if tools:
-                print(f"[DEBUG] Sample tool: {tools[0].name} ({tools[0].category.value})")
+                _logger.debug(f"Sample tool: {tools[0].name} ({tools[0].category.value})")
 
         self.tool_provider = self.orchestrator.tool_provider
 
@@ -226,21 +226,21 @@ class LLMService:
 
             if token_error:
                 if settings.debug_tool_calls:
-                    print("[TOKEN WARNING] Conversation exceeds token limit")
+                    _logger.warning("Conversation exceeds token limit")
                 return token_error
 
             if settings.debug_tool_calls:
-                print(f"[DEBUG] Sending {len(tools)} tools to LLM")
-                print(
-                    f"[DEBUG] Tools list: {[t.get('function', {}).get('name', 'unknown') for t in tool_schemas[:5]]}..."
+                _logger.debug(f"Sending {len(tools)} tools to LLM")
+                _logger.debug(
+                    f"Tools list: {[t.get('function', {}).get('name', 'unknown') for t in tool_schemas[:5]]}..."
                 )
-                print(f"[DEBUG] Messages count: {len(current_messages)}")
+                _logger.debug(f"Messages count: {len(current_messages)}")
                 if current_messages:
-                    print(
-                        f"[DEBUG] First message role: {current_messages[0].get('role', 'unknown')}"
+                    _logger.debug(
+                        f"First message role: {current_messages[0].get('role', 'unknown')}"
                     )
-                    print(
-                        f"[DEBUG] Last message role: {current_messages[-1].get('role', 'unknown')}"
+                    _logger.debug(
+                        f"Last message role: {current_messages[-1].get('role', 'unknown')}"
                     )
 
             # Pass tools as parameter if provider supports it
@@ -258,19 +258,19 @@ class LLMService:
             message_obj = response["choices"][0]["message"]
 
             if settings.debug_tool_calls:
-                print("[LLM RESPONSE] Full response structure:")
-                print(f"  Response keys: {list(response.keys())}")
-                print(f"  Message object keys: {list(message_obj.keys())}")
-                print(f"  Content: {str(message_obj.get('content', 'None'))[:200]}")
-                print(f"  Tool calls: {message_obj.get('tool_calls', 'None')}")
-                print(f"  Role: {message_obj.get('role', 'None')}")
+                _logger.debug("LLM response structure:")
+                _logger.debug(f"  Response keys: {list(response.keys())}")
+                _logger.debug(f"  Message object keys: {list(message_obj.keys())}")
+                _logger.debug(f"  Content: {str(message_obj.get('content', 'None'))[:200]}")
+                _logger.debug(f"  Tool calls: {message_obj.get('tool_calls', 'None')}")
+                _logger.debug(f"  Role: {message_obj.get('role', 'None')}")
                 if "finish_reason" in response["choices"][0]:
-                    print(f"  Finish reason: {response['choices'][0].get('finish_reason', 'None')}")
+                    _logger.debug(f"  Finish reason: {response['choices'][0].get('finish_reason', 'None')}")
                 if message_obj.get("content"):
                     content_preview = str(message_obj.get("content", ""))[:500]
                     if "<tool_call>" in content_preview:
-                        print("  [FOUND] XML tool_call tag in content!")
-                        print(f"  Content preview: {content_preview}")
+                        _logger.debug("  Found XML tool_call tag in content!")
+                        _logger.debug(f"  Content preview: {content_preview}")
 
             raw_content, cleaned_content, thinking_content = (
                 self.orchestrator.process_llm_response(message_obj, history, session_id)
@@ -309,15 +309,15 @@ class LLMService:
 
             if settings.debug_tool_calls:
                 if tool_calls:
-                    print(f"[TOOL CALLS FOUND] {len(tool_calls)} tool call(s)")
+                    _logger.debug(f"Tool calls found: {len(tool_calls)} tool call(s)")
                 elif raw_content and (
                     "<tool_call>" in raw_content
                     or ("name" in raw_content and "arguments" in raw_content)
                 ):
-                    print(
-                        "[WARNING] Content contains tool-like content but no structured tool_calls field"
+                    _logger.warning(
+                        "Content contains tool-like content but no structured tool_calls field"
                     )
-                    print(f"  Content snippet: {raw_content[:500]}")
+                    _logger.debug(f"  Content snippet: {raw_content[:500]}")
 
             if tool_calls:
                 should_continue, widget_response = await self.orchestrator.process_tool_calls(
@@ -355,7 +355,7 @@ class LLMService:
             # If we expected a tool call but didn't get one, log a warning
             # (This helps diagnose function calling issues)
             if iteration_state.iteration == 1 and not response_content:
-                print("WARNING: Model returned empty response on first iteration")
+                _logger.warning("Model returned empty response on first iteration")
 
             # Log final response thinking and full response
             if thinking_content:
@@ -374,8 +374,8 @@ class LLMService:
 
             # Show thinking in debug mode
             if settings.debug_tool_calls and thinking_content:
-                print("[THINKING] Final response thinking:")
-                print(f"  {thinking_content}")
+                _logger.debug("Final response thinking:")
+                _logger.debug(f"  {thinking_content}")
 
             return {
                 "type": "response",

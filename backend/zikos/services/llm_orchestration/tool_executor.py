@@ -9,6 +9,7 @@ from zikos.mcp.tool import ToolCategory
 from zikos.mcp.tool_registry import ToolRegistry
 from zikos.mcp.server import MCPServer
 
+_logger = logging.getLogger("zikos.services.llm_orchestration.tool_executor")
 _thinking_logger = logging.getLogger("thinking")
 
 
@@ -38,7 +39,7 @@ class ToolExecutor:
             Widget response dict if widget tool, None otherwise
         """
         if not isinstance(tool_call, dict) or "function" not in tool_call:
-            print(f"WARNING: Unexpected tool_call format: {tool_call}")
+            _logger.warning(f"Unexpected tool_call format: {tool_call}")
             return None
 
         tool_name = tool_call["function"]["name"]
@@ -49,20 +50,20 @@ class ToolExecutor:
                 json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
             )
         except json.JSONDecodeError as e:
-            print(f"WARNING: Failed to parse tool arguments: {e}")
+            _logger.warning(f"Failed to parse tool arguments: {e}")
             tool_args = {}
 
         if settings.debug_tool_calls:
-            print(f"[TOOL CALL] {tool_name}")
-            print(f"  Tool ID: {tool_call.get('id', 'N/A')}")
-            print(f"  Arguments: {json.dumps(tool_args, indent=2)}")
+            _logger.debug(f"Tool call: {tool_name}")
+            _logger.debug(f"  Tool ID: {tool_call.get('id', 'N/A')}")
+            _logger.debug(f"  Arguments: {json.dumps(tool_args, indent=2)}")
 
         tool = tool_registry.get_tool(tool_name)
         is_widget = tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING)
 
         if is_widget:
             if settings.debug_tool_calls:
-                print(f"[WIDGET TOOL] Returning {tool_name} to frontend (pausing conversation)")
+                _logger.debug(f"Widget tool: Returning {tool_name} to frontend (pausing conversation)")
             widget_content = (
                 tool_call_parser.strip_tool_call_tags(cleaned_content) if cleaned_content else ""
             )
@@ -130,8 +131,8 @@ class ToolExecutor:
             result = await mcp_server.call_tool(tool_name, **tool_args)
 
             if settings.debug_tool_calls:
-                print(f"[TOOL RESULT] {tool_name}")
-                print(f"  Result: {json.dumps(result, indent=2, default=str)}")
+                _logger.debug(f"Tool result: {tool_name}")
+                _logger.debug(f"  Result: {json.dumps(result, indent=2, default=str)}")
 
             _thinking_logger.info(
                 f"Session: {session_id}\n"
@@ -151,8 +152,8 @@ class ToolExecutor:
             enhanced_error = self._enhance_file_not_found_error(tool_name, error_msg)
 
             if settings.debug_tool_calls:
-                print(f"[TOOL ERROR] {tool_name}")
-                print(f"  Error: {error_msg}")
+                _logger.warning(f"Tool error: {tool_name}")
+                _logger.debug(f"  Error: {error_msg}")
 
             return {
                 "role": "tool",
@@ -162,8 +163,8 @@ class ToolExecutor:
             }
         except Exception as e:
             if settings.debug_tool_calls:
-                print(f"[TOOL ERROR] {tool_name}")
-                print(f"  Error: {str(e)}")
+                _logger.warning(f"Tool error: {tool_name}")
+                _logger.debug(f"  Error: {str(e)}")
 
             return {
                 "role": "tool",

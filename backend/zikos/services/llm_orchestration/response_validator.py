@@ -1,10 +1,13 @@
 """Validate LLM responses for safety and quality"""
 
+import logging
 from typing import Any
 
 import tiktoken
 
 from zikos.constants import LLM
+
+_logger = logging.getLogger("zikos.services.llm_orchestration.response_validator")
 
 
 class ResponseValidator:
@@ -46,7 +49,7 @@ class ResponseValidator:
         words = content.split()
 
         if len(words) > LLM.MAX_WORDS_RESPONSE:
-            print(f"WARNING: Model generated unusually long response ({len(words)} words)")
+            _logger.warning(f"Model generated unusually long response ({len(words)} words)")
             return {
                 "type": "response",
                 "message": "The model generated an unusually long response. Please try rephrasing your question.",
@@ -55,8 +58,8 @@ class ResponseValidator:
         if len(words) > 50:
             unique_ratio = len(set(words)) / len(words) if words else 0
             if unique_ratio < LLM.MIN_UNIQUE_WORD_RATIO:
-                print(
-                    f"WARNING: Model generated repetitive output (unique ratio: {unique_ratio:.2f})"
+                _logger.warning(
+                    f"Model generated repetitive output (unique ratio: {unique_ratio:.2f})"
                 )
                 return {
                     "type": "response",
@@ -65,7 +68,7 @@ class ResponseValidator:
 
             single_char_count = len([w for w in words if len(w) == 1 or w.isdigit()])
             if single_char_count > len(words) * LLM.MAX_SINGLE_CHAR_RATIO:
-                print("WARNING: Model generated suspicious pattern (too many single chars/numbers)")
+                _logger.warning("Model generated suspicious pattern (too many single chars/numbers)")
                 return {
                     "type": "response",
                     "message": "The model generated an invalid response. Please try rephrasing your question.",
@@ -93,8 +96,8 @@ class ResponseValidator:
             max_consecutive = LLM.MAX_CONSECUTIVE_TOOL_CALLS
 
         if consecutive_tool_calls > max_consecutive:
-            print(
-                f"WARNING: Too many consecutive tool calls ({consecutive_tool_calls}). "
+            _logger.warning(
+                f"Too many consecutive tool calls ({consecutive_tool_calls}). "
                 "Breaking loop to prevent infinite recursion."
             )
             return {
@@ -104,8 +107,8 @@ class ResponseValidator:
 
         if len(recent_tool_calls) >= LLM.REPETITIVE_PATTERN_THRESHOLD:
             if len(set(recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD :])) == 1:
-                print(
-                    f"WARNING: Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD:]}). "
+                _logger.warning(
+                    f"Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD:]}). "
                     "Breaking loop to prevent infinite recursion."
                 )
                 return {

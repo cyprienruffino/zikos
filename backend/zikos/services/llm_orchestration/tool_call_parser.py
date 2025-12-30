@@ -1,10 +1,13 @@
 """Parse tool calls from LLM responses"""
 
 import json
+import logging
 import re
 from typing import Any
 
 from zikos.config import settings
+
+_logger = logging.getLogger("zikos.services.llm_orchestration.tool_call_parser")
 
 
 class ToolCallParser:
@@ -67,8 +70,8 @@ class ToolCallParser:
                     )
 
                     if settings.debug_tool_calls:
-                        print(f"[PARSED QWEN TOOL CALL] {tool_name}")
-                        print(f"  Arguments: {tool_args}")
+                        _logger.debug(f"Parsed Qwen tool call: {tool_name}")
+                        _logger.debug(f"  Arguments: {tool_args}")
             except json.JSONDecodeError as e:
                 json_str = match.group(1).strip()
                 fixed_json = self._fix_json_string(json_str)
@@ -93,19 +96,19 @@ class ToolCallParser:
                             )
 
                             if settings.debug_tool_calls:
-                                print(f"[PARSED QWEN TOOL CALL] {tool_name} (after JSON fix)")
-                                print(f"  Arguments: {tool_args}")
+                                _logger.debug(f"Parsed Qwen tool call: {tool_name} (after JSON fix)")
+                                _logger.debug(f"  Arguments: {tool_args}")
                             continue
                     except Exception:
                         pass
 
                 if settings.debug_tool_calls:
-                    print(f"[PARSE ERROR] Failed to parse Qwen tool call JSON: {e}")
-                    print(f"  Content: {match.group(1)[:200]}")
+                    _logger.warning(f"Failed to parse Qwen tool call JSON: {e}")
+                    _logger.debug(f"  Content: {match.group(1)[:200]}")
                 continue
             except Exception as e:
                 if settings.debug_tool_calls:
-                    print(f"[PARSE ERROR] Unexpected error parsing Qwen tool call: {e}")
+                    _logger.warning(f"Unexpected error parsing Qwen tool call: {e}")
                 continue
 
         return tool_calls
