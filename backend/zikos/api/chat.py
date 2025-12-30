@@ -23,11 +23,19 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if data["type"] == "message":
                 try:
-                    response = await chat_service.process_message(
-                        data["message"],
-                        data.get("session_id"),
-                    )
-                    await websocket.send_json(response)
+                    # Check if streaming is requested
+                    if data.get("stream", False):
+                        async for chunk in chat_service.process_message_stream(
+                            data["message"],
+                            data.get("session_id"),
+                        ):
+                            await websocket.send_json(chunk)
+                    else:
+                        response = await chat_service.process_message(
+                            data["message"],
+                            data.get("session_id"),
+                        )
+                        await websocket.send_json(response)
                 except Exception as e:
                     print(f"Error processing message: {e}")
                     await websocket.send_json(

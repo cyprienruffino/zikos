@@ -25,6 +25,7 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 ### Prerequisites
 
 - Python 3.11+
+- FFmpeg (for audio preprocessing) - see [FFmpeg Installation](#ffmpeg-installation) below
 - LLM model file (GGUF or HuggingFace Transformers format) - see [Downloading Models](#downloading-models) below
 - GPU recommended (8GB+ VRAM) but CPU-only is supported - see [CONFIGURATION.md](./CONFIGURATION.md)
 
@@ -70,6 +71,27 @@ pip install -e ".[dev,ml]"
 # Option 2: Manual setup
 # See CONFIGURATION.md for hardware-specific examples
 # Edit .env with your settings (especially LLM_MODEL_PATH)
+```
+
+### FFmpeg Installation
+
+FFmpeg is required for audio preprocessing (converting various audio formats to WAV).
+
+**Linux:**
+```bash
+sudo apt-get update
+sudo apt-get install ffmpeg
+```
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Windows:**
+Download from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html) or use:
+```powershell
+choco install ffmpeg
 ```
 
 ### Downloading Models
@@ -203,13 +225,15 @@ This project follows Test-Driven Development (TDD) principles with comprehensive
 - **Integration tests**: Test API endpoints and service interactions
 - **Coverage target**: Minimum 80% code coverage
 
-**Note**: Comprehensive tests (LLM inference, heavy audio processing) are excluded from coverage calculations and CI runs. These tests are marked as `comprehensive` and require model files or significant resources. See [DEVELOPMENT.md](./DEVELOPMENT.md) for details.
+**Note**: Comprehensive tests (LLM inference, heavy audio processing) and integration tests are excluded from default pytest runs and pre-commit hooks to keep commit times reasonable. These tests are marked as `comprehensive` or `integration` and require model files or significant resources. See [DEVELOPMENT.md](./DEVELOPMENT.md) for details.
 
 Run tests:
 ```bash
-make test-cov  # With coverage report (excludes comprehensive tests)
-make test      # Standard test run (excludes comprehensive tests)
+make test-cov  # With coverage report (excludes comprehensive and integration tests)
+make test      # Standard test run (excludes comprehensive and integration tests)
 pytest -m comprehensive  # Run comprehensive tests (requires model file for LLM tests)
+pytest -m integration    # Run integration tests
+pytest -m ""             # Run all tests including comprehensive and integration
 ```
 
 **Important**: LLM integration tests verify real tool calling functionality. These are critical for catching bugs that mocked tests miss. See [DEVELOPMENT.md](./DEVELOPMENT.md#running-llm-integration-tests) for detailed instructions on when and how to run them.

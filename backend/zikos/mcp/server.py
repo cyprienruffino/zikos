@@ -11,6 +11,7 @@ from zikos.mcp.tools import (
     EarTrainerTools,
     MetronomeTools,
     MidiTools,
+    MusicFlamingoTools,
     PracticeTimerTools,
     RecordingTools,
     TempoTrainerTools,
@@ -27,6 +28,7 @@ class MCPServer:
         self.ear_trainer_tools = EarTrainerTools()
         self.midi_tools = MidiTools()
         self.metronome_tools = MetronomeTools()
+        self.music_flamingo_tools = MusicFlamingoTools()
         self.practice_timer_tools = PracticeTimerTools()
         self.recording_tools = RecordingTools()
         self.tempo_trainer_tools = TempoTrainerTools()
@@ -34,6 +36,9 @@ class MCPServer:
 
         self._registry = ToolRegistry()
         self._registry.register_many(self.audio_tools.get_tools(), self.audio_tools)
+        self._registry.register_many(
+            self.music_flamingo_tools.get_tools(), self.music_flamingo_tools
+        )
         self._registry.register_many(
             self.chord_progression_tools.get_tools(), self.chord_progression_tools
         )

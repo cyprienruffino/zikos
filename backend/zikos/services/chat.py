@@ -1,5 +1,6 @@
 """Chat service"""
 
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import WebSocket
@@ -33,6 +34,25 @@ class ChatService:
 
         response["session_id"] = session_id
         return dict(response)
+
+    async def process_message_stream(
+        self,
+        message: str,
+        session_id: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Process chat message with streaming"""
+        if not session_id:
+            session_id = self._create_session()
+
+        yield {"type": "session_id", "session_id": session_id}
+
+        async for chunk in self.llm_service.generate_response_stream(
+            message,
+            session_id,
+            self.mcp_server,
+        ):
+            chunk["session_id"] = session_id
+            yield chunk
 
     def get_thinking(self, session_id: str | None) -> dict[str, Any]:
         """Get thinking messages for a session (for debugging)"""

@@ -34,6 +34,9 @@ class Settings(BaseModel):
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 8001
 
+    # Music Flamingo Service
+    music_flamingo_service_url: str = ""
+
     # Debug
     debug_tool_calls: bool = False
 
@@ -55,6 +58,7 @@ class Settings(BaseModel):
             notation_storage_path=Path(os.getenv("NOTATION_STORAGE_PATH", "notation_storage")),
             mcp_server_host=os.getenv("MCP_SERVER_HOST", "localhost"),
             mcp_server_port=int(os.getenv("MCP_SERVER_PORT", "8001")),
+            music_flamingo_service_url=os.getenv("MUSIC_FLAMINGO_SERVICE_URL", ""),
             debug_tool_calls=os.getenv("DEBUG_TOOL_CALLS", "false").lower() == "true",
         )
 

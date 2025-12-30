@@ -780,6 +780,322 @@ class LLMService:
             "message": error_message,
         }
 
+    async def generate_response_stream(
+        self,
+        message: str,
+        session_id: str,
+        mcp_server: MCPServer,
+    ):
+        """Generate LLM response with streaming, handling tool calls"""
+        from collections.abc import AsyncGenerator
+
+        if not self.backend or not self.backend.is_initialized():
+            yield {
+                "type": "error",
+                "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
+            }
+            return
+
+        history = self._get_conversation_history(session_id)
+        original_message = message
+        message_lower = message.lower()
+        has_analysis_marker = (
+            "[audio analysis results]" in message_lower or "audio analysis results" in message_lower
+        )
+        audio_keywords = ["sample", "audio", "recording", "sound", "playback", "performance"]
+        is_asking_about_audio = any(keyword in message_lower for keyword in audio_keywords)
+
+        if not has_analysis_marker:
+            recent_audio_analysis = self._find_recent_audio_analysis(history)
+            if recent_audio_analysis:
+                interpretation_reminder = """CRITICAL: When referencing audio analysis data, NEVER report raw metrics or scores. Always interpret them musically. For example, say "your timing is inconsistent" not "timing_accuracy is 0.44". Use the metrics internally to understand the performance, then explain in musical terms."""
+                message = f"[Audio Analysis Context - Use this data to answer the user's question]\n{recent_audio_analysis}\n\n{interpretation_reminder}\n\n[User Question]\n{message}\n\nIMPORTANT: Answer based ONLY on the audio analysis data provided above. Do not make up or hallucinate information. If the analysis data doesn't contain the information needed, say so explicitly."
+            elif is_asking_about_audio:
+                message = f"{message}\n\n[IMPORTANT: The user is asking about audio analysis, but no audio analysis data is available in the conversation history. Please inform them that you don't see any audio analysis available and suggest they record or upload audio first.]"
+
+        history.append({"role": "user", "content": message})
+        _thinking_logger.info(
+            f"Session: {session_id}\n" f"User Prompt:\n{original_message}\n" f"{'='*80}"
+        )
+
+        tool_registry = mcp_server.get_tool_registry()
+        tools = tool_registry.get_all_tools()
+        tool_schemas = tool_registry.get_all_schemas()
+
+        if not self.tool_provider:
+            self.tool_provider = get_tool_provider()
+
+        if tools and self.tool_provider.should_inject_tools_as_text():
+            system_has_tools = False
+            if history and history[0].get("role") == "system":
+                system_content = history[0].get("content", "")
+                if "<tools>" in system_content or "# Available Tools" in system_content:
+                    system_has_tools = True
+
+            if not system_has_tools:
+                tool_instructions = self.tool_provider.format_tool_instructions()
+                tool_summary = self.tool_provider.generate_tool_summary(tools)
+                tool_schemas_text = self.tool_provider.format_tool_schemas(tools)
+                tool_examples = self.tool_provider.get_tool_call_examples()
+                tools_section = f"{tool_instructions}\n\n## Available Tools\n\n{tool_summary}\n\n{tool_schemas_text}\n\n{tool_examples}"
+
+                if history and history[0].get("role") == "system":
+                    original_system = history[0].get("content", "")
+                    history[0]["content"] = f"{original_system}\n\n{tools_section}"
+                else:
+                    system_prompt = self._get_system_prompt()
+                    history.insert(
+                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_section}"}
+                    )
+
+        max_iterations = LLM.MAX_ITERATIONS
+        iteration = 0
+        consecutive_tool_calls = 0
+        max_consecutive_tool_calls = 5
+        recent_tool_calls: list[str] = []
+        accumulated_content = ""
+
+        while iteration < max_iterations:
+            iteration += 1
+            current_messages = self._prepare_messages(
+                history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
+            )
+
+            try:
+                import tiktoken
+
+                enc = tiktoken.get_encoding("cl100k_base")
+                total_tokens = sum(
+                    len(enc.encode(str(msg.get("content", "")))) for msg in current_messages
+                )
+                if total_tokens > LLM.MAX_TOKENS_SAFETY_CHECK:
+                    yield {
+                        "type": "error",
+                        "message": "The conversation is too long. Please start a new conversation or summarize what you need.",
+                    }
+                    return
+            except Exception:
+                pass
+
+            tools_param = None
+            if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
+                tools_param = tool_schemas
+
+            try:
+                stream = self.backend.stream_chat_completion(
+                    messages=current_messages,
+                    tools=tools_param,
+                    temperature=settings.llm_temperature,
+                    top_p=settings.llm_top_p,
+                )
+
+                accumulated_content = ""
+                final_delta = {}
+                final_finish_reason = None
+                accumulated_tool_calls = []
+
+                async for chunk in stream:
+                    choice = chunk.get("choices", [{}])[0]
+                    delta = choice.get("delta", {})
+                    finish_reason = choice.get("finish_reason")
+
+                    if delta.get("content"):
+                        token = delta.get("content", "")
+                        accumulated_content += token
+                        yield {"type": "token", "content": token}
+
+                    # Handle tool calls in delta (for llama-cpp-python format)
+                    if delta.get("tool_calls"):
+                        accumulated_tool_calls.extend(delta.get("tool_calls", []))
+
+                    if finish_reason:
+                        final_delta = delta
+                        final_finish_reason = finish_reason
+                        # Tool calls might be in the final chunk
+                        if choice.get("tool_calls"):
+                            accumulated_tool_calls.extend(choice.get("tool_calls", []))
+                        break
+
+                message_obj = {
+                    "role": "assistant",
+                    "content": accumulated_content,
+                    "tool_calls": accumulated_tool_calls
+                    if accumulated_tool_calls
+                    else (
+                        final_delta.get("tool_calls")
+                        if final_finish_reason == "tool_calls"
+                        else None
+                    ),
+                }
+
+            except Exception as e:
+                yield {
+                    "type": "error",
+                    "message": f"Error during streaming: {str(e)}",
+                }
+                return
+
+            content = message_obj.get("content", "")
+            if not isinstance(content, str):
+                content = str(content) if content else ""
+            cleaned_content, thinking_content = self._extract_thinking(content)
+
+            if thinking_content:
+                history.append({"role": "thinking", "content": thinking_content})
+
+            tool_calls = message_obj.get("tool_calls")
+            if tool_calls and isinstance(tool_calls, list):
+                # Yield tool call information
+                for tool_call in tool_calls:
+                    if not isinstance(tool_call, dict):
+                        continue
+                    tool_name = (
+                        tool_call.get("function", {}).get("name", "")
+                        if isinstance(tool_call.get("function"), dict)
+                        else ""
+                    )
+                    tool_args_str = (
+                        tool_call.get("function", {}).get("arguments", "{}")
+                        if isinstance(tool_call.get("function"), dict)
+                        else "{}"
+                    )
+                    try:
+                        tool_args = (
+                            json.loads(tool_args_str)
+                            if isinstance(tool_args_str, str)
+                            else tool_args_str
+                        )
+                    except json.JSONDecodeError:
+                        tool_args = {}
+
+                    yield {
+                        "type": "tool_call",
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        "tool_id": tool_call.get("id") if isinstance(tool_call, dict) else None,
+                    }
+
+                consecutive_tool_calls += 1
+                if consecutive_tool_calls > max_consecutive_tool_calls:
+                    yield {
+                        "type": "response",
+                        "message": "I seem to be stuck in a loop making tool calls. Let me try a different approach.",
+                    }
+                    return
+
+                tool_call_names = [
+                    tc.get("function", {}).get("name", "")
+                    if isinstance(tc.get("function"), dict)
+                    else ""
+                    for tc in tool_calls
+                    if isinstance(tc, dict)
+                ]
+                if len(set(tool_call_names)) == 1 and len(recent_tool_calls) >= 3:
+                    if all(name == tool_call_names[0] for name in recent_tool_calls[-3:]):
+                        yield {
+                            "type": "response",
+                            "message": f"I've called {tool_call_names[0]} multiple times. There may be an issue. Let me try a different approach.",
+                        }
+                        return
+
+                recent_tool_calls.extend(tool_call_names)
+                if len(recent_tool_calls) > 10:
+                    recent_tool_calls = recent_tool_calls[-10:]
+
+                tool_results = []
+                for tool_call in tool_calls:
+                    if not isinstance(tool_call, dict):
+                        continue
+                    tool_name = (
+                        tool_call.get("function", {}).get("name", "")
+                        if isinstance(tool_call.get("function"), dict)
+                        else ""
+                    )
+                    tool_args_str = (
+                        tool_call.get("function", {}).get("arguments", "{}")
+                        if isinstance(tool_call.get("function"), dict)
+                        else "{}"
+                    )
+
+                    try:
+                        tool_args = (
+                            json.loads(tool_args_str)
+                            if isinstance(tool_args_str, str)
+                            else tool_args_str
+                        )
+                    except json.JSONDecodeError:
+                        tool_args = {}
+
+                    tool = tool_registry.get_tool(tool_name)
+                    tool_call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
+                    if not tool:
+                        tool_results.append(
+                            {
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": f"Error: Tool '{tool_name}' not found",
+                                "tool_call_id": tool_call_id,
+                            }
+                        )
+                        continue
+
+                    try:
+                        result = await mcp_server.call_tool(tool_name, tool_args)
+                        tool_results.append(
+                            {
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": json.dumps(result)
+                                if not isinstance(result, str)
+                                else result,
+                                "tool_call_id": tool_call_id,
+                            }
+                        )
+                    except Exception as e:
+                        tool_results.append(
+                            {
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": f"Error: {str(e)}",
+                                "tool_call_id": tool_call_id,
+                            }
+                        )
+
+                history.extend(tool_results)
+                continue
+
+            consecutive_tool_calls = 0
+            recent_tool_calls.clear()
+            response_content = cleaned_content
+
+            if thinking_content:
+                _thinking_logger.info(
+                    f"Session: {session_id}\n"
+                    f"Final Response Thinking:\n{thinking_content}\n"
+                    f"Response:\n{response_content}\n"
+                    f"{'='*80}"
+                )
+
+            history.append(
+                {
+                    "role": "assistant",
+                    "content": response_content
+                    or "I'm not sure how to help with that. Could you rephrase your request?",
+                }
+            )
+
+            yield {
+                "type": "response",
+                "message": response_content
+                or "I'm not sure how to help with that. Could you rephrase your request?",
+            }
+            return
+
+        yield {
+            "type": "error",
+            "message": "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts.",
+        }
+
     async def handle_audio_ready(
         self,
         audio_file_id: str,

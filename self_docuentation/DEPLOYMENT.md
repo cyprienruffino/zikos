@@ -72,7 +72,7 @@ docker rm zikos
 You can configure the application using environment variables in `docker-compose.yml` or via `-e` flags:
 
 - `LLM_MODEL_PATH`: Path to the GGUF model file (required)
-- `LLM_N_CTX`: Context window size (default: 32768, supports Qwen2.5's 32K context)
+- `LLM_N_CTX`: Context window size (default: 131072 / 128K, supports Qwen2.5's 32K and Qwen3's 128K context)
 - `LLM_N_GPU_LAYERS`: Number of GPU layers (default: 0, CPU only)
 - `LLM_TEMPERATURE`: Sampling temperature (default: 0.7)
 - `LLM_TOP_P`: Top-p sampling (default: 0.9)

@@ -1,6 +1,14 @@
 import { WebSocketMessage } from "./types.js";
 import { WS_URL } from "./config.js";
-import { addMessage, addTypingIndicator, removeTypingIndicator, updateStatus } from "./ui.js";
+import {
+    addMessage,
+    addTypingIndicator,
+    removeTypingIndicator,
+    updateStatus,
+    startStreamingMessage,
+    appendStreamingToken,
+    finishStreamingMessage,
+} from "./ui.js";
 import {
     addRecordingWidget,
     removeRecordingWidget,
@@ -40,9 +48,6 @@ export function connect(): void {
     };
 
     ws.onmessage = (event: MessageEvent) => {
-        removeTypingIndicator();
-        isProcessing = false;
-
         try {
             const data = JSON.parse(event.data as string) as WebSocketMessage;
 
@@ -51,9 +56,46 @@ export function connect(): void {
                 setSessionId(sessionId);
             }
 
+            if (data.type === "session_id") {
+                // Session ID chunk, continue processing
+                return;
+            }
+
+            if (data.type === "token") {
+                // Streaming token
+                if (!isProcessing) {
+                    startStreamingMessage("assistant");
+                    isProcessing = true;
+                }
+                appendStreamingToken(data.content || "");
+                return;
+            }
+
+            // Handle tool calls during streaming
+            if (data.type === "tool_call") {
+                if (isProcessing) {
+                    finishStreamingMessage();
+                    isProcessing = false;
+                }
+                // Continue to tool call handling below
+            } else {
+                // Non-streaming message or end of stream
+                if (isProcessing && (data.type === "response" || data.type === "error")) {
+                    finishStreamingMessage(data);
+                    isProcessing = false;
+                    removeTypingIndicator();
+                } else {
+                    removeTypingIndicator();
+                    isProcessing = false;
+                }
+            }
+
             if (data.type === "response") {
                 addMessage(data.message || "", "assistant", data);
             } else if (data.type === "tool_call" && data.tool_name === "request_audio_recording") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     prompt?: string;
                     max_duration?: number;
@@ -64,6 +106,9 @@ export function connect(): void {
                     args.max_duration || 60.0
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_metronome") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     bpm?: number;
                     time_signature?: string;
@@ -76,6 +121,9 @@ export function connect(): void {
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_tuner") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     reference_frequency?: number;
                     note?: string;
@@ -90,6 +138,9 @@ export function connect(): void {
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_chord_progression") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     chords?: string[];
                     tempo?: number;
@@ -108,6 +159,9 @@ export function connect(): void {
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_tempo_trainer") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     start_bpm?: number;
                     end_bpm?: number;
@@ -126,6 +180,9 @@ export function connect(): void {
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_ear_trainer") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     mode?: string;
                     difficulty?: string;
@@ -140,6 +197,9 @@ export function connect(): void {
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_practice_timer") {
+                if (data.message) {
+                    addMessage(data.message, "assistant", data);
+                }
                 const args = (data.arguments || {}) as {
                     duration_minutes?: number;
                     goal?: string;
@@ -188,15 +248,20 @@ export function connect(): void {
     };
 }
 
-export function sendMessage(message: string): boolean {
+export function sendMessage(message: string, stream: boolean = true): boolean {
     if (ws && ws.readyState === WebSocket.OPEN && !isProcessing) {
         isProcessing = true;
-        addTypingIndicator();
+        if (stream) {
+            startStreamingMessage("assistant");
+        } else {
+            addTypingIndicator();
+        }
         ws.send(
             JSON.stringify({
                 type: "message",
                 message: message,
                 session_id: sessionId,
+                stream: stream,
             })
         );
         return true;

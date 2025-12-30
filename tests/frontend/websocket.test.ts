@@ -79,6 +79,9 @@ describe("WebSocket Module", () => {
         vi.spyOn(ui, "addMessage").mockImplementation(() => {});
         vi.spyOn(ui, "addTypingIndicator").mockImplementation(() => {});
         vi.spyOn(ui, "removeTypingIndicator").mockImplementation(() => {});
+        vi.spyOn(ui, "startStreamingMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "appendStreamingToken").mockImplementation(() => {});
+        vi.spyOn(ui, "finishStreamingMessage").mockImplementation(() => {});
 
         // Mock widget functions
         vi.spyOn(recording, "setWebSocket").mockImplementation(() => {});
@@ -157,7 +160,8 @@ describe("WebSocket Module", () => {
             const result = sendMessage("test message");
             expect(result).toBe(true);
             expect(ws.send).toHaveBeenCalled();
-            expect(ui.addTypingIndicator).toHaveBeenCalled();
+            // Streaming is enabled by default, so startStreamingMessage should be called
+            expect(ui.startStreamingMessage).toHaveBeenCalled();
         });
 
         it("should format message correctly", async () => {
@@ -602,6 +606,8 @@ describe("WebSocket Module", () => {
             const ws = (global as any).lastWebSocket;
             expect(ws).toBeDefined();
 
+            // Start streaming first
+            sendMessage("test", true);
             const message = {
                 type: "tool_call",
                 tool_name: "unknown_tool",
@@ -609,7 +615,8 @@ describe("WebSocket Module", () => {
             };
             ws.onmessage?.(new MessageEvent("message", { data: JSON.stringify(message) }));
 
-            expect(ui.removeTypingIndicator).toHaveBeenCalled();
+            // When tool_call comes during streaming, finishStreamingMessage is called
+            expect(ui.finishStreamingMessage).toHaveBeenCalled();
         });
 
         it("should handle tool_call with missing tool_id", async () => {

@@ -1,6 +1,7 @@
 export interface WebSocketMessage {
     type: string;
     message?: string;
+    content?: string;
     session_id?: string;
     tool_name?: string;
     tool_id?: string;

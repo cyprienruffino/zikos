@@ -2,12 +2,15 @@
 
 import json
 import re
+import threading
+from collections.abc import AsyncGenerator
 from pathlib import Path
+from queue import Queue
 from typing import Any
 
 try:
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
     from transformers.generation import GenerationConfig
 
     HAS_TRANSFORMERS = True
@@ -15,6 +18,7 @@ except ImportError:
     HAS_TRANSFORMERS = False
     AutoModelForCausalLM = None
     AutoTokenizer = None
+    TextIteratorStreamer = None
     torch = None
 
 from zikos.services.llm_backends.base import LLMBackend
@@ -68,21 +72,31 @@ class TransformersBackend(LLMBackend):
             trust_remote_code=kwargs.get("trust_remote_code", True),
         )
 
-        model_kwargs: dict[str, Any] = {
-            "torch_dtype": torch_dtype,
-            "device_map": "auto" if self.device == "cuda" else None,
-            "trust_remote_code": kwargs.get("trust_remote_code", True),
-        }
-
         if self.device == "cuda":
             attn_impl = kwargs.get("attn_implementation", "flash_attention_2")
             try:
                 import flash_attn
 
-                model_kwargs["attn_implementation"] = attn_impl
+                model_kwargs: dict[str, Any] = {
+                    "torch_dtype": torch_dtype,
+                    "device_map": {"": "cuda:0"},
+                    "trust_remote_code": kwargs.get("trust_remote_code", True),
+                    "attn_implementation": attn_impl,
+                }
             except ImportError:
                 print("Warning: flash-attention not available, using default attention")
-                model_kwargs["attn_implementation"] = "sdpa"
+                model_kwargs = {
+                    "torch_dtype": torch_dtype,
+                    "device_map": {"": "cuda:0"},
+                    "trust_remote_code": kwargs.get("trust_remote_code", True),
+                    "attn_implementation": "sdpa",
+                }
+        else:
+            model_kwargs = {
+                "torch_dtype": torch_dtype,
+                "device_map": None,
+                "trust_remote_code": kwargs.get("trust_remote_code", True),
+            }
 
         self.model = AutoModelForCausalLM.from_pretrained(
             local_path,
@@ -91,8 +105,46 @@ class TransformersBackend(LLMBackend):
 
         if self.device == "cpu":
             self.model = self.model.to(self.device)
+        elif self.device == "cuda":
+            if hasattr(self.model, "hf_device_map"):
+                device_map = self.model.hf_device_map
+                if device_map:
+                    cpu_keys = [
+                        k
+                        for k, v in device_map.items()
+                        if v == "cpu" or (isinstance(v, int) and v < 0)
+                    ]
+                    if cpu_keys:
+                        print(f"Warning: Some model components on CPU: {cpu_keys[:5]}...")
+                    gpu_keys = [k for k, v in device_map.items() if isinstance(v, int) and v >= 0]
+                    if gpu_keys:
+                        print(f"Model components on GPU: {len(gpu_keys)} components")
+                    print(f"Device map summary: {len(device_map)} components")
+                else:
+                    if hasattr(self.model, "device"):
+                        actual_device = str(self.model.device)
+                        if "cuda" not in actual_device:
+                            print(
+                                f"Warning: Model on {actual_device}, expected CUDA. Moving to GPU..."
+                            )
+                            self.model = self.model.to(self.device)
+                        else:
+                            print(f"Model on device: {actual_device}")
+            else:
+                if hasattr(self.model, "device"):
+                    actual_device = str(self.model.device)
+                    if "cuda" not in actual_device:
+                        print(f"Warning: Model on {actual_device}, expected CUDA. Moving to GPU...")
+                        self.model = self.model.to(self.device)
+                    else:
+                        print(f"Model on device: {actual_device}")
 
         self.model.eval()
+
+        if self.device == "cuda" and torch is not None:
+            allocated = torch.cuda.memory_allocated(0) / (1024**3)
+            reserved = torch.cuda.memory_reserved(0) / (1024**3)
+            print(f"GPU memory allocated: {allocated:.2f} GB, reserved: {reserved:.2f} GB")
 
         print(f"Model loaded successfully on {self.device}")
 
@@ -141,6 +193,81 @@ class TransformersBackend(LLMBackend):
                         "tool_calls": tool_calls if tool_calls else None,
                     },
                     "finish_reason": "stop",
+                }
+            ]
+        }
+
+    async def stream_chat_completion(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream chat completion using Transformers"""
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError("Backend not initialized. Call initialize() first.")
+
+        if TextIteratorStreamer is None:
+            # Fallback to base implementation if streamer not available
+            async for chunk in super().stream_chat_completion(
+                messages, tools, temperature, top_p, **kwargs
+            ):
+                yield chunk
+            return
+
+        text = self._format_messages(messages, tools)
+        inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=self.n_ctx)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        generation_kwargs: dict[str, Any] = {
+            "max_new_tokens": kwargs.get("max_new_tokens", 2048),
+            "do_sample": temperature is not None and temperature > 0,
+        }
+
+        if temperature is not None:
+            generation_kwargs["temperature"] = temperature
+        if top_p is not None:
+            generation_kwargs["top_p"] = top_p
+
+        streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
+        generation_kwargs["streamer"] = streamer
+
+        def generate():
+            with torch.no_grad():
+                self.model.generate(**inputs, **generation_kwargs)
+
+        generation_thread = threading.Thread(target=generate)
+        generation_thread.start()
+
+        accumulated_text = ""
+        for new_text in streamer:
+            accumulated_text += new_text
+            yield {
+                "choices": [
+                    {
+                        "delta": {
+                            "content": new_text,
+                            "role": "assistant",
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            }
+
+        generation_thread.join()
+
+        tool_calls = self._extract_tool_calls(accumulated_text)
+        finish_reason = "tool_calls" if tool_calls else "stop"
+
+        yield {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": tool_calls if tool_calls else None,
+                    },
+                    "finish_reason": finish_reason,
                 }
             ]
         }

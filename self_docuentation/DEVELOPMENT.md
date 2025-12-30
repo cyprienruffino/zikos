@@ -141,12 +141,13 @@ pytest -m integration   # Run integration tests
 ```
 
 **Important**:
-- **Comprehensive tests** are marked as `comprehensive` and are **excluded by default** in CI and pre-commit. These tests include:
+- **Comprehensive tests** are marked as `comprehensive` and are **excluded by default** in pytest and pre-commit. These tests include:
   - LLM tests (require `llama-cpp-python` and model files)
   - Heavy audio processing tests (real audio analysis with librosa)
-  - Full integration tests with real LLM calls
   - These tests require significant computational resources and/or long runtime
-- Comprehensive tests are still run in CI but excluded from pre-commit hooks to keep commit times reasonable (~26+ minutes otherwise).
+- **Integration tests** are marked as `integration` and are also **excluded by default** in pytest and pre-commit to keep commit times reasonable.
+- Both comprehensive and integration tests are excluded from pre-commit hooks (default pytest config excludes both: `-m "not comprehensive and not integration"`).
+- Pre-commit uses a lower coverage threshold (75%) than the main pytest config (80%) to account for excluded tests.
 - LLM service code is intentionally excluded from coverage requirements due to the expense of running these tests.
 
 ### Running LLM Integration Tests
@@ -235,11 +236,12 @@ Run these tests:
 
 ### Coverage Requirements
 
-- **Minimum coverage**: 80% (for fast tests in pre-commit)
+- **Minimum coverage**: 80% (for pytest default runs)
+- **Pre-commit threshold**: 75% (lower threshold to account for excluded tests)
 - **Target coverage**: 90%+
 - Coverage reports generated in `htmlcov/` directory
 
-**Note**: Some audio analysis modules (`articulation.py`, `chords.py`, `comprehensive.py`, `dynamics.py`, `groove.py`, `key.py`, `timbre.py`) are excluded from coverage requirements because they are only tested by comprehensive tests that do real audio processing. These tests are excluded from pre-commit hooks to keep commit times reasonable (~26+ minutes otherwise). These modules are still tested in CI and can be run manually with `pytest -m comprehensive`.
+**Note**: Some audio analysis modules (`articulation.py`, `chords.py`, `comprehensive.py`, `dynamics.py`, `groove.py`, `key.py`, `timbre.py`) are excluded from coverage requirements because they are only tested by comprehensive tests that do real audio processing. These tests are excluded from pre-commit hooks to keep commit times reasonable. These modules are still tested in CI and can be run manually with `pytest -m comprehensive`.
 
 View coverage report:
 ```bash

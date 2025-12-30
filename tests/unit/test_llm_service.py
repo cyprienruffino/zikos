@@ -100,30 +100,44 @@ class TestSystemPrompt:
         prompt_file = tmp_path / "SYSTEM_PROMPT.md"
         prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
 
-        # Mock the path resolution to point to our temp file
-        with patch("zikos.services.llm.Path") as mock_path_class:
-            mock_path_instance = MagicMock()
-            mock_path_instance.parent.parent.parent.parent = tmp_path
-            mock_path_instance.exists.return_value = True
-            mock_path_class.return_value = mock_path_instance
-            mock_path_class.side_effect = lambda *args: Path(*args) if args else mock_path_instance
+        # Create directory structure that matches the path resolution
+        # Path(__file__).parent.parent.parent.parent resolves from backend/zikos/services/llm.py to root
+        # So we need: tmp_path/backend/zikos/services/llm.py -> tmp_path/SYSTEM_PROMPT.md
+        services_dir = tmp_path / "backend" / "zikos" / "services"
+        services_dir.mkdir(parents=True, exist_ok=True)
 
-            with patch("builtins.open", create=True) as mock_open:
-                mock_open.return_value.__enter__.return_value.read.return_value = (
-                    "# System Prompt\n\n```\nYou are a helpful assistant.\n```\n"
-                )
-                prompt = llm_service._get_system_prompt()
+        # Patch __file__ to point to our temp structure
+        import zikos.services.llm as llm_module
 
-                assert "helpful assistant" in prompt
+        original_file = llm_module.__file__
+        fake_file = services_dir / "llm.py"
+        fake_file.touch()
 
-    def test_get_system_prompt_fallback(self, llm_service):
-        """Test fallback system prompt when file doesn't exist"""
-        with patch("zikos.services.llm.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-
+        try:
+            llm_module.__file__ = str(fake_file)
             prompt = llm_service._get_system_prompt()
+            assert "helpful assistant" in prompt
+        finally:
+            llm_module.__file__ = original_file
 
+    def test_get_system_prompt_fallback(self, llm_service, tmp_path):
+        """Test fallback system prompt when file doesn't exist"""
+        # Create directory structure but don't create SYSTEM_PROMPT.md
+        services_dir = tmp_path / "backend" / "zikos" / "services"
+        services_dir.mkdir(parents=True, exist_ok=True)
+
+        import zikos.services.llm as llm_module
+
+        original_file = llm_module.__file__
+        fake_file = services_dir / "llm.py"
+        fake_file.touch()
+
+        try:
+            llm_module.__file__ = str(fake_file)
+            prompt = llm_service._get_system_prompt()
             assert "expert music teacher" in prompt.lower()
+        finally:
+            llm_module.__file__ = original_file
 
 
 class TestConversationHistory:

@@ -1,6 +1,7 @@
 """Abstract base class for LLM backends"""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from typing import Any
 
 
@@ -44,6 +45,67 @@ class LLMBackend(ABC):
         }
         """
         pass
+
+    async def stream_chat_completion(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream chat completion tokens
+
+        Yields standardized format chunks:
+        {
+            "choices": [{
+                "delta": {
+                    "content": "token",
+                    "role": "assistant",
+                    "tool_calls": [...] (optional, only in final chunk)
+                },
+                "finish_reason": None | "stop" | "tool_calls" | ...
+            }]
+        }
+
+        Default implementation falls back to non-streaming and yields final result.
+        Backends should override this for true streaming.
+        """
+        result = self.create_chat_completion(
+            messages=messages,
+            tools=tools,
+            temperature=temperature,
+            top_p=top_p,
+            **kwargs,
+        )
+
+        # Simulate streaming by yielding the full response as a single chunk
+        content = result["choices"][0]["message"].get("content", "")
+        if content:
+            # Split content into words for simulation
+            words = content.split()
+            for i, word in enumerate(words):
+                yield {
+                    "choices": [
+                        {
+                            "delta": {
+                                "content": word + (" " if i < len(words) - 1 else ""),
+                                "role": "assistant",
+                            },
+                            "finish_reason": None,
+                        }
+                    ]
+                }
+
+        # Final chunk with finish reason
+        yield {
+            "choices": [
+                {
+                    "delta": {},
+                    "finish_reason": result["choices"][0].get("finish_reason", "stop"),
+                }
+            ]
+        }
 
     @abstractmethod
     def supports_tools(self) -> bool:

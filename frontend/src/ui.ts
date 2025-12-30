@@ -71,3 +71,52 @@ export function updateStatus(text: string, className: string): void {
         statusEl.className = `status ${className}`;
     }
 }
+
+let streamingMessageEl: HTMLElement | null = null;
+let streamingTextEl: HTMLElement | null = null;
+let streamingContent: string = "";
+
+export function startStreamingMessage(type: string = "assistant"): void {
+    removeTypingIndicator();
+    streamingMessageEl = document.createElement("div");
+    streamingMessageEl.className = `message ${type}`;
+
+    streamingTextEl = document.createElement("div");
+    streamingTextEl.className = "message-text";
+    streamingMessageEl.appendChild(streamingTextEl);
+
+    const messagesEl = getMessagesEl();
+    messagesEl.appendChild(streamingMessageEl);
+    streamingContent = "";
+}
+
+export function appendStreamingToken(token: string): void {
+    if (streamingTextEl) {
+        streamingContent += token;
+        streamingTextEl.innerHTML = streamingContent.replace(/\n/g, "<br>");
+        const messagesEl = getMessagesEl();
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+}
+
+export function finishStreamingMessage(data: Partial<WebSocketMessage> | null = null): void {
+    if (streamingMessageEl && streamingTextEl) {
+        if (data?.audio_file_id) {
+            const audioEl = document.createElement("div");
+            audioEl.className = "audio-player";
+            audioEl.innerHTML = `<audio controls src="${API_URL}/api/audio/${data.audio_file_id}"></audio>`;
+            streamingMessageEl.appendChild(audioEl);
+        }
+
+        if (data?.notation_url) {
+            const notationEl = document.createElement("div");
+            notationEl.className = "notation";
+            notationEl.innerHTML = `<img src="${data.notation_url}" alt="Musical notation" />`;
+            streamingMessageEl.appendChild(notationEl);
+        }
+    }
+
+    streamingMessageEl = null;
+    streamingTextEl = null;
+    streamingContent = "";
+}

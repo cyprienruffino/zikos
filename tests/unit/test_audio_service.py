@@ -33,48 +33,55 @@ class TestAudioService:
     @pytest.mark.asyncio
     async def test_store_audio(self, audio_service, mock_upload_file, temp_dir):
         """Test storing audio file"""
-        audio_file_id = await audio_service.store_audio(mock_upload_file)
+        with patch.object(
+            audio_service.preprocessing_service, "preprocess_upload_file"
+        ) as mock_preprocess:
+            mock_preprocessed = temp_dir / "preprocessed.wav"
+            mock_preprocessed.write_bytes(b"preprocessed audio data")
+            mock_preprocess.return_value = mock_preprocessed
 
-        assert isinstance(audio_file_id, str)
-        assert len(audio_file_id) > 0
+            audio_file_id = await audio_service.store_audio(mock_upload_file)
 
-        file_path = temp_dir / f"{audio_file_id}.wav"
-        assert file_path.exists()
-        assert file_path.read_bytes() == b"fake audio data"
+            assert isinstance(audio_file_id, str)
+            assert len(audio_file_id) > 0
+
+            file_path = temp_dir / f"{audio_file_id}.wav"
+            assert file_path.exists()
+            assert file_path.read_bytes() == b"preprocessed audio data"
+            mock_preprocess.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_store_audio_with_recording_id(self, audio_service, mock_upload_file):
+    async def test_store_audio_with_recording_id(self, audio_service, mock_upload_file, temp_dir):
         """Test storing audio with recording_id"""
-        recording_id = "test_recording_123"
-        audio_file_id = await audio_service.store_audio(mock_upload_file, recording_id)
+        with patch.object(
+            audio_service.preprocessing_service, "preprocess_upload_file"
+        ) as mock_preprocess:
+            mock_preprocessed = temp_dir / "preprocessed.wav"
+            mock_preprocessed.write_bytes(b"preprocessed audio data")
+            mock_preprocess.return_value = mock_preprocessed
 
-        assert isinstance(audio_file_id, str)
-        assert len(audio_file_id) > 0
+            recording_id = "test_recording_123"
+            audio_file_id = await audio_service.store_audio(mock_upload_file, recording_id)
+
+            assert isinstance(audio_file_id, str)
+            assert len(audio_file_id) > 0
 
     @pytest.mark.asyncio
     async def test_run_baseline_analysis(self, audio_service, temp_dir):
-        """Test running baseline analysis with mocked tools"""
+        """Test running baseline analysis with real tools"""
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
         audio_file_id = "test_audio"
-        test_file = temp_dir / f"{audio_file_id}.wav"
-        test_file.touch()
+        audio_file = temp_dir / f"{audio_file_id}.wav"
 
-        with (
-            patch.object(audio_service.analysis_tools, "analyze_tempo") as mock_tempo,
-            patch.object(audio_service.analysis_tools, "detect_pitch") as mock_pitch,
-            patch.object(audio_service.analysis_tools, "analyze_rhythm") as mock_rhythm,
-        ):
-            mock_tempo.return_value = {"bpm": 120.0}
-            mock_pitch.return_value = {"notes": []}
-            mock_rhythm.return_value = {"onsets": []}
+        # Create synthesized audio (scale with known characteristics)
+        create_test_audio_file(audio_file, audio_type="scale", duration=2.0)
 
-            result = await audio_service.run_baseline_analysis(audio_file_id)
+        result = await audio_service.run_baseline_analysis(audio_file_id)
 
-            assert "tempo" in result
-            assert "pitch" in result
-            assert "rhythm" in result
-            mock_tempo.assert_called_once_with(audio_file_id)
-            mock_pitch.assert_called_once_with(audio_file_id)
-            mock_rhythm.assert_called_once_with(audio_file_id)
+        assert "tempo" in result
+        assert "pitch" in result
+        assert "rhythm" in result
 
     @pytest.mark.asyncio
     @pytest.mark.integration
@@ -108,20 +115,19 @@ class TestAudioService:
     @pytest.mark.asyncio
     async def test_get_audio_info(self, audio_service, temp_dir):
         """Test getting audio info"""
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
         audio_file_id = "test_audio"
-        test_file = temp_dir / f"{audio_file_id}.wav"
-        test_file.touch()
+        audio_file = temp_dir / f"{audio_file_id}.wav"
 
-        with patch.object(audio_service.analysis_tools, "get_audio_info") as mock_info:
-            mock_info.return_value = {
-                "duration": 10.5,
-                "sample_rate": 44100,
-            }
+        # Create real audio file
+        create_test_audio_file(audio_file, audio_type="single_note", duration=2.0)
 
-            result = await audio_service.get_audio_info(audio_file_id)
+        result = await audio_service.get_audio_info(audio_file_id)
 
-            assert "duration" in result
-            mock_info.assert_called_once_with(audio_file_id)
+        assert "duration" in result
+        assert result["duration"] > 0
+        assert "sample_rate" in result
 
     @pytest.mark.asyncio
     async def test_get_audio_path(self, audio_service, temp_dir):

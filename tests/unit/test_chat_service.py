@@ -126,3 +126,52 @@ class TestChatService:
         await chat_service.disconnect(mock_websocket)
 
         assert True
+
+    @pytest.mark.asyncio
+    async def test_process_message_stream_creates_session(self, chat_service):
+        """Test streaming creates session if none provided"""
+
+        # Mock the LLM service to return streaming tokens
+        async def mock_stream(*args, **kwargs):
+            yield {"type": "token", "content": "Hello"}
+            yield {"type": "token", "content": " there"}
+            yield {"type": "response", "message": "Hello there"}
+
+        chat_service.llm_service.generate_response_stream = mock_stream
+
+        tokens = []
+        session_found = False
+        async for chunk in chat_service.process_message_stream("Hello"):
+            if chunk.get("type") == "token":
+                tokens.append(chunk.get("content", ""))
+            elif chunk.get("type") == "session_id":
+                assert "session_id" in chunk
+                session_found = True
+
+        assert len(tokens) > 0
+        assert session_found
+
+    @pytest.mark.asyncio
+    async def test_process_message_stream_handles_llm_error(self, chat_service):
+        """Test streaming handles LLM service errors"""
+
+        async def error_stream(*args, **kwargs):
+            yield {"type": "error", "message": "LLM error"}
+
+        chat_service.llm_service.generate_response_stream = error_stream
+
+        chunks = []
+        async for chunk in chat_service.process_message_stream("Hello", "test_session"):
+            chunks.append(chunk)
+
+        error_chunks = [c for c in chunks if c.get("type") == "error"]
+        assert len(error_chunks) > 0
+
+    @pytest.mark.asyncio
+    async def test_process_message_stream_preserves_session_id(self, chat_service):
+        """Test streaming preserves session ID in all chunks"""
+        session_id = chat_service._create_session()
+        chunks = []
+        async for chunk in chat_service.process_message_stream("Hello", session_id):
+            chunks.append(chunk)
+            assert chunk.get("session_id") == session_id
