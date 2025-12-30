@@ -228,9 +228,9 @@ class LLMService:
         )
 
         if tools_injected and settings.debug_tool_calls:
-            print(
-                f"[DEBUG] Injected {len(tools)} tools into system prompt using {type(self.tool_provider).__name__}"
-            )
+                    print(
+                        f"[DEBUG] Injected {len(tools)} tools into system prompt using {type(self.tool_provider).__name__}"
+                    )
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
@@ -246,7 +246,7 @@ class LLMService:
 
             token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
-                if settings.debug_tool_calls:
+                    if settings.debug_tool_calls:
                     print("[TOKEN WARNING] Conversation exceeds token limit")
                 return token_error
 
@@ -374,14 +374,13 @@ class LLMService:
                     consecutive_tool_calls, recent_tool_calls, max_consecutive_tool_calls
                 )
                 if loop_error:
-                    _thinking_logger.warning(
-                        f"Session: {session_id}\n"
+                        _thinking_logger.warning(
+                            f"Session: {session_id}\n"
                         f"Tool call loop detected: consecutive={consecutive_tool_calls}, recent={recent_tool_calls[-4:]}\n"
                         f"Response: {loop_error['message']}\n"
-                        f"{'='*80}"
-                    )
-                    error_response: dict[str, Any] = loop_error
-                    return error_response
+                            f"{'='*80}"
+                        )
+                    return loop_error
 
                 tool_results = []
 
@@ -598,7 +597,7 @@ class LLMService:
 
         self.tool_injector.inject_if_needed(
             history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
-        )
+                    )
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
@@ -615,11 +614,11 @@ class LLMService:
 
             token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
-                yield {
-                    "type": "error",
+                    yield {
+                        "type": "error",
                     "message": token_error["message"],
-                }
-                return
+                    }
+                    return
 
             tools_param = None
             if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
