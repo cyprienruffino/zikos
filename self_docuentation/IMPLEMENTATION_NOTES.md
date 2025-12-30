@@ -289,7 +289,7 @@ backend/zikos/services/
     ├── tool_call_parser.py ✅
     ├── tool_executor.py ✅
     ├── response_validator.py ✅
-    └── orchestrator.py ⏳
+    └── orchestrator.py ✅
 ```
 
 ## Constants Added
@@ -343,6 +343,15 @@ Added to `backend/zikos/constants.py`:
 - Enhances error messages for MIDI tools
 - Used by both generate_response and generate_response_stream
 
+### 9. LLMOrchestrator ✅
+- Orchestrates common LLM response generation logic
+- Handles conversation preparation (history, audio context, tool injection)
+- Manages iteration state (counters, recent tool calls)
+- Processes LLM responses (thinking extraction, validation)
+- Processes tool calls with loop detection
+- Finalizes responses
+- Used by generate_response (streaming version still has some duplication due to yield semantics)
+
 ## Testing Strategy
 
 - Run existing tests after each extraction to ensure no regressions
@@ -353,6 +362,6 @@ Added to `backend/zikos/constants.py`:
 
 ## Next Steps
 
-1. Create `LLMOrchestrator` - Eliminate duplication between generate_response and generate_response_stream
-2. Replace all `print()` statements with proper logging
-3. Final test run to ensure everything works
+1. Replace all `print()` statements with proper logging
+2. Final test run to ensure everything works
+3. Consider further reducing duplication in generate_response_stream (though streaming semantics make this challenging)
