@@ -287,7 +287,7 @@ backend/zikos/services/
     ├── audio_context_enricher.py ✅
     ├── tool_injector.py ✅
     ├── tool_call_parser.py ✅
-    ├── tool_executor.py ⏳
+    ├── tool_executor.py ✅
     ├── response_validator.py ✅
     └── orchestrator.py ⏳
 ```
@@ -336,6 +336,13 @@ Added to `backend/zikos/constants.py`:
 - Detects gibberish patterns (repetition, single chars, excessive length)
 - Detects tool call loops (consecutive and repetitive patterns)
 
+### 8. ToolExecutor ✅
+- Executes tools via MCP server
+- Handles widget detection and early returns
+- Handles error cases (FileNotFoundError, general exceptions)
+- Enhances error messages for MIDI tools
+- Used by both generate_response and generate_response_stream
+
 ## Testing Strategy
 
 - Run existing tests after each extraction to ensure no regressions
@@ -346,7 +353,6 @@ Added to `backend/zikos/constants.py`:
 
 ## Next Steps
 
-1. Extract `ToolExecutor` - Execute tools and handle errors
-2. Create `LLMOrchestrator` - Eliminate duplication between generate_response and generate_response_stream
-3. Replace all `print()` statements with proper logging
-4. Final test run to ensure everything works
+1. Create `LLMOrchestrator` - Eliminate duplication between generate_response and generate_response_stream
+2. Replace all `print()` statements with proper logging
+3. Final test run to ensure everything works
