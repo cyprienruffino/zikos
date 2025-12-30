@@ -18,6 +18,7 @@ from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
 from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
+from zikos.services.llm_orchestration.tool_executor import ToolExecutor
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
 from zikos.services.prompt import SystemPromptBuilder
 from zikos.services.prompt.sections import (
@@ -61,6 +62,7 @@ class LLMService:
         self.audio_context_enricher = AudioContextEnricher()
         self.tool_injector = ToolInjector()
         self.tool_call_parser = ToolCallParser()
+        self.tool_executor = ToolExecutor()
         self.response_validator = ResponseValidator()
         self.conversations = self.conversation_manager.conversations
         self._initialize_llm()
@@ -246,7 +248,7 @@ class LLMService:
 
             token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
-                    if settings.debug_tool_calls:
+                if settings.debug_tool_calls:
                     print("[TOKEN WARNING] Conversation exceeds token limit")
                 return token_error
 
@@ -374,140 +376,33 @@ class LLMService:
                     consecutive_tool_calls, recent_tool_calls, max_consecutive_tool_calls
                 )
                 if loop_error:
-                        _thinking_logger.warning(
-                            f"Session: {session_id}\n"
+                    _thinking_logger.warning(
+                        f"Session: {session_id}\n"
                         f"Tool call loop detected: consecutive={consecutive_tool_calls}, recent={recent_tool_calls[-4:]}\n"
                         f"Response: {loop_error['message']}\n"
-                            f"{'='*80}"
-                        )
+                        f"{'='*80}"
+                    )
                     return loop_error
 
                 tool_results = []
 
                 for tool_call in tool_calls:
-                    # Handle native tool calls from LLM
-                    if isinstance(tool_call, dict) and "function" in tool_call:
-                        tool_name = tool_call["function"]["name"]
-                        tool_args_str = tool_call["function"].get("arguments", "{}")
-                    else:
-                        # Unexpected format - log and skip
-                        print(f"WARNING: Unexpected tool_call format: {tool_call}")
-                        continue
-
-                    try:
-                        tool_args = (
-                            json.loads(tool_args_str)
-                            if isinstance(tool_args_str, str)
-                            else tool_args_str
-                        )
-                    except json.JSONDecodeError as e:
-                        print(f"WARNING: Failed to parse tool arguments: {e}")
-                        tool_args = {}
-
-                    if settings.debug_tool_calls:
-                        print(f"[TOOL CALL] {tool_name}")
-                        print(f"  Tool ID: {tool_call.get('id', 'N/A')}")
-                        print(f"  Arguments: {json.dumps(tool_args, indent=2)}")
-
-                    tool = tool_registry.get_tool(tool_name)
-                    is_widget = tool and tool.category in (
-                        ToolCategory.WIDGET,
-                        ToolCategory.RECORDING,
+                    widget_response = await self.tool_executor.execute_tool_call(
+                        tool_call,
+                        tool_registry,
+                        mcp_server,
+                        session_id,
+                        cleaned_content,
+                        self.tool_call_parser,
                     )
 
-                    if is_widget:
-                        if settings.debug_tool_calls:
-                            print(
-                                f"[WIDGET TOOL] Returning {tool_name} to frontend (pausing conversation)"
-                            )
-                        # Use cleaned_content (already has thinking stripped)
-                        widget_content = (
-                            self.tool_call_parser.strip_tool_call_tags(cleaned_content)
-                            if cleaned_content
-                            else ""
-                        )
-                        _thinking_logger.info(
-                            f"Session: {session_id}\n"
-                            f"Tool Call (Widget): {tool_name}\n"
-                            f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
-                            f"Message: {widget_content}\n"
-                            f"{'='*80}"
-                        )
-                        return {
-                            "type": "tool_call",
-                            "message": widget_content,
-                            "tool_name": tool_name,
-                            "tool_id": tool_call.get("id"),
-                            "arguments": tool_args,
-                        }
+                    if widget_response:
+                        return widget_response
 
-                    # Log tool call
-                    _thinking_logger.info(
-                        f"Session: {session_id}\n"
-                        f"Tool Call: {tool_name}\n"
-                        f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
-                        f"{'='*80}"
+                    tool_result = await self.tool_executor.execute_tool_and_get_result(
+                        tool_call, tool_registry, mcp_server, session_id
                     )
-
-                    try:
-                        result = await mcp_server.call_tool(tool_name, **tool_args)
-                        if settings.debug_tool_calls:
-                            print(f"[TOOL RESULT] {tool_name}")
-                            print(f"  Result: {json.dumps(result, indent=2, default=str)}")
-
-                        # Log tool result
-                        _thinking_logger.info(
-                            f"Session: {session_id}\n"
-                            f"Tool Result: {tool_name}\n"
-                            f"Result: {json.dumps(result, indent=2, default=str)}\n"
-                            f"{'='*80}"
-                        )
-                        tool_results.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": str(result),
-                                "tool_call_id": tool_call.get("id"),
-                            }
-                        )
-                    except FileNotFoundError as e:
-                        error_msg = str(e)
-                        if (
-                            tool_name in ("midi_to_audio", "midi_to_notation")
-                            and "not found" in error_msg.lower()
-                        ):
-                            enhanced_error = (
-                                f"Error: {error_msg}\n\n"
-                                "To fix this: First generate MIDI text in your response, then call 'validate_midi' "
-                                "with that MIDI text. The validate_midi tool will return a midi_file_id that you "
-                                "can use with midi_to_audio or midi_to_notation."
-                            )
-                        else:
-                            enhanced_error = f"Error: {error_msg}"
-
-                        if settings.debug_tool_calls:
-                            print(f"[TOOL ERROR] {tool_name}")
-                            print(f"  Error: {error_msg}")
-                        tool_results.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": enhanced_error,
-                                "tool_call_id": tool_call.get("id"),
-                            }
-                        )
-                    except Exception as e:
-                        if settings.debug_tool_calls:
-                            print(f"[TOOL ERROR] {tool_name}")
-                            print(f"  Error: {str(e)}")
-                        tool_results.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": f"Error: {str(e)}",
-                                "tool_call_id": tool_call.get("id"),
-                            }
-                        )
+                    tool_results.append(tool_result)
 
                 history.extend(tool_results)
 
@@ -597,7 +492,7 @@ class LLMService:
 
         self.tool_injector.inject_if_needed(
             history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
-                    )
+        )
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
@@ -614,11 +509,11 @@ class LLMService:
 
             token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
-                    yield {
-                        "type": "error",
+                yield {
+                    "type": "error",
                     "message": token_error["message"],
-                    }
-                    return
+                }
+                return
 
             tools_param = None
             if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
@@ -749,60 +644,11 @@ class LLMService:
                 for tool_call in tool_calls:
                     if not isinstance(tool_call, dict):
                         continue
-                    tool_name = (
-                        tool_call.get("function", {}).get("name", "")
-                        if isinstance(tool_call.get("function"), dict)
-                        else ""
+
+                    tool_result = await self.tool_executor.execute_tool_and_get_result(
+                        tool_call, tool_registry, mcp_server, session_id
                     )
-                    tool_args_str = (
-                        tool_call.get("function", {}).get("arguments", "{}")
-                        if isinstance(tool_call.get("function"), dict)
-                        else "{}"
-                    )
-
-                    try:
-                        tool_args = (
-                            json.loads(tool_args_str)
-                            if isinstance(tool_args_str, str)
-                            else tool_args_str
-                        )
-                    except json.JSONDecodeError:
-                        tool_args = {}
-
-                    tool = tool_registry.get_tool(tool_name)
-                    tool_call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
-                    if not tool:
-                        tool_results.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": f"Error: Tool '{tool_name}' not found",
-                                "tool_call_id": tool_call_id,
-                            }
-                        )
-                        continue
-
-                    try:
-                        result = await mcp_server.call_tool(tool_name, tool_args)
-                        tool_results.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": json.dumps(result)
-                                if not isinstance(result, str)
-                                else result,
-                                "tool_call_id": tool_call_id,
-                            }
-                        )
-                    except Exception as e:
-                        tool_results.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": f"Error: {str(e)}",
-                                "tool_call_id": tool_call_id,
-                            }
-                        )
+                    tool_results.append(tool_result)
 
                 history.extend(tool_results)
                 continue
