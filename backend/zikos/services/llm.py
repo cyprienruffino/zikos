@@ -15,7 +15,10 @@ from zikos.services.llm_backends import create_backend
 from zikos.services.llm_orchestration.audio_context_enricher import AudioContextEnricher
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
+from zikos.services.llm_orchestration.response_validator import ResponseValidator
 from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
+from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
+from zikos.services.llm_orchestration.tool_injector import ToolInjector
 from zikos.services.prompt import SystemPromptBuilder
 from zikos.services.prompt.sections import (
     AudioAnalysisContextFormatter,
@@ -56,6 +59,9 @@ class LLMService:
         self.conversation_manager = ConversationManager(self._get_system_prompt)
         self.message_preparer = MessagePreparer()
         self.audio_context_enricher = AudioContextEnricher()
+        self.tool_injector = ToolInjector()
+        self.tool_call_parser = ToolCallParser()
+        self.response_validator = ResponseValidator()
         self.conversations = self.conversation_manager.conversations
         self._initialize_llm()
 
@@ -214,37 +220,17 @@ class LLMService:
             if tools:
                 print(f"[DEBUG] Sample tool: {tools[0].name} ({tools[0].category.value})")
 
-        # Use tool provider to format and inject tools
         if not self.tool_provider:
             self.tool_provider = get_tool_provider()
 
-        if tools and self.tool_provider.should_inject_tools_as_text():
-            # Check if tools are already in the system prompt (avoid duplicates)
-            system_has_tools = False
-            if history and history[0].get("role") == "system":
-                system_content = history[0].get("content", "")
-                if "<tools>" in system_content or "# Available Tools" in system_content:
-                    system_has_tools = True
+        tools_injected = self.tool_injector.inject_if_needed(
+            history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
+        )
 
-            if not system_has_tools:
-                tools_section = ToolInstructionsSection(self.tool_provider, tools, tool_schemas)
-                tools_text = tools_section.render()
-
-                # Inject tools into the system prompt in the conversation history
-                if history and history[0].get("role") == "system":
-                    original_system = history[0].get("content", "")
-                    history[0]["content"] = f"{original_system}\n\n{tools_text}"
-                else:
-                    # If no system message, add one with tools
-                    system_prompt = self._get_system_prompt()
-                    history.insert(
-                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_text}"}
-                    )
-
-                if settings.debug_tool_calls:
-                    print(
-                        f"[DEBUG] Injected {len(tools)} tools into system prompt using {type(self.tool_provider).__name__}"
-                    )
+        if tools_injected and settings.debug_tool_calls:
+            print(
+                f"[DEBUG] Injected {len(tools)} tools into system prompt using {type(self.tool_provider).__name__}"
+            )
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
@@ -254,30 +240,15 @@ class LLMService:
 
         while iteration < max_iterations:
             iteration += 1
-            # Prepare messages for LLM (include thinking messages for context)
             current_messages = self._prepare_messages(
                 history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
             )
 
-            # Safety check: prevent context overflow
-            try:
-                import tiktoken
-
-                enc = tiktoken.get_encoding("cl100k_base")
-                total_tokens = sum(
-                    len(enc.encode(str(msg.get("content", "")))) for msg in current_messages
-                )
-                if total_tokens > LLM.MAX_TOKENS_SAFETY_CHECK:
-                    if settings.debug_tool_calls:
-                        print(
-                            f"[TOKEN WARNING] Conversation has {total_tokens} tokens, limit is {LLM.MAX_TOKENS_SAFETY_CHECK}"
-                        )
-                    return {
-                        "type": "response",
-                        "message": "The conversation is too long. Please start a new conversation or summarize what you need.",
-                    }
-            except Exception:
-                pass  # If tiktoken fails, continue anyway
+            token_error = self.response_validator.validate_token_limit(current_messages)
+            if token_error:
+                if settings.debug_tool_calls:
+                    print("[TOKEN WARNING] Conversation exceeds token limit")
+                return token_error
 
             if settings.debug_tool_calls:
                 print(f"[DEBUG] Sending {len(tools)} tools to LLM")
@@ -322,41 +293,12 @@ class LLMService:
                         print("  [FOUND] XML tool_call tag in content!")
                         print(f"  Content preview: {content_preview}")
 
-            # Safety check: detect gibberish/looping output
-            # Note: we'll extract thinking later, so check raw content here
             raw_content_for_safety = message_obj.get("content", "")
-            if raw_content_for_safety:
-                words = raw_content_for_safety.split()
-                # Check for very long responses (likely gibberish)
-                if len(words) > LLM.MAX_WORDS_RESPONSE:
-                    print(f"WARNING: Model generated unusually long response ({len(words)} words)")
-                    return {
-                        "type": "response",
-                        "message": "The model generated an unusually long response. Please try rephrasing your question.",
-                    }
-                # Check for excessive repetition (gibberish pattern)
-                if len(words) > 50:
-                    unique_ratio = len(set(words)) / len(words) if words else 0
-                    if unique_ratio < LLM.MIN_UNIQUE_WORD_RATIO:
-                        print(
-                            f"WARNING: Model generated repetitive output (unique ratio: {unique_ratio:.2f})"
-                        )
-                        return {
-                            "type": "response",
-                            "message": "The model seems to be repeating itself. Please try rephrasing your question.",
-                        }
-                    # Check for excessive single-character or number patterns (gibberish)
-                    if (
-                        len([w for w in words if len(w) == 1 or w.isdigit()])
-                        > len(words) * LLM.MAX_SINGLE_CHAR_RATIO
-                    ):
-                        print(
-                            "WARNING: Model generated suspicious pattern (too many single chars/numbers)"
-                        )
-                        return {
-                            "type": "response",
-                            "message": "The model generated an invalid response. Please try rephrasing your question.",
-                        }
+            content_error = self.response_validator.validate_response_content(
+                raw_content_for_safety
+            )
+            if content_error:
+                return content_error
 
             # Extract thinking from content before processing
             raw_content = message_obj.get("content", "")
@@ -400,14 +342,7 @@ class LLMService:
             message_obj["content"] = cleaned_content
             history.append(message_obj)
 
-            # Check for tool calls in response
-            tool_calls = message_obj.get("tool_calls", [])
-
-            # Qwen2.5 uses XML-based tool calling format: <tool_call>{"name": "...", "arguments": {...}}</tool_call>
-            # Parse this if no structured tool_calls are present
-            # Use raw_content (before thinking extraction) for tool call parsing
-            if not tool_calls and raw_content and "<tool_call>" in raw_content:
-                tool_calls = self._parse_qwen_tool_calls(raw_content)
+            tool_calls = self.tool_call_parser.parse_tool_calls(message_obj, raw_content)
 
             if settings.debug_tool_calls:
                 if tool_calls:
@@ -432,44 +367,21 @@ class LLMService:
                         current_tool_names.append(tool_name)
 
                 recent_tool_calls.extend(current_tool_names)
-                if len(recent_tool_calls) > 10:
-                    recent_tool_calls = recent_tool_calls[-10:]
+                if len(recent_tool_calls) > LLM.RECENT_TOOL_CALLS_WINDOW:
+                    recent_tool_calls = recent_tool_calls[-LLM.RECENT_TOOL_CALLS_WINDOW :]
 
-                # Check for repetitive tool calling pattern
-                if len(recent_tool_calls) >= 4:
-                    if len(set(recent_tool_calls[-4:])) == 1:
-                        print(
-                            f"WARNING: Detected repetitive tool calling pattern ({recent_tool_calls[-4:]}). "
-                            "Breaking loop to prevent infinite recursion."
-                        )
-                        error_message = "The model appears to be stuck in a loop calling the same tool. Please try rephrasing your request."
-                        _thinking_logger.warning(
-                            f"Session: {session_id}\n"
-                            f"Repetitive tool calling detected: {recent_tool_calls[-4:]}\n"
-                            f"Response: {error_message}\n"
-                            f"{'='*80}"
-                        )
-                        return {
-                            "type": "response",
-                            "message": error_message,
-                        }
-
-                if consecutive_tool_calls > max_consecutive_tool_calls:
-                    print(
-                        f"WARNING: Too many consecutive tool calls ({consecutive_tool_calls}). "
-                        "Breaking loop to prevent infinite recursion."
-                    )
-                    error_message = "The model is making too many tool calls. Please try rephrasing your request or breaking it into smaller parts."
+                loop_error = self.response_validator.validate_tool_call_loops(
+                    consecutive_tool_calls, recent_tool_calls, max_consecutive_tool_calls
+                )
+                if loop_error:
                     _thinking_logger.warning(
                         f"Session: {session_id}\n"
-                        f"Too many consecutive tool calls: {consecutive_tool_calls}\n"
-                        f"Response: {error_message}\n"
+                        f"Tool call loop detected: consecutive={consecutive_tool_calls}, recent={recent_tool_calls[-4:]}\n"
+                        f"Response: {loop_error['message']}\n"
                         f"{'='*80}"
                     )
-                    return {
-                        "type": "response",
-                        "message": error_message,
-                    }
+                    error_response: dict[str, Any] = loop_error
+                    return error_response
 
                 tool_results = []
 
@@ -511,7 +423,9 @@ class LLMService:
                             )
                         # Use cleaned_content (already has thinking stripped)
                         widget_content = (
-                            self._strip_tool_call_tags(cleaned_content) if cleaned_content else ""
+                            self.tool_call_parser.strip_tool_call_tags(cleaned_content)
+                            if cleaned_content
+                            else ""
                         )
                         _thinking_logger.info(
                             f"Session: {session_id}\n"
@@ -682,25 +596,9 @@ class LLMService:
         if not self.tool_provider:
             self.tool_provider = get_tool_provider()
 
-        if tools and self.tool_provider.should_inject_tools_as_text():
-            system_has_tools = False
-            if history and history[0].get("role") == "system":
-                system_content = history[0].get("content", "")
-                if "<tools>" in system_content or "# Available Tools" in system_content:
-                    system_has_tools = True
-
-            if not system_has_tools:
-                tools_section = ToolInstructionsSection(self.tool_provider, tools, tool_schemas)
-                tools_text = tools_section.render()
-
-                if history and history[0].get("role") == "system":
-                    original_system = history[0].get("content", "")
-                    history[0]["content"] = f"{original_system}\n\n{tools_text}"
-                else:
-                    system_prompt = self._get_system_prompt()
-                    history.insert(
-                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_text}"}
-                    )
+        self.tool_injector.inject_if_needed(
+            history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
+        )
 
         max_iterations = LLM.MAX_ITERATIONS
         iteration = 0
@@ -715,21 +613,13 @@ class LLMService:
                 history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
             )
 
-            try:
-                import tiktoken
-
-                enc = tiktoken.get_encoding("cl100k_base")
-                total_tokens = sum(
-                    len(enc.encode(str(msg.get("content", "")))) for msg in current_messages
-                )
-                if total_tokens > LLM.MAX_TOKENS_SAFETY_CHECK:
-                    yield {
-                        "type": "error",
-                        "message": "The conversation is too long. Please start a new conversation or summarize what you need.",
-                    }
-                    return
-            except Exception:
-                pass
+            token_error = self.response_validator.validate_token_limit(current_messages)
+            if token_error:
+                yield {
+                    "type": "error",
+                    "message": token_error["message"],
+                }
+                return
 
             tools_param = None
             if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
@@ -1000,131 +890,3 @@ class LLMService:
         """Find the most recent audio analysis in conversation history"""
         result: str | None = self.audio_context_enricher.find_recent_audio_analysis(history)
         return result
-
-    def _parse_qwen_tool_calls(self, content: str) -> list[dict[str, Any]]:
-        """Parse Qwen2.5's XML-based tool call format
-
-        Qwen2.5 wraps tool calls in <tool_call> tags:
-        <tool_call>
-        {"name": "tool_name", "arguments": {...}}
-        </tool_call>
-        """
-        import re
-
-        tool_calls: list[dict[str, Any]] = []
-
-        # Find all <tool_call>...</tool_call> blocks
-        pattern = r"<tool_call>\s*(.*?)\s*</tool_call>"
-        matches = re.finditer(pattern, content, re.DOTALL)
-
-        for match in matches:
-            try:
-                json_str = match.group(1).strip()
-                tool_obj = json.loads(json_str)
-
-                tool_name = tool_obj.get("name")
-                tool_args = tool_obj.get("arguments", {})
-
-                if tool_name:
-                    tool_calls.append(
-                        {
-                            "id": f"call_qwen_{len(tool_calls)}",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": json.dumps(tool_args)
-                                if isinstance(tool_args, dict)
-                                else str(tool_args),
-                            },
-                        }
-                    )
-
-                    if settings.debug_tool_calls:
-                        print(f"[PARSED QWEN TOOL CALL] {tool_name}")
-                        print(f"  Arguments: {tool_args}")
-            except json.JSONDecodeError as e:
-                # Try to fix common JSON issues
-                json_str = match.group(1).strip()
-                fixed_json = self._fix_json_string(json_str)
-
-                if fixed_json != json_str:
-                    try:
-                        tool_obj = json.loads(fixed_json)
-                        tool_name = tool_obj.get("name")
-                        tool_args = tool_obj.get("arguments", {})
-
-                        if tool_name:
-                            tool_calls.append(
-                                {
-                                    "id": f"call_qwen_{len(tool_calls)}",
-                                    "function": {
-                                        "name": tool_name,
-                                        "arguments": json.dumps(tool_args)
-                                        if isinstance(tool_args, dict)
-                                        else str(tool_args),
-                                    },
-                                }
-                            )
-
-                            if settings.debug_tool_calls:
-                                print(f"[PARSED QWEN TOOL CALL] {tool_name} (after JSON fix)")
-                                print(f"  Arguments: {tool_args}")
-                            continue
-                    except Exception:
-                        pass
-
-                if settings.debug_tool_calls:
-                    print(f"[PARSE ERROR] Failed to parse Qwen tool call JSON: {e}")
-                    print(f"  Content: {match.group(1)[:200]}")
-                continue
-            except Exception as e:
-                if settings.debug_tool_calls:
-                    print(f"[PARSE ERROR] Unexpected error parsing Qwen tool call: {e}")
-                continue
-
-        return tool_calls
-
-    def _fix_json_string(self, json_str: str) -> str:
-        """Attempt to fix common JSON issues like unescaped newlines in strings
-
-        This handles cases where the model includes multi-line content
-        (like MIDI text) directly in JSON strings without proper escaping.
-        """
-        fixed = json_str
-        result = []
-        i = 0
-        in_string = False
-        escape_next = False
-
-        while i < len(fixed):
-            char = fixed[i]
-
-            if escape_next:
-                result.append(char)
-                escape_next = False
-            elif char == "\\":
-                result.append(char)
-                escape_next = True
-            elif char == '"' and not escape_next:
-                in_string = not in_string
-                result.append(char)
-            elif in_string and char in ["\n", "\r", "\t"]:
-                # Escape unescaped control characters in strings
-                if char == "\n":
-                    result.append("\\n")
-                elif char == "\r":
-                    result.append("\\r")
-                elif char == "\t":
-                    result.append("\\t")
-            else:
-                result.append(char)
-
-            i += 1
-
-        return "".join(result)
-
-    def _strip_tool_call_tags(self, content: str) -> str:
-        """Remove <tool_call> XML tags from content for display"""
-        import re
-
-        pattern = r"<tool_call>.*?</tool_call>"
-        return re.sub(pattern, "", content, flags=re.DOTALL).strip()
