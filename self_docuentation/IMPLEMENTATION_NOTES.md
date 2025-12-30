@@ -284,11 +284,11 @@ backend/zikos/services/
     ├── thinking_extractor.py ✅
     ├── conversation_manager.py ✅
     ├── message_preparer.py ✅
-    ├── audio_context_enricher.py ⏳
-    ├── tool_injector.py ⏳
-    ├── tool_call_parser.py ⏳
+    ├── audio_context_enricher.py ✅
+    ├── tool_injector.py ✅
+    ├── tool_call_parser.py ✅
     ├── tool_executor.py ⏳
-    ├── response_validator.py ⏳
+    ├── response_validator.py ✅
     └── orchestrator.py ⏳
 ```
 
@@ -298,7 +298,43 @@ Added to `backend/zikos/constants.py`:
 - `MAX_CONSECUTIVE_TOOL_CALLS = 5`
 - `RECENT_TOOL_CALLS_WINDOW = 10`
 - `REPETITIVE_PATTERN_THRESHOLD = 4`
-- `REPETITIVE_PATTERN_CHECK_WINDOW = 3`
+
+## Completed Extractions
+
+### 1. ThinkingExtractor ✅
+- Extracts thinking content from `<thinking>` tags
+- Returns cleaned content and thinking separately
+
+### 2. ConversationManager ✅
+- Manages conversation history per session
+- Handles system prompt injection
+- Provides thinking retrieval for debugging
+
+### 3. MessagePreparer ✅
+- Prepares and truncates messages for LLM
+- Handles system prompt inclusion
+- Manages audio analysis message prioritization
+
+### 4. AudioContextEnricher ✅
+- Enriches user messages with audio analysis context
+- Finds recent audio analysis in history
+- Formats context appropriately
+
+### 5. ToolInjector ✅
+- Injects tools into system prompts
+- Checks for duplicate tool definitions
+- Handles both system message update and creation
+
+### 6. ToolCallParser ✅
+- Parses native tool calls from LLM responses
+- Parses Qwen XML-based tool calls
+- Fixes common JSON issues in tool call arguments
+- Strips tool call tags from content
+
+### 7. ResponseValidator ✅
+- Validates token limits
+- Detects gibberish patterns (repetition, single chars, excessive length)
+- Detects tool call loops (consecutive and repetitive patterns)
 
 ## Testing Strategy
 
@@ -306,14 +342,11 @@ Added to `backend/zikos/constants.py`:
 - All unit tests pass
 - Integration tests pass
 - Coverage maintained
+- Pre-commit hooks pass (black, ruff, mypy)
 
 ## Next Steps
 
-1. Extract `AudioContextEnricher`
-2. Extract `ToolInjector`
-3. Extract `ToolCallParser`
-4. Extract `ToolExecutor`
-5. Extract `ResponseValidator`
-6. Create `LLMOrchestrator` to eliminate duplication between generate_response and generate_response_stream
-7. Replace all `print()` statements with proper logging
-8. Final test run to ensure everything works
+1. Extract `ToolExecutor` - Execute tools and handle errors
+2. Create `LLMOrchestrator` - Eliminate duplication between generate_response and generate_response_stream
+3. Replace all `print()` statements with proper logging
+4. Final test run to ensure everything works
