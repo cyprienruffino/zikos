@@ -231,15 +231,8 @@ class LLMService:
         if tool_call_response:
             return dict(tool_call_response)
 
-        # Convert error to response for backward compatibility
+        # Return error responses as-is (standardized error handling)
         if final_response and final_response.get("type") == "error":
-            # Special case: "LLM not available" should be type "response" not "error"
-            message = str(final_response.get("message", ""))
-            if "LLM not available" in message:
-                return {
-                    "type": "response",
-                    "message": message,
-                }
             return dict(final_response)
 
         # Return the final response, or a fallback if something went wrong
@@ -247,6 +240,10 @@ class LLMService:
             "type": "response",
             "message": "An unexpected error occurred while generating the response.",
         }
+
+    def _yield_error(self, message: str) -> dict[str, Any]:
+        """Create a standardized error response"""
+        return {"type": "error", "message": message}
 
     async def generate_response_stream(
         self,
@@ -258,10 +255,9 @@ class LLMService:
         from collections.abc import AsyncGenerator
 
         if not self.backend or not self.backend.is_initialized():
-            yield {
-                "type": "response",
-                "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
-            }
+            yield self._yield_error(
+                "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH."
+            )
             return
 
         history = self._get_conversation_history(session_id)
@@ -299,10 +295,7 @@ class LLMService:
 
             token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
-                yield {
-                    "type": "error",
-                    "message": token_error["message"],
-                }
+                yield self._yield_error(token_error["message"])
                 return
 
             tools_param = None
@@ -357,10 +350,7 @@ class LLMService:
                 }
 
             except Exception as e:
-                yield {
-                    "type": "error",
-                    "message": f"Error during streaming: {str(e)}",
-                }
+                yield self._yield_error(f"Error during streaming: {str(e)}")
                 return
 
             content = message_obj.get("content", "")
@@ -405,10 +395,9 @@ class LLMService:
 
                 consecutive_tool_calls += 1
                 if consecutive_tool_calls > max_consecutive_tool_calls:
-                    yield {
-                        "type": "response",
-                        "message": "I seem to be stuck in a loop making tool calls. Let me try a different approach.",
-                    }
+                    yield self._yield_error(
+                        "I seem to be stuck in a loop making tool calls. Let me try a different approach."
+                    )
                     return
 
                 tool_call_names = [
@@ -420,10 +409,9 @@ class LLMService:
                 ]
                 if len(set(tool_call_names)) == 1 and len(recent_tool_calls) >= 3:
                     if all(name == tool_call_names[0] for name in recent_tool_calls[-3:]):
-                        yield {
-                            "type": "response",
-                            "message": f"I've called {tool_call_names[0]} multiple times. There may be an issue. Let me try a different approach.",
-                        }
+                        yield self._yield_error(
+                            f"I've called {tool_call_names[0]} multiple times. There may be an issue. Let me try a different approach."
+                        )
                         return
 
                 recent_tool_calls.extend(tool_call_names)
@@ -470,10 +458,9 @@ class LLMService:
             }
             return
 
-        yield {
-            "type": "error",
-            "message": "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts.",
-        }
+        yield self._yield_error(
+            "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts."
+        )
 
     async def handle_audio_ready(
         self,

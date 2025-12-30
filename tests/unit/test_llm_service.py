@@ -359,7 +359,7 @@ class TestGenerateResponse:
             "Hello", "test_session", mock_mcp_server
         )
 
-        assert result["type"] == "response"
+        assert result["type"] == "error"
         assert "LLM not available" in result["message"]
 
     @pytest.mark.asyncio
@@ -507,7 +507,8 @@ class TestGenerateResponse:
         # Should hit repetitive tool calling detection (after 3-4 calls) or max iterations
         # Note: The repetitive detection triggers first, preventing infinite loops
         # Streaming version triggers after 3 calls, non-streaming after 4
-        assert result["type"] == "response"
+        # All error conditions now return "error" type (standardized error handling)
+        assert result["type"] == "error"
         assert (
             "stuck in a loop" in result["message"]
             or "Maximum iterations" in result["message"]
