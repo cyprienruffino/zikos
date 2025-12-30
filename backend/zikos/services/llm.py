@@ -15,6 +15,7 @@ from zikos.services.llm_backends import create_backend
 from zikos.services.llm_orchestration.audio_context_enricher import AudioContextEnricher
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
+from zikos.services.llm_orchestration.orchestrator import LLMOrchestrator
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
 from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
@@ -64,6 +65,17 @@ class LLMService:
         self.tool_call_parser = ToolCallParser()
         self.tool_executor = ToolExecutor()
         self.response_validator = ResponseValidator()
+        self.orchestrator = LLMOrchestrator(
+            self.conversation_manager,
+            self.message_preparer,
+            self.audio_context_enricher,
+            self.tool_injector,
+            self.tool_call_parser,
+            self.tool_executor,
+            self.response_validator,
+            self.thinking_extractor,
+            self._get_system_prompt,
+        )
         self.conversations = self.conversation_manager.conversations
         self._initialize_llm()
 
@@ -191,62 +203,27 @@ class LLMService:
                 "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
             }
 
-        history = self._get_conversation_history(session_id)
+        history, original_message, tool_registry, tools, tool_schemas, iteration_state = (
+            self.orchestrator.prepare_conversation(message, session_id, mcp_server)
+        )
 
-        original_message = message
-        message, _ = self.audio_context_enricher.enrich_message(message, history)
-
-        history.append({"role": "user", "content": message})
-
-        # Log user prompt
         _thinking_logger.info(
             f"Session: {session_id}\n" f"User Prompt:\n{original_message}\n" f"{'='*80}"
         )
-
-        messages = self._prepare_messages(history)
-
-        print(
-            f"DEBUG: Conversation history has {len(history)} messages, prepared {len(messages)} messages"
-        )
-        if history and history[0].get("role") == "system":
-            print(
-                f"DEBUG: System message present, length: {len(history[0].get('content', ''))} chars"
-            )
-
-        tool_registry = mcp_server.get_tool_registry()
-        tools = tool_registry.get_all_tools()
-        tool_schemas = tool_registry.get_all_schemas()
 
         if settings.debug_tool_calls:
             print(f"[DEBUG] Total tools available: {len(tools)}")
             if tools:
                 print(f"[DEBUG] Sample tool: {tools[0].name} ({tools[0].category.value})")
 
-        if not self.tool_provider:
-            self.tool_provider = get_tool_provider()
-
-        tools_injected = self.tool_injector.inject_if_needed(
-            history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
-        )
-
-        if tools_injected and settings.debug_tool_calls:
-                    print(
-                        f"[DEBUG] Injected {len(tools)} tools into system prompt using {type(self.tool_provider).__name__}"
-                    )
+        self.tool_provider = self.orchestrator.tool_provider
 
         max_iterations = LLM.MAX_ITERATIONS
-        iteration = 0
-        consecutive_tool_calls = 0
-        max_consecutive_tool_calls = 5
-        recent_tool_calls: list[str] = []
 
-        while iteration < max_iterations:
-            iteration += 1
-            current_messages = self._prepare_messages(
-                history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
-            )
+        while iteration_state.iteration < max_iterations:
+            iteration_state.iteration += 1
+            current_messages, token_error = self.orchestrator.prepare_iteration_messages(history)
 
-            token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
                 if settings.debug_tool_calls:
                     print("[TOKEN WARNING] Conversation exceeds token limit")
@@ -295,30 +272,22 @@ class LLMService:
                         print("  [FOUND] XML tool_call tag in content!")
                         print(f"  Content preview: {content_preview}")
 
-            raw_content_for_safety = message_obj.get("content", "")
-            content_error = self.response_validator.validate_response_content(
-                raw_content_for_safety
+            raw_content, cleaned_content, thinking_content = (
+                self.orchestrator.process_llm_response(message_obj, history, session_id)
             )
-            if content_error:
-                return content_error
 
-            # Extract thinking from content before processing
-            raw_content = message_obj.get("content", "")
-            cleaned_content, thinking_content = self._extract_thinking(raw_content)
+            if not cleaned_content and raw_content:
+                content_error = self.response_validator.validate_response_content(raw_content)
+                if content_error:
+                    return content_error
 
-            # Log whether thinking was found or not (for debugging)
             if thinking_content:
-                thinking_msg = {"role": "thinking", "content": thinking_content}
-                history.append(thinking_msg)
-
-                # Log thinking to file
                 _thinking_logger.info(
                     f"Session: {session_id}\n"
                     f"Thinking (before tool calls):\n{thinking_content}\n"
                     f"{'='*80}"
                 )
             else:
-                # Log when no thinking is found (helps debug why model isn't using it)
                 if settings.debug_tool_calls:
                     content_to_log = raw_content if raw_content else "(empty content)"
                     _thinking_logger.debug(
@@ -336,14 +305,6 @@ class LLMService:
                         f"{'='*80}"
                     )
 
-                if settings.debug_tool_calls:
-                    print("[THINKING] Extracted thinking:")
-                    print(f"  {thinking_content[:500]}...")
-
-            # Update message_obj with cleaned content
-            message_obj["content"] = cleaned_content
-            history.append(message_obj)
-
             tool_calls = self.tool_call_parser.parse_tool_calls(message_obj, raw_content)
 
             if settings.debug_tool_calls:
@@ -359,65 +320,41 @@ class LLMService:
                     print(f"  Content snippet: {raw_content[:500]}")
 
             if tool_calls:
-                consecutive_tool_calls += 1
-
-                # Track tool names to detect repetitive loops
-                current_tool_names = []
-                for tool_call in tool_calls:
-                    if isinstance(tool_call, dict) and "function" in tool_call:
-                        tool_name = tool_call["function"]["name"]
-                        current_tool_names.append(tool_name)
-
-                recent_tool_calls.extend(current_tool_names)
-                if len(recent_tool_calls) > LLM.RECENT_TOOL_CALLS_WINDOW:
-                    recent_tool_calls = recent_tool_calls[-LLM.RECENT_TOOL_CALLS_WINDOW :]
-
-                loop_error = self.response_validator.validate_tool_call_loops(
-                    consecutive_tool_calls, recent_tool_calls, max_consecutive_tool_calls
+                should_continue, widget_response = await self.orchestrator.process_tool_calls(
+                    tool_calls,
+                    iteration_state,
+                    history,
+                    tool_registry,
+                    mcp_server,
+                    session_id,
+                    cleaned_content,
                 )
-                if loop_error:
-                    _thinking_logger.warning(
-                        f"Session: {session_id}\n"
-                        f"Tool call loop detected: consecutive={consecutive_tool_calls}, recent={recent_tool_calls[-4:]}\n"
-                        f"Response: {loop_error['message']}\n"
-                        f"{'='*80}"
-                    )
-                    return loop_error
 
-                tool_results = []
+                if widget_response:
+                    if isinstance(widget_response, dict) and widget_response.get("type") == "response":
+                        _thinking_logger.warning(
+                            f"Session: {session_id}\n"
+                            f"Tool call loop detected: consecutive={iteration_state.consecutive_tool_calls}, recent={iteration_state.recent_tool_calls[-4:]}\n"
+                            f"Response: {widget_response['message']}\n"
+                            f"{'='*80}"
+                        )
+                    return widget_response
 
-                for tool_call in tool_calls:
-                    widget_response = await self.tool_executor.execute_tool_call(
-                        tool_call,
-                        tool_registry,
-                        mcp_server,
-                        session_id,
-                        cleaned_content,
-                        self.tool_call_parser,
-                    )
+                if should_continue:
+                    continue
+                else:
+                    return widget_response if widget_response else {
+                        "type": "response",
+                        "message": "An error occurred processing tool calls.",
+                    }
 
-                    if widget_response:
-                        return widget_response
-
-                    tool_result = await self.tool_executor.execute_tool_and_get_result(
-                        tool_call, tool_registry, mcp_server, session_id
-                    )
-                    tool_results.append(tool_result)
-
-                history.extend(tool_results)
-
-                # After tool results, allow model to reason about the results
-                # This will be handled in the next iteration when the model generates a response
-                continue
-
-            # No tool calls - reset counters and return the response
-            consecutive_tool_calls = 0
-            recent_tool_calls.clear()
-            response_content = cleaned_content
+            response_content = self.orchestrator.finalize_response(
+                cleaned_content, thinking_content, iteration_state
+            )
 
             # If we expected a tool call but didn't get one, log a warning
             # (This helps diagnose function calling issues)
-            if iteration == 1 and not response_content:
+            if iteration_state.iteration == 1 and not response_content:
                 print("WARNING: Model returned empty response on first iteration")
 
             # Log final response thinking and full response
