@@ -11,12 +11,25 @@ from zikos.services.llm import LLMService
 
 @pytest.fixture
 def mock_backend():
-    """Mock LLM backend"""
+    """Mock LLM backend with streaming support"""
     backend = MagicMock()
     backend.is_initialized.return_value = True
     backend.create_chat_completion.return_value = {
         "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
     }
+
+    # Mock streaming response (default behavior)
+    async def stream_chat_completion(*args, **kwargs):
+        tokens = ["Test", " response"]
+        for token in tokens:
+            yield {
+                "choices": [
+                    {"delta": {"content": token, "role": "assistant"}, "finish_reason": None}
+                ]
+            }
+        yield {"choices": [{"delta": {}, "finish_reason": "stop"}]}
+
+    backend.stream_chat_completion = stream_chat_completion
     return backend
 
 
@@ -352,11 +365,23 @@ class TestGenerateResponse:
     @pytest.mark.asyncio
     async def test_generate_response_with_llm(self, llm_service, mock_mcp_server):
         """Test response generation with LLM"""
+        # Track if stream_chat_completion was called
+        original_stream = llm_service.backend.stream_chat_completion
+        call_count = 0
+
+        async def tracked_stream(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            async for chunk in original_stream(*args, **kwargs):
+                yield chunk
+
+        llm_service.backend.stream_chat_completion = tracked_stream
+
         result = await llm_service.generate_response("Hello", "test_session", mock_mcp_server)
 
         assert result["type"] == "response"
         assert "message" in result
-        assert llm_service.backend.create_chat_completion.called
+        assert call_count > 0
 
     @pytest.mark.asyncio
     async def test_generate_response_with_tool_call(self, llm_service, mock_mcp_server):
@@ -368,12 +393,35 @@ class TestGenerateResponse:
         mock_tool_registry = mock_mcp_server.get_tool_registry()
         mock_tool_registry.get_tool.return_value = mock_tool
 
-        llm_service.backend.create_chat_completion.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": None,
-                        "role": "assistant",
+        # Mock streaming response with tool call
+        async def stream_with_tool_call(*args, **kwargs):
+            # First yield tool call in delta
+            yield {
+                "choices": [
+                    {
+                        "delta": {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "id": "call_123",
+                                    "function": {
+                                        "name": "request_audio_recording",
+                                        "arguments": '{"prompt": "Record audio"}',
+                                    },
+                                    "index": 0,
+                                }
+                            ],
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            }
+            # Final chunk
+            yield {
+                "choices": [
+                    {
+                        "delta": {},
+                        "finish_reason": "tool_calls",
                         "tool_calls": [
                             {
                                 "id": "call_123",
@@ -381,12 +429,14 @@ class TestGenerateResponse:
                                     "name": "request_audio_recording",
                                     "arguments": '{"prompt": "Record audio"}',
                                 },
+                                "index": 0,
                             }
                         ],
                     }
-                }
-            ]
-        }
+                ]
+            }
+
+        llm_service.backend.stream_chat_completion = stream_with_tool_call
 
         result = await llm_service.generate_response(
             "let's record", "test_session", mock_mcp_server
@@ -401,14 +451,14 @@ class TestGenerateResponse:
         # Mock tool call that keeps returning tool calls (not a widget tool)
         call_count = 0
 
-        def mock_chat_completion(*args, **kwargs):
+        async def mock_stream_chat_completion(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            return {
+            # Yield tool call
+            yield {
                 "choices": [
                     {
-                        "message": {
-                            "content": None,
+                        "delta": {
                             "role": "assistant",
                             "tool_calls": [
                                 {
@@ -417,14 +467,35 @@ class TestGenerateResponse:
                                         "name": "analyze_tempo",  # An audio analysis tool, not a widget
                                         "arguments": '{"audio_file_id": "test"}',
                                     },
+                                    "index": 0,
                                 }
                             ],
-                        }
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            }
+            # Final chunk
+            yield {
+                "choices": [
+                    {
+                        "delta": {},
+                        "finish_reason": "tool_calls",
+                        "tool_calls": [
+                            {
+                                "id": f"call_{call_count}",
+                                "function": {
+                                    "name": "analyze_tempo",
+                                    "arguments": '{"audio_file_id": "test"}',
+                                },
+                                "index": 0,
+                            }
+                        ],
                     }
                 ]
             }
 
-        llm_service.backend.create_chat_completion.side_effect = mock_chat_completion
+        llm_service.backend.stream_chat_completion = mock_stream_chat_completion
         mock_mcp_server.call_tool = AsyncMock(return_value={"result": "analysis_result"})
 
         # Use a message that won't trigger pre-detection
@@ -433,16 +504,18 @@ class TestGenerateResponse:
             "Hello, how are you?", "test_session", mock_mcp_server
         )
 
-        # Should hit repetitive tool calling detection (after 4 calls) or max iterations
+        # Should hit repetitive tool calling detection (after 3-4 calls) or max iterations
         # Note: The repetitive detection triggers first, preventing infinite loops
+        # Streaming version triggers after 3 calls, non-streaming after 4
         assert result["type"] == "response"
         assert (
             "stuck in a loop" in result["message"]
             or "Maximum iterations" in result["message"]
             or "too many tool calls" in result["message"]
+            or "multiple times" in result["message"]  # Streaming version's loop detection message
         )
-        # Should have called multiple times (at least 4 for repetitive detection)
-        assert call_count >= 4, f"Expected at least 4 calls, got {call_count}"
+        # Verify loop detection triggered (streaming version triggers after 3 calls)
+        assert call_count >= 3, f"Expected at least 3 calls, got {call_count}"
 
 
 class TestHandleAudioReady:

@@ -139,7 +139,9 @@ class LLMService:
             )
 
             self.tool_provider = get_tool_provider(model_path_str)
-            _logger.info(f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens")
+            _logger.info(
+                f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens"
+            )
             _logger.info(f"Using tool provider: {type(self.tool_provider).__name__}")
         except Exception as e:
             _logger.error(f"Error initializing LLM: {e}", exc_info=True)
@@ -196,203 +198,54 @@ class LLMService:
         session_id: str,
         mcp_server: MCPServer,
     ) -> dict[str, Any]:
-        """Generate LLM response, handling tool calls"""
-        if not self.backend or not self.backend.is_initialized():
-            return {
-                "type": "response",
-                "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
-            }
+        """Generate LLM response, handling tool calls
 
-        history, original_message, tool_registry, tools, tool_schemas, iteration_state = (
-            self.orchestrator.prepare_conversation(message, session_id, mcp_server)
-        )
+        This method accumulates the stream from generate_response_stream and returns
+        the final response. Streaming is the single source of truth for response generation.
+        """
+        final_response = None
+        tool_call_response = None
+        tool_registry = None
 
-        _thinking_logger.info(
-            f"Session: {session_id}\n" f"User Prompt:\n{original_message}\n" f"{'='*80}"
-        )
+        async for chunk in self.generate_response_stream(message, session_id, mcp_server):
+            chunk_type = chunk.get("type")
 
-        if settings.debug_tool_calls:
-            _logger.debug(f"Total tools available: {len(tools)}")
-            if tools:
-                _logger.debug(f"Sample tool: {tools[0].name} ({tools[0].category.value})")
+            # Keep tool_call chunks, but only return them if they're widgets
+            if chunk_type == "tool_call":
+                # Get tool registry to check if tool is a widget
+                if tool_registry is None:
+                    tool_registry = mcp_server.get_tool_registry()
 
-        self.tool_provider = self.orchestrator.tool_provider
+                tool_name = chunk.get("tool_name")
+                if tool_name:
+                    tool = tool_registry.get_tool(tool_name)
+                    # Only keep widget/recording tool calls (they pause the conversation)
+                    if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
+                        tool_call_response = chunk
 
-        max_iterations = LLM.MAX_ITERATIONS
+            # Keep the last response or error chunk as the final result
+            if chunk_type in ("response", "error"):
+                final_response = chunk
 
-        while iteration_state.iteration < max_iterations:
-            iteration_state.iteration += 1
-            current_messages, token_error = self.orchestrator.prepare_iteration_messages(history)
+        # If we got a widget tool_call, return it (pauses conversation)
+        if tool_call_response:
+            return dict(tool_call_response)
 
-            if token_error:
-                if settings.debug_tool_calls:
-                    _logger.warning("Conversation exceeds token limit")
-                return token_error
+        # Convert error to response for backward compatibility
+        if final_response and final_response.get("type") == "error":
+            # Special case: "LLM not available" should be type "response" not "error"
+            message = str(final_response.get("message", ""))
+            if "LLM not available" in message:
+                return {
+                    "type": "response",
+                    "message": message,
+                }
+            return dict(final_response)
 
-            if settings.debug_tool_calls:
-                _logger.debug(f"Sending {len(tools)} tools to LLM")
-                _logger.debug(
-                    f"Tools list: {[t.get('function', {}).get('name', 'unknown') for t in tool_schemas[:5]]}..."
-                )
-                _logger.debug(f"Messages count: {len(current_messages)}")
-                if current_messages:
-                    _logger.debug(
-                        f"First message role: {current_messages[0].get('role', 'unknown')}"
-                    )
-                    _logger.debug(
-                        f"Last message role: {current_messages[-1].get('role', 'unknown')}"
-                    )
-
-            # Pass tools as parameter if provider supports it
-            tools_param = None
-            if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
-                tools_param = tool_schemas
-
-            response = self.backend.create_chat_completion(
-                messages=current_messages,
-                tools=tools_param,
-                temperature=settings.llm_temperature,
-                top_p=settings.llm_top_p,
-            )
-
-            message_obj = response["choices"][0]["message"]
-
-            if settings.debug_tool_calls:
-                _logger.debug("LLM response structure:")
-                _logger.debug(f"  Response keys: {list(response.keys())}")
-                _logger.debug(f"  Message object keys: {list(message_obj.keys())}")
-                _logger.debug(f"  Content: {str(message_obj.get('content', 'None'))[:200]}")
-                _logger.debug(f"  Tool calls: {message_obj.get('tool_calls', 'None')}")
-                _logger.debug(f"  Role: {message_obj.get('role', 'None')}")
-                if "finish_reason" in response["choices"][0]:
-                    _logger.debug(f"  Finish reason: {response['choices'][0].get('finish_reason', 'None')}")
-                if message_obj.get("content"):
-                    content_preview = str(message_obj.get("content", ""))[:500]
-                    if "<tool_call>" in content_preview:
-                        _logger.debug("  Found XML tool_call tag in content!")
-                        _logger.debug(f"  Content preview: {content_preview}")
-
-            raw_content, cleaned_content, thinking_content = (
-                self.orchestrator.process_llm_response(message_obj, history, session_id)
-            )
-
-            if not cleaned_content and raw_content:
-                content_error = self.response_validator.validate_response_content(raw_content)
-                if content_error:
-                    return content_error
-
-            if thinking_content:
-                _thinking_logger.info(
-                    f"Session: {session_id}\n"
-                    f"Thinking (before tool calls):\n{thinking_content}\n"
-                    f"{'='*80}"
-                )
-            else:
-                if settings.debug_tool_calls:
-                    content_to_log = raw_content if raw_content else "(empty content)"
-                    _thinking_logger.debug(
-                        f"Session: {session_id}\n"
-                        f"No thinking found in response.\n"
-                        f"Full content:\n{content_to_log}\n"
-                        f"{'='*80}"
-                    )
-                else:
-                    content_preview = raw_content[:300] if raw_content else "(empty content)"
-                    _thinking_logger.debug(
-                        f"Session: {session_id}\n"
-                        f"No thinking found in response.\n"
-                        f"Content preview: {content_preview}...\n"
-                        f"{'='*80}"
-                    )
-
-            tool_calls = self.tool_call_parser.parse_tool_calls(message_obj, raw_content)
-
-            if settings.debug_tool_calls:
-                if tool_calls:
-                    _logger.debug(f"Tool calls found: {len(tool_calls)} tool call(s)")
-                elif raw_content and (
-                    "<tool_call>" in raw_content
-                    or ("name" in raw_content and "arguments" in raw_content)
-                ):
-                    _logger.warning(
-                        "Content contains tool-like content but no structured tool_calls field"
-                    )
-                    _logger.debug(f"  Content snippet: {raw_content[:500]}")
-
-            if tool_calls:
-                should_continue, widget_response = await self.orchestrator.process_tool_calls(
-                    tool_calls,
-                    iteration_state,
-                    history,
-                    tool_registry,
-                    mcp_server,
-                    session_id,
-                    cleaned_content,
-                )
-
-                if widget_response:
-                    if isinstance(widget_response, dict) and widget_response.get("type") == "response":
-                        _thinking_logger.warning(
-                            f"Session: {session_id}\n"
-                            f"Tool call loop detected: consecutive={iteration_state.consecutive_tool_calls}, recent={iteration_state.recent_tool_calls[-4:]}\n"
-                            f"Response: {widget_response['message']}\n"
-                            f"{'='*80}"
-                        )
-                    return widget_response
-
-                if should_continue:
-                    continue
-                else:
-                    return widget_response if widget_response else {
-                        "type": "response",
-                        "message": "An error occurred processing tool calls.",
-                    }
-
-            response_content = self.orchestrator.finalize_response(
-                cleaned_content, thinking_content, iteration_state
-            )
-
-            # If we expected a tool call but didn't get one, log a warning
-            # (This helps diagnose function calling issues)
-            if iteration_state.iteration == 1 and not response_content:
-                _logger.warning("Model returned empty response on first iteration")
-
-            # Log final response thinking and full response
-            if thinking_content:
-                _thinking_logger.info(
-                    f"Session: {session_id}\n"
-                    f"Final Response Thinking:\n{thinking_content}\n"
-                    f"Response:\n{response_content}\n"
-                    f"{'='*80}"
-                )
-            else:
-                _thinking_logger.info(
-                    f"Session: {session_id}\n"
-                    f"Response (no thinking):\n{response_content}\n"
-                    f"{'='*80}"
-                )
-
-            # Show thinking in debug mode
-            if settings.debug_tool_calls and thinking_content:
-                _logger.debug("Final response thinking:")
-                _logger.debug(f"  {thinking_content}")
-
-            return {
-                "type": "response",
-                "message": response_content
-                or "I'm not sure how to help with that. Could you rephrase your request?",
-            }
-
-        error_message = "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts."
-        _thinking_logger.warning(
-            f"Session: {session_id}\n"
-            f"Maximum iterations reached\n"
-            f"Response: {error_message}\n"
-            f"{'='*80}"
-        )
-        return {
+        # Return the final response, or a fallback if something went wrong
+        return final_response or {
             "type": "response",
-            "message": error_message,
+            "message": "An unexpected error occurred while generating the response.",
         }
 
     async def generate_response_stream(
@@ -406,7 +259,7 @@ class LLMService:
 
         if not self.backend or not self.backend.is_initialized():
             yield {
-                "type": "error",
+                "type": "response",
                 "message": "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH.",
             }
             return
