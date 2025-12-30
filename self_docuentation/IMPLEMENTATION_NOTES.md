@@ -362,6 +362,19 @@ Added to `backend/zikos/constants.py`:
 
 ## Next Steps
 
-1. Replace all `print()` statements with proper logging
-2. Final test run to ensure everything works
-3. Consider further reducing duplication in generate_response_stream (though streaming semantics make this challenging)
+1. Final test run to ensure everything works
+2. Consider further reducing duplication in generate_response_stream (though streaming semantics make this challenging)
+
+## Completed: Logging Migration ✅
+
+- Replaced all `print()` statements with proper `logging.getLogger()` calls
+- Added loggers to:
+  - `llm.py` - Main LLM service logger
+  - `response_validator.py` - Response validation logger
+  - `tool_call_parser.py` - Tool call parsing logger
+  - `tool_executor.py` - Tool execution logger
+- Used appropriate log levels:
+  - `logger.debug()` for debug information (when `settings.debug_tool_calls` is True)
+  - `logger.info()` for informational messages
+  - `logger.warning()` for warnings
+  - `logger.error()` for errors (with `exc_info=True` for exceptions)
