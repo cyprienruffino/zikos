@@ -218,3 +218,102 @@ Optional for optimization:
 4. Add error handling and logging
 5. Connect to FastAPI endpoint
 6. Add tests following TDD approach
+
+---
+
+# LLM Service Refactoring
+
+## Overview
+
+The `LLMService` class in `backend/zikos/services/llm.py` was a 1300+ line "god object" with multiple responsibilities mixed together. This refactoring extracts focused, testable components while maintaining backward compatibility.
+
+## Problems Identified
+
+1. **Massive code duplication**: `generate_response` and `generate_response_stream` shared ~70% of logic
+2. **God object anti-pattern**: Single class handling 10+ responsibilities
+3. **Hard to test**: Tight coupling, many side effects, hard to mock
+4. **Inconsistent patterns**: Mixed error handling, magic numbers, print statements everywhere
+5. **Poor separation of concerns**: Audio analysis, tool injection, validation, execution all mixed
+
+## Refactoring Strategy
+
+Extract focused classes with single responsibilities:
+
+1. ✅ **ThinkingExtractor** - Extracts thinking from `<thinking>` tags
+2. ✅ **ConversationManager** - Manages conversation history per session
+3. ✅ **MessagePreparer** - Prepares messages, handles truncation, system prompt injection
+4. ⏳ **AudioContextEnricher** - Enriches messages with audio analysis context
+5. ⏳ **ToolInjector** - Injects tools into system prompts
+6. ⏳ **ToolCallParser** - Parses native and Qwen XML tool calls
+7. ⏳ **ToolExecutor** - Executes tools, handles errors, widget detection
+8. ⏳ **ResponseValidator** - Validates responses (gibberish, tokens, loops)
+9. ⏳ **LLMOrchestrator** - Orchestrates generate_response and generate_response_stream
+
+## Progress
+
+### Completed (2024-12-XX)
+
+- ✅ Extracted `ThinkingExtractor` class
+- ✅ Extracted `ConversationManager` class
+- ✅ Extracted `MessagePreparer` class
+- ✅ Added missing constants for tool calling limits
+- ✅ Fixed type annotations for mypy compliance
+- ✅ All existing tests pass (backward compatibility maintained)
+
+### In Progress
+
+- ⏳ Extracting remaining orchestration components
+- ⏳ Replacing print() statements with proper logging
+- ⏳ Creating comprehensive test suite
+
+## Design Principles
+
+1. **Single Responsibility**: Each class has one clear purpose
+2. **Testability**: Components can be tested in isolation
+3. **Reusability**: Shared logic extracted to avoid duplication
+4. **Backward Compatibility**: Public API unchanged, internal refactoring only
+5. **TDD Approach**: Tests written/verified at each step
+
+## File Structure
+
+```
+backend/zikos/services/
+├── llm.py (main service, thin facade)
+└── llm_orchestration/
+    ├── __init__.py
+    ├── thinking_extractor.py ✅
+    ├── conversation_manager.py ✅
+    ├── message_preparer.py ✅
+    ├── audio_context_enricher.py ⏳
+    ├── tool_injector.py ⏳
+    ├── tool_call_parser.py ⏳
+    ├── tool_executor.py ⏳
+    ├── response_validator.py ⏳
+    └── orchestrator.py ⏳
+```
+
+## Constants Added
+
+Added to `backend/zikos/constants.py`:
+- `MAX_CONSECUTIVE_TOOL_CALLS = 5`
+- `RECENT_TOOL_CALLS_WINDOW = 10`
+- `REPETITIVE_PATTERN_THRESHOLD = 4`
+- `REPETITIVE_PATTERN_CHECK_WINDOW = 3`
+
+## Testing Strategy
+
+- Run existing tests after each extraction to ensure no regressions
+- All unit tests pass
+- Integration tests pass
+- Coverage maintained
+
+## Next Steps
+
+1. Extract `AudioContextEnricher`
+2. Extract `ToolInjector`
+3. Extract `ToolCallParser`
+4. Extract `ToolExecutor`
+5. Extract `ResponseValidator`
+6. Create `LLMOrchestrator` to eliminate duplication between generate_response and generate_response_stream
+7. Replace all `print()` statements with proper logging
+8. Final test run to ensure everything works

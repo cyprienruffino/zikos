@@ -100,97 +100,43 @@ class TestSystemPrompt:
         prompt_file = tmp_path / "SYSTEM_PROMPT.md"
         prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
 
-        # Create directory structure that matches the path resolution
-        # Path(__file__).parent.parent.parent.parent resolves from backend/zikos/services/llm.py to root
-        # So we need: tmp_path/backend/zikos/services/llm.py -> tmp_path/SYSTEM_PROMPT.md
-        services_dir = tmp_path / "backend" / "zikos" / "services"
-        services_dir.mkdir(parents=True, exist_ok=True)
-
-        # Patch __file__ to point to our temp structure
-        import zikos.services.llm as llm_module
-
-        original_file = llm_module.__file__
-        fake_file = services_dir / "llm.py"
-        fake_file.touch()
-
-        try:
-            llm_module.__file__ = str(fake_file)
-            prompt = llm_service._get_system_prompt()
-            assert "helpful assistant" in prompt
-        finally:
-            llm_module.__file__ = original_file
+        prompt = llm_service._get_system_prompt(prompt_file_path=prompt_file)
+        assert "helpful assistant" in prompt
 
     def test_get_system_prompt_fallback(self, llm_service, tmp_path):
         """Test fallback system prompt when file doesn't exist"""
-        # Create directory structure but don't create SYSTEM_PROMPT.md
-        services_dir = tmp_path / "backend" / "zikos" / "services"
-        services_dir.mkdir(parents=True, exist_ok=True)
+        from pathlib import Path
 
-        import zikos.services.llm as llm_module
-
-        original_file = llm_module.__file__
-        fake_file = services_dir / "llm.py"
-        fake_file.touch()
-
-        try:
-            llm_module.__file__ = str(fake_file)
-            prompt = llm_service._get_system_prompt()
-            assert "expert music teacher" in prompt.lower()
-        finally:
-            llm_module.__file__ = original_file
+        non_existent_file = tmp_path / "NONEXISTENT.md"
+        prompt = llm_service._get_system_prompt(prompt_file_path=non_existent_file)
+        assert "expert music teacher" in prompt.lower()
 
     def test_get_system_prompt_injects_music_flamingo_when_configured(self, llm_service, tmp_path):
         """Test that Music Flamingo section is injected when service URL is configured"""
         prompt_file = tmp_path / "SYSTEM_PROMPT.md"
         prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
 
-        services_dir = tmp_path / "backend" / "zikos" / "services"
-        services_dir.mkdir(parents=True, exist_ok=True)
-
         from unittest.mock import patch
 
-        import zikos.services.llm as llm_module
-
-        original_file = llm_module.__file__
-        fake_file = services_dir / "llm.py"
-        fake_file.touch()
-
-        try:
-            llm_module.__file__ = str(fake_file)
-            with patch("zikos.services.llm.settings") as mock_settings:
-                mock_settings.music_flamingo_service_url = "http://localhost:8001"
-                prompt = llm_service._get_system_prompt()
-                assert "Music Flamingo" in prompt
-                assert "analyze_music_with_flamingo" in prompt
-                assert "multimodal AI model" in prompt
-        finally:
-            llm_module.__file__ = original_file
+        with patch("zikos.services.llm.settings") as mock_settings:
+            mock_settings.music_flamingo_service_url = "http://localhost:8001"
+            prompt = llm_service._get_system_prompt(prompt_file_path=prompt_file)
+            assert "Music Flamingo" in prompt
+            assert "analyze_music_with_flamingo" in prompt
+            assert "multimodal AI model" in prompt
 
     def test_get_system_prompt_no_music_flamingo_when_not_configured(self, llm_service, tmp_path):
         """Test that Music Flamingo section is NOT injected when service URL is not configured"""
         prompt_file = tmp_path / "SYSTEM_PROMPT.md"
         prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
 
-        services_dir = tmp_path / "backend" / "zikos" / "services"
-        services_dir.mkdir(parents=True, exist_ok=True)
-
         from unittest.mock import patch
 
-        import zikos.services.llm as llm_module
-
-        original_file = llm_module.__file__
-        fake_file = services_dir / "llm.py"
-        fake_file.touch()
-
-        try:
-            llm_module.__file__ = str(fake_file)
-            with patch("zikos.services.llm.settings") as mock_settings:
-                mock_settings.music_flamingo_service_url = ""
-                prompt = llm_service._get_system_prompt()
-                assert "Music Flamingo" not in prompt
-                assert "analyze_music_with_flamingo" not in prompt
-        finally:
-            llm_module.__file__ = original_file
+        with patch("zikos.services.llm.settings") as mock_settings:
+            mock_settings.music_flamingo_service_url = ""
+            prompt = llm_service._get_system_prompt(prompt_file_path=prompt_file)
+            assert "Music Flamingo" not in prompt
+            assert "analyze_music_with_flamingo" not in prompt
 
 
 class TestConversationHistory:

@@ -16,6 +16,12 @@ class LLMConstants:
     # Iteration limits
     MAX_ITERATIONS: int = 10
 
+    # Tool calling limits
+    MAX_CONSECUTIVE_TOOL_CALLS: int = 5
+    RECENT_TOOL_CALLS_WINDOW: int = 10
+    REPETITIVE_PATTERN_THRESHOLD: int = 4
+    REPETITIVE_PATTERN_CHECK_WINDOW: int = 3
+
     # Response quality checks
     MAX_WORDS_RESPONSE: int = 500
     MIN_UNIQUE_WORD_RATIO: float = 0.15

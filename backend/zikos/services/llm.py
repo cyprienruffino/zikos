@@ -12,6 +12,17 @@ from zikos.mcp.server import MCPServer
 from zikos.mcp.tool import ToolCategory
 from zikos.services.audio import AudioService
 from zikos.services.llm_backends import create_backend
+from zikos.services.llm_orchestration.audio_context_enricher import AudioContextEnricher
+from zikos.services.llm_orchestration.conversation_manager import ConversationManager
+from zikos.services.llm_orchestration.message_preparer import MessagePreparer
+from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
+from zikos.services.prompt import SystemPromptBuilder
+from zikos.services.prompt.sections import (
+    AudioAnalysisContextFormatter,
+    CorePromptSection,
+    MusicFlamingoSection,
+    ToolInstructionsSection,
+)
 from zikos.services.tool_providers import get_tool_provider
 from zikos.utils.gpu import get_optimal_gpu_layers
 
@@ -40,8 +51,12 @@ class LLMService:
     def __init__(self):
         self.backend = None
         self.audio_service = AudioService()
-        self.conversations: dict[str, list[dict[str, Any]]] = {}
         self.tool_provider = None
+        self.thinking_extractor = ThinkingExtractor()
+        self.conversation_manager = ConversationManager(self._get_system_prompt)
+        self.message_preparer = MessagePreparer()
+        self.audio_context_enricher = AudioContextEnricher()
+        self.conversations = self.conversation_manager.conversations
         self._initialize_llm()
 
     def __del__(self):
@@ -114,48 +129,18 @@ class LLMService:
 
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
         """Get conversation history for session"""
-        if session_id not in self.conversations:
-            system_prompt = self._get_system_prompt()
-            self.conversations[session_id] = [{"role": "system", "content": system_prompt}]
-        return self.conversations[session_id]
+        result: list[dict[str, Any]] = self.conversation_manager.get_history(session_id)
+        return result
 
     def get_thinking_for_session(self, session_id: str) -> list[dict[str, Any]]:
         """Get all thinking messages for a session (for debugging)
 
         Returns list of thinking messages with their context (adjacent messages)
         """
-        if session_id not in self.conversations:
-            return []
-
-        history = self.conversations[session_id]
-        thinking_messages = []
-
-        for i, msg in enumerate(history):
-            if msg.get("role") == "thinking":
-                context = {}
-                # Get adjacent messages for context
-                if i > 0:
-                    prev_msg = history[i - 1]
-                    context["before"] = {
-                        "role": prev_msg.get("role"),
-                        "content_preview": str(prev_msg.get("content", ""))[:200],
-                    }
-                if i < len(history) - 1:
-                    next_msg = history[i + 1]
-                    context["after"] = {
-                        "role": next_msg.get("role"),
-                        "content_preview": str(next_msg.get("content", ""))[:200],
-                    }
-
-                thinking_messages.append(
-                    {
-                        "thinking": msg.get("content", ""),
-                        "context": context,
-                        "position": i,
-                    }
-                )
-
-        return thinking_messages
+        result: list[dict[str, Any]] = self.conversation_manager.get_thinking_for_session(
+            session_id
+        )
+        return result
 
     def _extract_thinking(self, content: str | None) -> tuple[str, str]:
         """Extract thinking content from <thinking> tags
@@ -163,29 +148,12 @@ class LLMService:
         Returns:
             tuple: (cleaned_content, thinking_content)
         """
-        import re
-
-        if content is None:
-            return "", ""
-
-        thinking_parts = []
-        pattern = r"<thinking>(.*?)</thinking>"
-        matches = re.finditer(pattern, content, re.DOTALL)
-
-        for match in matches:
-            thinking_parts.append(match.group(1).strip())
-
-        cleaned_content = re.sub(pattern, "", content, flags=re.DOTALL).strip()
-
-        thinking_content = "\n\n".join(thinking_parts) if thinking_parts else ""
-
-        return cleaned_content, thinking_content
+        result: tuple[str, str] = self.thinking_extractor.extract(content)
+        return result
 
     def _prepare_messages(
         self, history: list[dict[str, Any]], max_tokens: int | None = None, for_user: bool = False
     ) -> list[dict[str, Any]]:
-        if max_tokens is None:
-            max_tokens = LLM.MAX_TOKENS_PREPARE_MESSAGES
         """Prepare messages for LLM, ensuring system prompt is included
 
         For models that don't properly handle system messages (like Phi3),
@@ -199,79 +167,8 @@ class LLMService:
             max_tokens: Maximum tokens to include
             for_user: If True, filters out thinking messages for user display
         """
-        if not history:
-            return history
-
-        import tiktoken
-
-        enc = tiktoken.get_encoding("cl100k_base")
-
-        messages = []
-        system_prompt = None
-        system_prepended = False
-        total_tokens = 0
-
-        # First, find and preserve audio analysis messages (they're critical)
-        audio_analysis_messages = []
-        other_messages = []
-        for msg in history:
-            if msg.get("role") == "system":
-                system_prompt = msg.get("content", "")
-                continue
-            # Filter thinking messages if preparing for user display
-            if for_user and msg.get("role") == "thinking":
-                continue
-            content = str(msg.get("content", ""))
-            # Check if this is an audio analysis message
-            if any(
-                marker in content
-                for marker in ["[Audio Analysis", "Audio analysis complete", "audio_file_id"]
-            ):
-                audio_analysis_messages.append(msg)
-            else:
-                other_messages.append(msg)
-
-        # Process other messages in reverse (keep most recent) to stay within token limit
-        # Reserve more space for audio analysis (can be large)
-        # Ensure we have at least some room for messages (handle case where max_tokens < reserve)
-        available_tokens = max(max_tokens - LLM.TOKENS_RESERVE_AUDIO_ANALYSIS, max_tokens // 2)
-
-        processed_messages: list[dict[str, Any]] = []
-        first_message_added = False
-        for msg in reversed(other_messages):
-            msg_tokens = len(enc.encode(str(msg.get("content", ""))))
-            if total_tokens + msg_tokens > available_tokens and first_message_added:
-                break
-
-            processed_messages.insert(0, msg)
-            total_tokens += msg_tokens
-            first_message_added = True
-
-        # Always include audio analysis messages (they're essential)
-        for msg in audio_analysis_messages:
-            processed_messages.append(msg)
-
-        # Now process in forward order
-        for msg in processed_messages:
-            if msg.get("role") == "user" and system_prompt and not system_prepended:
-                combined_content = f"{system_prompt}\n\n{msg['content']}"
-                messages.append({"role": "user", "content": combined_content})
-                system_prepended = True
-            elif msg.get("role") != "system":
-                messages.append(msg)
-
-        # Ensure at least one message is included (system prompt or first user message)
-        if not messages and system_prompt:
-            messages.append({"role": "user", "content": system_prompt})
-        elif not messages and other_messages:
-            first_msg = other_messages[0]
-            if system_prompt:
-                combined_content = f"{system_prompt}\n\n{first_msg.get('content', '')}"
-                messages.append({"role": "user", "content": combined_content})
-            else:
-                messages.append(first_msg)
-
-        return messages
+        result: list[dict[str, Any]] = self.message_preparer.prepare(history, max_tokens, for_user)
+        return result
 
     async def generate_response(
         self,
@@ -288,31 +185,8 @@ class LLMService:
 
         history = self._get_conversation_history(session_id)
 
-        # Store original message for logging
         original_message = message
-
-        # Check if message already contains analysis (from handle_audio_ready)
-        # If so, the LLM should use it directly - no need for keyword detection
-        message_lower = message.lower()
-        has_analysis_marker = (
-            "[audio analysis results]" in message_lower or "audio analysis results" in message_lower
-        )
-
-        # Detect if user is asking about audio
-        audio_keywords = ["sample", "audio", "recording", "sound", "playback", "performance"]
-        is_asking_about_audio = any(keyword in message_lower for keyword in audio_keywords)
-
-        # If asking about audio but no analysis marker, try to find recent audio analysis in history
-        # This helps provide context when user asks follow-up questions about audio
-        if not has_analysis_marker:
-            recent_audio_analysis = self._find_recent_audio_analysis(history)
-            if recent_audio_analysis:
-                # Prepend the analysis context to help the LLM answer questions
-                interpretation_reminder = """CRITICAL: When referencing audio analysis data, NEVER report raw metrics or scores. Always interpret them musically. For example, say "your timing is inconsistent" not "timing_accuracy is 0.44". Use the metrics internally to understand the performance, then explain in musical terms."""
-                message = f"[Audio Analysis Context - Use this data to answer the user's question]\n{recent_audio_analysis}\n\n{interpretation_reminder}\n\n[User Question]\n{message}\n\nIMPORTANT: Answer based ONLY on the audio analysis data provided above. Do not make up or hallucinate information. If the analysis data doesn't contain the information needed, say so explicitly."
-            elif is_asking_about_audio:
-                # User is asking about audio but no analysis is available
-                message = f"{message}\n\n[IMPORTANT: The user is asking about audio analysis, but no audio analysis data is available in the conversation history. Please inform them that you don't see any audio analysis available and suggest they record or upload audio first.]"
+        message, _ = self.audio_context_enricher.enrich_message(message, history)
 
         history.append({"role": "user", "content": message})
 
@@ -353,22 +227,18 @@ class LLMService:
                     system_has_tools = True
 
             if not system_has_tools:
-                tool_instructions = self.tool_provider.format_tool_instructions()
-                tool_summary = self.tool_provider.generate_tool_summary(tools)
-                tool_schemas_text = self.tool_provider.format_tool_schemas(tools)
-                tool_examples = self.tool_provider.get_tool_call_examples()
-
-                tools_section = f"{tool_instructions}\n\n## Available Tools\n\n{tool_summary}\n\n{tool_schemas_text}\n\n{tool_examples}"
+                tools_section = ToolInstructionsSection(self.tool_provider, tools, tool_schemas)
+                tools_text = tools_section.render()
 
                 # Inject tools into the system prompt in the conversation history
                 if history and history[0].get("role") == "system":
                     original_system = history[0].get("content", "")
-                    history[0]["content"] = f"{original_system}\n\n{tools_section}"
+                    history[0]["content"] = f"{original_system}\n\n{tools_text}"
                 else:
                     # If no system message, add one with tools
                     system_prompt = self._get_system_prompt()
                     history.insert(
-                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_section}"}
+                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_text}"}
                     )
 
                 if settings.debug_tool_calls:
@@ -798,20 +668,7 @@ class LLMService:
 
         history = self._get_conversation_history(session_id)
         original_message = message
-        message_lower = message.lower()
-        has_analysis_marker = (
-            "[audio analysis results]" in message_lower or "audio analysis results" in message_lower
-        )
-        audio_keywords = ["sample", "audio", "recording", "sound", "playback", "performance"]
-        is_asking_about_audio = any(keyword in message_lower for keyword in audio_keywords)
-
-        if not has_analysis_marker:
-            recent_audio_analysis = self._find_recent_audio_analysis(history)
-            if recent_audio_analysis:
-                interpretation_reminder = """CRITICAL: When referencing audio analysis data, NEVER report raw metrics or scores. Always interpret them musically. For example, say "your timing is inconsistent" not "timing_accuracy is 0.44". Use the metrics internally to understand the performance, then explain in musical terms."""
-                message = f"[Audio Analysis Context - Use this data to answer the user's question]\n{recent_audio_analysis}\n\n{interpretation_reminder}\n\n[User Question]\n{message}\n\nIMPORTANT: Answer based ONLY on the audio analysis data provided above. Do not make up or hallucinate information. If the analysis data doesn't contain the information needed, say so explicitly."
-            elif is_asking_about_audio:
-                message = f"{message}\n\n[IMPORTANT: The user is asking about audio analysis, but no audio analysis data is available in the conversation history. Please inform them that you don't see any audio analysis available and suggest they record or upload audio first.]"
+        message, _ = self.audio_context_enricher.enrich_message(message, history)
 
         history.append({"role": "user", "content": message})
         _thinking_logger.info(
@@ -833,19 +690,16 @@ class LLMService:
                     system_has_tools = True
 
             if not system_has_tools:
-                tool_instructions = self.tool_provider.format_tool_instructions()
-                tool_summary = self.tool_provider.generate_tool_summary(tools)
-                tool_schemas_text = self.tool_provider.format_tool_schemas(tools)
-                tool_examples = self.tool_provider.get_tool_call_examples()
-                tools_section = f"{tool_instructions}\n\n## Available Tools\n\n{tool_summary}\n\n{tool_schemas_text}\n\n{tool_examples}"
+                tools_section = ToolInstructionsSection(self.tool_provider, tools, tool_schemas)
+                tools_text = tools_section.render()
 
                 if history and history[0].get("role") == "system":
                     original_system = history[0].get("content", "")
-                    history[0]["content"] = f"{original_system}\n\n{tools_section}"
+                    history[0]["content"] = f"{original_system}\n\n{tools_text}"
                 else:
                     system_prompt = self._get_system_prompt()
                     history.insert(
-                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_section}"}
+                        0, {"role": "system", "content": f"{system_prompt}\n\n{tools_text}"}
                     )
 
         max_iterations = LLM.MAX_ITERATIONS
@@ -1118,120 +972,34 @@ class LLMService:
         analysis_str = (
             json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
         )
-        # Use [Audio Analysis Results] marker to prevent re-detection
-        # CRITICAL: Add strong reminder to interpret metrics, not report them
-        interpretation_reminder = """CRITICAL INSTRUCTIONS FOR PROVIDING FEEDBACK:
 
-- NEVER report raw metrics or scores (e.g., "timing_accuracy: 0.44", "BPM: 86.54", "average_deviation: 52.74 ms")
-- NEVER structure feedback as "Tempo Analysis:", "Pitch Analysis:", "Rhythm Analysis:" sections listing metrics
-- ALWAYS interpret metrics musically (e.g., "Your timing is inconsistent - you're rushing the beat" instead of "timing accuracy is 0.44")
-- Use scores internally to understand what's happening, then explain in musical terms
-- Be concise and actionable - get to the point quickly with specific advice
-
-The analysis data below contains scores and metrics FOR YOUR INTERNAL USE ONLY. Use them to understand the performance, then provide musical feedback without mentioning the raw numbers."""
-
-        message = f"[Audio Analysis Results]\nAudio File: {audio_file_id}\n\n{analysis_str}\n\n{interpretation_reminder}\n\nPlease provide feedback on this musical performance based on the analysis above."
+        message = AudioAnalysisContextFormatter.format_analysis_results(audio_file_id, analysis_str)
 
         return await self.generate_response(message, session_id or "default", mcp_server)
 
-    def _get_system_prompt(self) -> str:
-        """Get system prompt"""
-        from pathlib import Path
+    def _get_system_prompt(self, prompt_file_path: Path | None = None) -> str:
+        """Get system prompt using modular builder
 
-        prompt_path = Path(__file__).parent.parent.parent.parent / "SYSTEM_PROMPT.md"
+        Args:
+            prompt_file_path: Optional path to SYSTEM_PROMPT.md. If None, uses default location.
+                Mainly for testing.
+        """
+        if prompt_file_path is None:
+            from pathlib import Path
 
-        if prompt_path.exists():
-            with open(prompt_path, encoding="utf-8") as f:
-                content = f.read()
-                start = content.find("```")
-                end = content.find("```", start + 3)
-                if start != -1 and end != -1:
-                    prompt = content[start + 3 : end].strip()
-                    print(f"DEBUG: System prompt extracted, length: {len(prompt)} chars")
-                else:
-                    prompt = "You are an expert music teacher AI assistant."
-        else:
-            print("DEBUG: Using fallback system prompt")
-            prompt = "You are an expert music teacher AI assistant."
+            prompt_file_path = Path(__file__).parent.parent.parent.parent / "SYSTEM_PROMPT.md"
 
-        # Inject Music Flamingo information if service is configured
-        if settings.music_flamingo_service_url:
-            music_flamingo_section = """
+        builder = SystemPromptBuilder()
+        builder.add_section(CorePromptSection(prompt_file_path))
+        builder.add_section(MusicFlamingoSection())
 
-## Music Flamingo - Advanced Multimodal Analysis
-
-You have access to **Music Flamingo**, a state-of-the-art multimodal AI model that can understand both audio and text simultaneously. This is a powerful tool for deep musical analysis that goes beyond signal processing.
-
-### When to Use Music Flamingo
-
-Use `analyze_music_with_flamingo` when you need:
-- **Semantic understanding**: Understanding musical expression, emotional content, or stylistic interpretation
-- **Performance nuances**: Identifying subtle performance characteristics that signal processing might miss
-- **Comparative analysis**: Comparing performances to identify differences in interpretation, phrasing, or expression
-- **Contextual insights**: Getting rich, context-aware analysis that considers musical meaning, not just technical metrics
-- **Complex musical questions**: Answering questions that require understanding musical concepts, not just measurements
-
-### How Music Flamingo Complements Signal Processing Tools
-
-- **Signal processing tools** (tempo, pitch, rhythm analysis): Provide exact, measurable metrics based on audio signal properties. Use these for precise technical feedback.
-- **Music Flamingo**: Provides semantic, contextual understanding of musical performance. Use this for interpretive feedback, expression analysis, and complex musical insights.
-
-**Best Practice**: Often use both! Start with signal processing tools for technical metrics, then use Music Flamingo for deeper interpretation and semantic understanding. For example:
-1. Use `analyze_tempo` to get precise BPM and timing accuracy
-2. Use `analyze_music_with_flamingo` with a prompt like "Analyze the musical expression and phrasing of this performance" to get interpretive insights
-3. Combine both to provide comprehensive feedback that covers both technical and musical aspects
-
-### Using Music Flamingo
-
-Call `analyze_music_with_flamingo` with:
-- **text**: A specific analysis prompt or question. Be clear about what you want to analyze (e.g., "Analyze this performance and identify the main technical issues", "Compare this performance to the reference and highlight differences in expression", "Describe the musical phrasing and emotional content")
-- **audio_file_id**: Optional audio file ID from the main service's storage. If provided, Music Flamingo will analyze that specific audio file.
-
-The tool will return plain text analysis that you can interpret and present to the student in your own words, following the same metric interpretation guidelines (never report raw data, always interpret musically).
-"""
-            prompt = f"{prompt}{music_flamingo_section}"
-
-        return prompt
+        result: str = builder.build()
+        return result
 
     def _find_recent_audio_analysis(self, history: list[dict[str, Any]]) -> str | None:
         """Find the most recent audio analysis in conversation history"""
-        # Look for messages containing audio analysis (both user messages with analysis context and tool results)
-        for msg in reversed(history):
-            content = str(msg.get("content", ""))
-
-            # Check for audio analysis markers (case insensitive)
-            content_lower = content.lower()
-            has_analysis_markers = any(
-                keyword in content_lower
-                for keyword in [
-                    "[audio analysis",
-                    "audio analysis",
-                    "analysis complete",
-                    "tempo",
-                    "pitch",
-                    "rhythm",
-                    "bpm",
-                    "intonation",
-                    "timing accuracy",
-                    "audio_file_id",
-                ]
-            )
-
-            # Check if it contains structured data (JSON-like)
-            has_structured_data = (
-                "{" in content or "[" in content or '"tempo"' in content or '"pitch"' in content
-            )
-
-            if has_analysis_markers and has_structured_data:
-                # Extract just the analysis portion if it's embedded in a longer message
-                if "[Audio Analysis Context]" in content:
-                    # Extract the analysis section
-                    parts = content.split("[Audio Analysis Context]")
-                    if len(parts) > 1:
-                        analysis_part = parts[1].split("[User Question]")[0].strip()
-                        return analysis_part
-                return content
-        return None
+        result: str | None = self.audio_context_enricher.find_recent_audio_analysis(history)
+        return result
 
     def _parse_qwen_tool_calls(self, content: str) -> list[dict[str, Any]]:
         """Parse Qwen2.5's XML-based tool call format
