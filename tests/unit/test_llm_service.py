@@ -336,14 +336,15 @@ class TestAudioAnalysisDetection:
         final_history = llm_service._get_conversation_history(session_id)
         # The last user message should have been enriched with audio analysis
         user_messages = [msg for msg in final_history if msg.get("role") == "user"]
-        if user_messages:
-            last_user_msg = user_messages[-1].get("content", "")
-            # Audio analysis should be referenced in the enriched message
-            assert (
-                "audio" in last_user_msg.lower()
-                or "tempo" in last_user_msg.lower()
-                or "120" in last_user_msg
-            )
+        assert len(user_messages) > 0, "Should have user messages in history"
+        last_user_msg = user_messages[-1].get("content", "")
+        # Audio analysis should be properly formatted with [Audio Analysis Context] marker
+        # or contain the actual analysis data (tempo: 120 BPM)
+        assert (
+            "[Audio Analysis Context]" in last_user_msg
+            or "120" in last_user_msg
+            or "Tempo: 120 BPM" in last_user_msg
+        ), f"Audio analysis not properly injected. Message: {last_user_msg[:200]}"
 
     @pytest.mark.asyncio
     async def test_generate_response_no_analysis_found(self, llm_service, mock_mcp_server):
@@ -496,11 +497,17 @@ class TestHandleAudioReady:
             # Should return a dict with type and message (or tool_call)
             assert result["type"] in ["response", "tool_call"]
             # Check that analysis was included in the message sent to LLM
-            call_args = llm_service.backend.create_chat_completion.call_args
-            if call_args:
-                messages = call_args.kwargs.get("messages", [])
-                message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
-                assert "[Audio Analysis Results]" in message_contents or "120" in message_contents
+            # Verify stream_chat_completion was called by checking the call count
+            # Since it's a function, we need to track calls differently
+            # The best way is to check the conversation history to see if the analysis was included
+            final_history = llm_service._get_conversation_history("test_session")
+            user_messages = [msg for msg in final_history if msg.get("role") == "user"]
+            assert len(user_messages) > 0, "Should have user messages in history"
+            # The last user message should contain the audio analysis
+            last_user_msg = user_messages[-1].get("content", "")
+            assert (
+                "[Audio Analysis Results]" in last_user_msg or "120" in last_user_msg
+            ), f"Audio analysis not found in message: {last_user_msg[:200]}"
 
     @pytest.mark.asyncio
     async def test_handle_audio_ready_includes_interpretation_reminder(
@@ -518,13 +525,16 @@ class TestHandleAudioReady:
             )
 
             # Check that interpretation reminder is included in the message
-            call_args = llm_service.backend.create_chat_completion.call_args
-            if call_args:
-                messages = call_args.kwargs.get("messages", [])
-                message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
-                assert "CRITICAL INSTRUCTIONS FOR PROVIDING FEEDBACK" in message_contents
-                assert "NEVER report raw metrics" in message_contents
-                assert "ALWAYS interpret metrics musically" in message_contents
+            # Verify by checking the conversation history
+            final_history = llm_service._get_conversation_history("session_123")
+            user_messages = [msg for msg in final_history if msg.get("role") == "user"]
+            assert len(user_messages) > 0, "Should have user messages in history"
+            last_user_msg = user_messages[-1].get("content", "")
+            assert (
+                "CRITICAL INSTRUCTIONS FOR PROVIDING FEEDBACK" in last_user_msg
+            ), f"Interpretation reminder not found in message: {last_user_msg[:300]}"
+            assert "NEVER report raw metrics" in last_user_msg
+            assert "ALWAYS interpret metrics musically" in last_user_msg
 
     @pytest.mark.asyncio
     async def test_generate_response_includes_interpretation_reminder_for_audio_context(
@@ -545,17 +555,17 @@ class TestHandleAudioReady:
         await llm_service.generate_response(user_message, session_id, mock_mcp_server)
 
         # Check that interpretation reminder is included
-        call_args = llm_service.backend.create_chat_completion.call_args
-        if call_args:
-            messages = call_args.kwargs.get("messages", [])
-            message_contents = " ".join(str(msg.get("content", "")) for msg in messages)
-            # Should have the reminder when audio context is prepended
-            if "Audio Analysis Context" in message_contents:
-                assert "CRITICAL:" in message_contents
-                assert (
-                    "NEVER report raw metrics" in message_contents
-                    or "interpret" in message_contents.lower()
-                )
+        # Verify by checking the conversation history
+        final_history = llm_service._get_conversation_history(session_id)
+        user_messages = [msg for msg in final_history if msg.get("role") == "user"]
+        assert len(user_messages) > 0, "Should have user messages in history"
+        last_user_msg = user_messages[-1].get("content", "")
+        # Should have the reminder when audio context is prepended
+        if "Audio Analysis Context" in last_user_msg:
+            assert "CRITICAL:" in last_user_msg or "CRITICAL INSTRUCTIONS" in last_user_msg
+            assert (
+                "NEVER report raw metrics" in last_user_msg or "interpret" in last_user_msg.lower()
+            )
 
     @pytest.mark.asyncio
     async def test_handle_audio_ready_error_handling(self, llm_service, mock_mcp_server):
