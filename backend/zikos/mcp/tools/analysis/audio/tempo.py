@@ -23,7 +23,7 @@ async def analyze_tempo(audio_path: str) -> dict[str, Any]:
         tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
         if hasattr(tempo, "item"):
             tempo = float(tempo.item())
-        elif hasattr(tempo, "__len__") and len(tempo) > 0:
+        elif isinstance(tempo, list | np.ndarray) and len(tempo) > 0:
             tempo = float(tempo[0])
         else:
             tempo = float(tempo)
