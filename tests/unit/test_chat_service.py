@@ -80,6 +80,7 @@ class TestChatService:
         """Test handling audio ready notification"""
         import uuid
         from pathlib import Path
+        from unittest.mock import AsyncMock
 
         from zikos.config import settings
 
@@ -87,6 +88,11 @@ class TestChatService:
         audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
+
+        # Mock generate_response to return a successful response
+        chat_service.llm_service.generate_response = AsyncMock(
+            return_value={"type": "response", "message": "Audio analysis complete"}
+        )
 
         result = await chat_service.handle_audio_ready(audio_file_id, "recording1", "session1")
 
@@ -108,6 +114,13 @@ class TestChatService:
         audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
+
+        # Mock generate_response to return a successful response
+        from unittest.mock import AsyncMock
+
+        chat_service.llm_service.generate_response = AsyncMock(
+            return_value={"type": "response", "message": "Audio analysis complete"}
+        )
 
         result = await chat_service.handle_audio_ready(audio_file_id, "recording1", None)
 

@@ -5,7 +5,15 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from zikos.services.chat import ChatService
 
 router = APIRouter()
-chat_service = ChatService()
+_chat_service: ChatService | None = None
+
+
+def get_chat_service() -> ChatService:
+    """Get or create ChatService instance (lazy initialization)"""
+    global _chat_service
+    if _chat_service is None:
+        _chat_service = ChatService()
+    return _chat_service
 
 
 @router.websocket("/ws")
@@ -24,6 +32,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if data["type"] == "message":
                 try:
                     # Check if streaming is requested
+                    chat_service = get_chat_service()
                     if data.get("stream", False):
                         async for chunk in chat_service.process_message_stream(
                             data["message"],
@@ -47,6 +56,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif data["type"] == "audio_ready":
                 try:
+                    chat_service = get_chat_service()
                     response = await chat_service.handle_audio_ready(
                         data["audio_file_id"],
                         data.get("recording_id"),
@@ -64,6 +74,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif data["type"] == "get_thinking":
                 try:
+                    chat_service = get_chat_service()
                     response = chat_service.get_thinking(data.get("session_id"))
                     await websocket.send_json(response)
                 except Exception as e:
@@ -84,6 +95,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
 
     except WebSocketDisconnect:
+        chat_service = get_chat_service()
         await chat_service.disconnect(websocket)
     except Exception as e:
         print(f"WebSocket error: {e}")

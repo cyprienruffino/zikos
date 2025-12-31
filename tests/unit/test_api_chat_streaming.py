@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import WebSocket, WebSocketDisconnect
 
-from zikos.api.chat import chat_service, websocket_endpoint
+from zikos.api.chat import get_chat_service, websocket_endpoint
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ class TestWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_websocket_streaming_message(self, mock_websocket, mock_chat_service):
         """Test WebSocket handles streaming messages"""
-        with patch("zikos.api.chat.chat_service", mock_chat_service):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
             call_count = 0
 
             async def receive_json():
@@ -76,7 +76,7 @@ class TestWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_websocket_non_streaming_message(self, mock_websocket, mock_chat_service):
         """Test WebSocket handles non-streaming messages"""
-        with patch("zikos.api.chat.chat_service", mock_chat_service):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
             call_count = 0
 
             async def receive_json():
@@ -109,7 +109,7 @@ class TestWebSocketStreaming:
 
         mock_chat_service.process_message_stream = failing_stream
 
-        with patch("zikos.api.chat.chat_service", mock_chat_service):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
             call_count = 0
 
             async def receive_json():
@@ -144,7 +144,7 @@ class TestWebSocketStreaming:
 
         mock_chat_service.process_message_stream = mock_process_message_stream
 
-        with patch("zikos.api.chat.chat_service", mock_chat_service):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
             call_count = 0
 
             async def receive_json():
@@ -173,7 +173,7 @@ class TestWebSocketStreaming:
     @pytest.mark.asyncio
     async def test_websocket_streaming_disconnect(self, mock_websocket, mock_chat_service):
         """Test WebSocket handles disconnect during streaming"""
-        with patch("zikos.api.chat.chat_service", mock_chat_service):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
 
             async def receive_json():
                 raise WebSocketDisconnect()

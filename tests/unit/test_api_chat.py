@@ -20,11 +20,12 @@ def client():
 @pytest.fixture
 def mock_chat_service():
     """Mock chat service"""
-    with patch("zikos.api.chat.chat_service") as mock:
-        mock.process_message = AsyncMock()
-        mock.handle_audio_ready = AsyncMock()
-        mock.get_thinking = Mock()
-        mock.disconnect = AsyncMock()
+    mock = Mock()
+    mock.process_message = AsyncMock()
+    mock.handle_audio_ready = AsyncMock()
+    mock.get_thinking = Mock()
+    mock.disconnect = AsyncMock()
+    with patch("zikos.api.chat.get_chat_service", return_value=mock):
         yield mock
 
 
