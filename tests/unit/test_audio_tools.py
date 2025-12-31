@@ -722,6 +722,7 @@ class TestComparisonTools:
 
         with (
             patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch.object(settings, "midi_storage_path", temp_dir),
             patch("librosa.load") as mock_load,
             patch("librosa.beat.beat_track") as mock_beat,
             patch("librosa.pyin") as mock_pyin,
