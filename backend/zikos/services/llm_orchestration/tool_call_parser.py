@@ -96,7 +96,9 @@ class ToolCallParser:
                             )
 
                             if settings.debug_tool_calls:
-                                _logger.debug(f"Parsed Qwen tool call: {tool_name} (after JSON fix)")
+                                _logger.debug(
+                                    f"Parsed Qwen tool call: {tool_name} (after JSON fix)"
+                                )
                                 _logger.debug(f"  Arguments: {tool_args}")
                             continue
                     except Exception:

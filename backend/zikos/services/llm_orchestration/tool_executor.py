@@ -5,9 +5,9 @@ import logging
 from typing import Any
 
 from zikos.config import settings
+from zikos.mcp.server import MCPServer
 from zikos.mcp.tool import ToolCategory
 from zikos.mcp.tool_registry import ToolRegistry
-from zikos.mcp.server import MCPServer
 
 _logger = logging.getLogger("zikos.services.llm_orchestration.tool_executor")
 _thinking_logger = logging.getLogger("thinking")
@@ -63,7 +63,9 @@ class ToolExecutor:
 
         if is_widget:
             if settings.debug_tool_calls:
-                _logger.debug(f"Widget tool: Returning {tool_name} to frontend (pausing conversation)")
+                _logger.debug(
+                    f"Widget tool: Returning {tool_name} to frontend (pausing conversation)"
+                )
             widget_content = (
                 tool_call_parser.strip_tool_call_tags(cleaned_content) if cleaned_content else ""
             )
@@ -180,7 +182,8 @@ class ToolExecutor:
 
         tool_args_str = tool_call["function"].get("arguments", "{}")
         try:
-            return json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
+            result = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
+            return result if isinstance(result, dict) else {}
         except json.JSONDecodeError:
             return {}
 
@@ -194,4 +197,3 @@ class ToolExecutor:
                 "can use with midi_to_audio or midi_to_notation."
             )
         return f"Error: {error_msg}"
-

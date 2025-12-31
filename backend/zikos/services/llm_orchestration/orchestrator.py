@@ -200,5 +200,7 @@ class LLMOrchestrator:
         iteration_state.consecutive_tool_calls = 0
         iteration_state.recent_tool_calls.clear()
 
-        return cleaned_content or "I'm not sure how to help with that. Could you rephrase your request?"
-
+        return (
+            cleaned_content
+            or "I'm not sure how to help with that. Could you rephrase your request?"
+        )

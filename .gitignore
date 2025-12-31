@@ -29,6 +29,7 @@ ENV/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -74,5 +75,8 @@ node_modules/
 # TypeScript
 frontend/dist/**/*.js
 frontend/dist/**/*.js.map
+
+# External services (deployed separately)
+music-flamingo-hf-service/
 
 .mypy_cache/

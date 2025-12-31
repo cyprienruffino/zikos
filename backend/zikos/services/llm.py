@@ -235,8 +235,20 @@ class LLMService:
         if final_response and final_response.get("type") == "error":
             return dict(final_response)
 
-        # Return the final response, or a fallback if something went wrong
-        return final_response or {
+        if final_response:
+            return dict(final_response)
+
+        history = self._get_conversation_history(session_id)
+        self._inject_error_system_message(
+            history,
+            "unexpected_error",
+            "An unexpected error occurred while generating the response",
+        )
+        async for chunk in self.generate_response_stream("", session_id, mcp_server):
+            if chunk.get("type") == "response":
+                return dict(chunk)
+
+        return {
             "type": "response",
             "message": "An unexpected error occurred while generating the response.",
         }
@@ -244,6 +256,19 @@ class LLMService:
     def _yield_error(self, message: str) -> dict[str, Any]:
         """Create a standardized error response"""
         return {"type": "error", "message": message}
+
+    def _inject_error_system_message(
+        self, history: list[dict[str, Any]], error_type: str, error_details: str
+    ) -> None:
+        """Inject error information as a system message for the LLM to handle
+
+        Args:
+            history: Conversation history to modify
+            error_type: Type of error (e.g., 'token_limit', 'streaming_error', 'tool_loop')
+            error_details: Technical details about the error
+        """
+        error_message = f"ERROR: {error_type}: {error_details}"
+        history.append({"role": "system", "content": error_message})
 
     async def generate_response_stream(
         self,
@@ -295,8 +320,10 @@ class LLMService:
 
             token_error = self.response_validator.validate_token_limit(current_messages)
             if token_error:
-                yield self._yield_error(token_error["message"])
-                return
+                self._inject_error_system_message(
+                    history, token_error["error_type"], token_error["error_details"]
+                )
+                continue
 
             tools_param = None
             if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
@@ -350,8 +377,10 @@ class LLMService:
                 }
 
             except Exception as e:
-                yield self._yield_error(f"Error during streaming: {str(e)}")
-                return
+                self._inject_error_system_message(
+                    history, "streaming_error", f"Error during streaming: {str(e)}"
+                )
+                continue
 
             content = message_obj.get("content", "")
             if not isinstance(content, str):
@@ -394,12 +423,6 @@ class LLMService:
                     }
 
                 consecutive_tool_calls += 1
-                if consecutive_tool_calls > max_consecutive_tool_calls:
-                    yield self._yield_error(
-                        "I seem to be stuck in a loop making tool calls. Let me try a different approach."
-                    )
-                    return
-
                 tool_call_names = [
                     tc.get("function", {}).get("name", "")
                     if isinstance(tc.get("function"), dict)
@@ -407,26 +430,58 @@ class LLMService:
                     for tc in tool_calls
                     if isinstance(tc, dict)
                 ]
+
+                loop_error = self.response_validator.validate_tool_call_loops(
+                    consecutive_tool_calls, recent_tool_calls, max_consecutive_tool_calls
+                )
+                if loop_error:
+                    self._inject_error_system_message(
+                        history, loop_error["error_type"], loop_error["error_details"]
+                    )
+                    max_iterations += 1
+                    continue
+
                 if len(set(tool_call_names)) == 1 and len(recent_tool_calls) >= 3:
                     if all(name == tool_call_names[0] for name in recent_tool_calls[-3:]):
-                        yield self._yield_error(
-                            f"I've called {tool_call_names[0]} multiple times. There may be an issue. Let me try a different approach."
+                        self._inject_error_system_message(
+                            history,
+                            "repetitive_tool_calls",
+                            f"Detected repetitive pattern calling tool '{tool_call_names[0]}' multiple times",
                         )
-                        return
+                        max_iterations += 1
+                        continue
 
                 recent_tool_calls.extend(tool_call_names)
                 if len(recent_tool_calls) > 10:
                     recent_tool_calls = recent_tool_calls[-10:]
 
                 tool_results = []
+                widget_tool_found = False
                 for tool_call in tool_calls:
                     if not isinstance(tool_call, dict):
                         continue
+
+                    # Check if this is a widget/recording tool (should not be executed)
+                    tool_name = (
+                        tool_call.get("function", {}).get("name", "")
+                        if isinstance(tool_call.get("function"), dict)
+                        else ""
+                    )
+                    if tool_name:
+                        tool = tool_registry.get_tool(tool_name)
+                        if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
+                            widget_tool_found = True
+                            continue
 
                     tool_result = await self.tool_executor.execute_tool_and_get_result(
                         tool_call, tool_registry, mcp_server, session_id
                     )
                     tool_results.append(tool_result)
+
+                # If we found a widget tool, don't add results to history and let the stream end
+                # The generate_response method will catch the tool_call chunk and return it
+                if widget_tool_found:
+                    return
 
                 history.extend(tool_results)
                 continue
@@ -443,24 +498,61 @@ class LLMService:
                     f"{'='*80}"
                 )
 
-            history.append(
-                {
-                    "role": "assistant",
-                    "content": response_content
-                    or "I'm not sure how to help with that. Could you rephrase your request?",
-                }
-            )
+            if not response_content:
+                self._inject_error_system_message(
+                    history, "empty_response", "Generated response is empty"
+                )
+                continue
 
-            yield {
-                "type": "response",
-                "message": response_content
-                or "I'm not sure how to help with that. Could you rephrase your request?",
-            }
+            history.append({"role": "assistant", "content": response_content})
+
+            yield {"type": "response", "message": response_content}
             return
 
-        yield self._yield_error(
-            "Maximum iterations reached. The model may be having trouble processing your request. Please try rephrasing or breaking it into smaller parts."
+        self._inject_error_system_message(
+            history,
+            "max_iterations",
+            f"Reached maximum iterations ({max_iterations}). The model may be having trouble processing the request.",
         )
+
+        current_messages = self._prepare_messages(
+            history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
+        )
+
+        tools_param = None
+        if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
+            tools_param = tool_schemas
+
+        try:
+            stream = self.backend.stream_chat_completion(
+                messages=current_messages,
+                tools=tools_param,
+                temperature=settings.llm_temperature,
+                top_p=settings.llm_top_p,
+            )
+
+            accumulated_content = ""
+            async for chunk in stream:
+                choice = chunk.get("choices", [{}])[0]
+                delta = choice.get("delta", {})
+                finish_reason = choice.get("finish_reason")
+
+                if delta.get("content"):
+                    token = delta.get("content", "")
+                    accumulated_content += token
+                    yield {"type": "token", "content": token}
+
+                if finish_reason:
+                    break
+
+            cleaned_content, _ = self._extract_thinking(accumulated_content)
+            if cleaned_content:
+                history.append({"role": "assistant", "content": cleaned_content})
+                yield {"type": "response", "message": cleaned_content}
+            else:
+                yield self._yield_error("Maximum iterations reached.")
+        except Exception as e:
+            yield self._yield_error(f"Error after max iterations: {str(e)}")
 
     async def handle_audio_ready(
         self,
@@ -473,10 +565,14 @@ class LLMService:
         try:
             analysis = await self.audio_service.run_baseline_analysis(audio_file_id)
         except Exception as e:
-            return {
-                "type": "response",
-                "message": f"Error analyzing audio: {str(e)}. The file may be corrupted or in an unsupported format.",
-            }
+            session_id = session_id or "default"
+            history = self._get_conversation_history(session_id)
+            self._inject_error_system_message(
+                history,
+                "audio_analysis_error",
+                f"Error analyzing audio file {audio_file_id}: {str(e)}. The file may be corrupted or in an unsupported format.",
+            )
+            return await self.generate_response("", session_id, mcp_server)
 
         # Format analysis clearly for the LLM
         import json

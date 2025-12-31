@@ -20,15 +20,15 @@ class ResponseValidator:
             messages: List of message dictionaries
 
         Returns:
-            Error response dict if limit exceeded, None otherwise
+            Error info dict with 'error_type' and 'error_details' if limit exceeded, None otherwise
         """
         try:
             enc = tiktoken.get_encoding("cl100k_base")
             total_tokens = sum(len(enc.encode(str(msg.get("content", "")))) for msg in messages)
             if total_tokens > LLM.MAX_TOKENS_SAFETY_CHECK:
                 return {
-                    "type": "response",
-                    "message": "The conversation is too long. Please start a new conversation or summarize what you need.",
+                    "error_type": "token_limit",
+                    "error_details": f"Conversation exceeds token limit ({total_tokens} tokens, max: {LLM.MAX_TOKENS_SAFETY_CHECK})",
                 }
         except Exception:
             pass
@@ -41,7 +41,7 @@ class ResponseValidator:
             content: Raw response content
 
         Returns:
-            Error response dict if gibberish detected, None otherwise
+            Error info dict with 'error_type' and 'error_details' if gibberish detected, None otherwise
         """
         if not content:
             return None
@@ -51,8 +51,8 @@ class ResponseValidator:
         if len(words) > LLM.MAX_WORDS_RESPONSE:
             _logger.warning(f"Model generated unusually long response ({len(words)} words)")
             return {
-                "type": "response",
-                "message": "The model generated an unusually long response. Please try rephrasing your question.",
+                "error_type": "response_too_long",
+                "error_details": f"Response exceeds maximum word count ({len(words)} words, max: {LLM.MAX_WORDS_RESPONSE})",
             }
 
         if len(words) > 50:
@@ -62,16 +62,18 @@ class ResponseValidator:
                     f"Model generated repetitive output (unique ratio: {unique_ratio:.2f})"
                 )
                 return {
-                    "type": "response",
-                    "message": "The model seems to be repeating itself. Please try rephrasing your question.",
+                    "error_type": "repetitive_output",
+                    "error_details": f"Response has low unique word ratio ({unique_ratio:.2f}, min: {LLM.MIN_UNIQUE_WORD_RATIO})",
                 }
 
             single_char_count = len([w for w in words if len(w) == 1 or w.isdigit()])
             if single_char_count > len(words) * LLM.MAX_SINGLE_CHAR_RATIO:
-                _logger.warning("Model generated suspicious pattern (too many single chars/numbers)")
+                _logger.warning(
+                    "Model generated suspicious pattern (too many single chars/numbers)"
+                )
                 return {
-                    "type": "response",
-                    "message": "The model generated an invalid response. Please try rephrasing your question.",
+                    "error_type": "invalid_response_pattern",
+                    "error_details": f"Response contains too many single characters/numbers ({single_char_count}/{len(words)})",
                 }
 
         return None
@@ -90,7 +92,7 @@ class ResponseValidator:
             max_consecutive: Maximum allowed consecutive tool calls (defaults to constant)
 
         Returns:
-            Error response dict if loop detected, None otherwise
+            Error info dict with 'error_type' and 'error_details' if loop detected, None otherwise
         """
         if max_consecutive is None:
             max_consecutive = LLM.MAX_CONSECUTIVE_TOOL_CALLS
@@ -101,8 +103,8 @@ class ResponseValidator:
                 "Breaking loop to prevent infinite recursion."
             )
             return {
-                "type": "response",
-                "message": "The model is making too many tool calls. Please try rephrasing your request or breaking it into smaller parts.",
+                "error_type": "too_many_tool_calls",
+                "error_details": f"Exceeded maximum consecutive tool calls ({consecutive_tool_calls}, max: {max_consecutive})",
             }
 
         if len(recent_tool_calls) >= LLM.REPETITIVE_PATTERN_THRESHOLD:
@@ -111,9 +113,10 @@ class ResponseValidator:
                     f"Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD:]}). "
                     "Breaking loop to prevent infinite recursion."
                 )
+                tool_name = recent_tool_calls[-1]
                 return {
-                    "type": "response",
-                    "message": "The model appears to be stuck in a loop calling the same tool. Please try rephrasing your request.",
+                    "error_type": "repetitive_tool_calls",
+                    "error_details": f"Detected repetitive pattern calling tool '{tool_name}' {LLM.REPETITIVE_PATTERN_THRESHOLD} times",
                 }
 
         return None
