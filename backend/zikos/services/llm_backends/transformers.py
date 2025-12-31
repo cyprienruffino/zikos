@@ -420,9 +420,11 @@ class TransformersBackend(LLMBackend):
                             "id": f"call_transformers_{idx}",
                             "function": {
                                 "name": tool_name,
-                                "arguments": json.dumps(tool_args)
-                                if isinstance(tool_args, dict)
-                                else str(tool_args),
+                                "arguments": (
+                                    json.dumps(tool_args)
+                                    if isinstance(tool_args, dict)
+                                    else str(tool_args)
+                                ),
                             },
                         }
                     )

@@ -62,9 +62,11 @@ class ToolCallParser:
                             "id": f"call_qwen_{len(tool_calls)}",
                             "function": {
                                 "name": tool_name,
-                                "arguments": json.dumps(tool_args)
-                                if isinstance(tool_args, dict)
-                                else str(tool_args),
+                                "arguments": (
+                                    json.dumps(tool_args)
+                                    if isinstance(tool_args, dict)
+                                    else str(tool_args)
+                                ),
                             },
                         }
                     )
@@ -88,9 +90,11 @@ class ToolCallParser:
                                     "id": f"call_qwen_{len(tool_calls)}",
                                     "function": {
                                         "name": tool_name,
-                                        "arguments": json.dumps(tool_args)
-                                        if isinstance(tool_args, dict)
-                                        else str(tool_args),
+                                        "arguments": (
+                                            json.dumps(tool_args)
+                                            if isinstance(tool_args, dict)
+                                            else str(tool_args)
+                                        ),
                                     },
                                 }
                             )

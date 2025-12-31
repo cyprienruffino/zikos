@@ -367,12 +367,14 @@ class LLMService:
                 message_obj = {
                     "role": "assistant",
                     "content": accumulated_content,
-                    "tool_calls": accumulated_tool_calls
-                    if accumulated_tool_calls
-                    else (
-                        final_delta.get("tool_calls")
-                        if final_finish_reason == "tool_calls"
-                        else None
+                    "tool_calls": (
+                        accumulated_tool_calls
+                        if accumulated_tool_calls
+                        else (
+                            final_delta.get("tool_calls")
+                            if final_finish_reason == "tool_calls"
+                            else None
+                        )
                     ),
                 }
 
@@ -424,9 +426,11 @@ class LLMService:
 
                 consecutive_tool_calls += 1
                 tool_call_names = [
-                    tc.get("function", {}).get("name", "")
-                    if isinstance(tc.get("function"), dict)
-                    else ""
+                    (
+                        tc.get("function", {}).get("name", "")
+                        if isinstance(tc.get("function"), dict)
+                        else ""
+                    )
                     for tc in tool_calls
                     if isinstance(tc, dict)
                 ]
