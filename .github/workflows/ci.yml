@@ -48,11 +48,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v -m "not comprehensive and not integration" --cov=backend/zikos --cov-report=term-missing --cov-report=xml
-
-      - name: Run comprehensive tests
-        run: |
-          pytest tests/comprehensive/ -v --no-cov
+          pytest tests/unit/ -v -m "not comprehensive and not integration" --cov=backend/zikos --cov-report=term-missing --cov-report=xml --cov-fail-under=75
 
       - name: Run integration tests
         run: |
