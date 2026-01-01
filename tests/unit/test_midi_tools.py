@@ -196,11 +196,36 @@ Track 1:
             await midi_tools.midi_to_notation("nonexistent_midi", "both")
 
     @pytest.mark.asyncio
-    async def test_midi_to_notation_default_format(self, midi_tools):
+    async def test_midi_to_notation_default_format(self, midi_tools, temp_dir):
         """Test MIDI to notation with default format via call_tool"""
-        result = await midi_tools.call_tool("midi_to_notation", midi_file_id="test_midi")
+        from unittest.mock import patch
 
-        assert result["format"] == "both"
+        from zikos.config import settings
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
+
+        try:
+            with patch.object(settings, "midi_storage_path", temp_dir):
+                with patch.object(settings, "notation_storage_path", temp_dir):
+                    with patch.object(midi_tools, "storage_path", temp_dir):
+                        midi_file_id = "test_midi"
+                        midi_path = temp_dir / f"{midi_file_id}.mid"
+
+                        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+                        midi_text_to_file(midi_text, midi_path)
+
+                        result = await midi_tools.call_tool(
+                            "midi_to_notation", midi_file_id=midi_file_id
+                        )
+
+                        assert result["format"] == "both"
+        except ImportError:
+            pytest.skip("music21 not available")
 
     @pytest.mark.asyncio
     async def test_midi_to_notation_parse_failure(self, midi_tools, temp_dir):
