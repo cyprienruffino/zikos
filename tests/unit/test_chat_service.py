@@ -188,3 +188,99 @@ class TestChatService:
         async for chunk in chat_service.process_message_stream("Hello", session_id):
             chunks.append(chunk)
             assert chunk.get("session_id") == session_id
+
+    def test_get_thinking_without_session_id(self, chat_service):
+        """Test get_thinking returns error when session_id is None"""
+        result = chat_service.get_thinking(None)
+
+        assert "error" in result
+        assert result["error"] == "session_id required"
+
+    def test_get_thinking_with_session_id(self, chat_service):
+        """Test get_thinking with valid session_id"""
+        session_id = chat_service._create_session()
+        chat_service.llm_service.get_thinking_for_session = MagicMock(
+            return_value=[{"thinking": "Test", "position": 0}]
+        )
+
+        result = chat_service.get_thinking(session_id)
+
+        assert "thinking" in result
+        assert isinstance(result["thinking"], list)
+
+    @pytest.mark.asyncio
+    async def test_handle_audio_ready_with_string_response(self, chat_service, temp_dir):
+        """Test handle_audio_ready when LLM service returns string instead of dict"""
+        import uuid
+        from pathlib import Path
+        from unittest.mock import AsyncMock
+
+        from zikos.config import settings
+
+        audio_file_id = str(uuid.uuid4())
+        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
+        audio_path.touch()
+
+        chat_service.llm_service.handle_audio_ready = AsyncMock(
+            return_value="Audio analysis complete"
+        )
+
+        result = await chat_service.handle_audio_ready(audio_file_id, "recording1", "session1")
+
+        assert "type" in result
+        assert result["type"] == "response"
+        assert "audio_file_id" in result
+        assert result["audio_file_id"] == audio_file_id
+        assert "message" in result
+        assert result["message"] == "Audio analysis complete"
+
+    @pytest.mark.asyncio
+    async def test_handle_audio_ready_with_empty_response(self, chat_service, temp_dir):
+        """Test handle_audio_ready when LLM service returns empty response"""
+        import uuid
+        from pathlib import Path
+        from unittest.mock import AsyncMock
+
+        from zikos.config import settings
+
+        audio_file_id = str(uuid.uuid4())
+        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
+        audio_path.touch()
+
+        chat_service.llm_service.handle_audio_ready = AsyncMock(return_value=None)
+
+        result = await chat_service.handle_audio_ready(audio_file_id, "recording1", "session1")
+
+        assert "type" in result
+        assert result["type"] == "response"
+        assert "audio_file_id" in result
+        assert "message" in result
+        assert result["message"] == "Audio analysis complete."
+
+    @pytest.mark.asyncio
+    async def test_handle_audio_ready_with_exception(self, chat_service, temp_dir):
+        """Test handle_audio_ready when LLM service raises exception"""
+        import uuid
+        from pathlib import Path
+        from unittest.mock import AsyncMock
+
+        from zikos.config import settings
+
+        audio_file_id = str(uuid.uuid4())
+        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path.parent.mkdir(parents=True, exist_ok=True)
+        audio_path.touch()
+
+        chat_service.llm_service.handle_audio_ready = AsyncMock(
+            side_effect=Exception("Processing error")
+        )
+
+        result = await chat_service.handle_audio_ready(audio_file_id, "recording1", "session1")
+
+        assert "type" in result
+        assert result["type"] == "error"
+        assert "audio_file_id" in result
+        assert result["audio_file_id"] == audio_file_id
+        assert "Error processing audio" in result["message"]

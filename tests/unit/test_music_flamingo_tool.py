@@ -115,3 +115,95 @@ class TestMusicFlamingoTools:
         """Test calling unknown tool"""
         with pytest.raises(ValueError, match="Unknown tool"):
             await music_flamingo_tools.call_tool("unknown_tool", text="test")
+
+    @pytest.mark.asyncio
+    async def test_analyze_music_audio_upload_http_error(self, music_flamingo_tools):
+        """Test error handling when audio upload fails with HTTP error"""
+        import httpx
+
+        audio_path = Path("test_audio.wav")
+        audio_path.write_bytes(b"fake audio")
+        music_flamingo_tools.audio_service.get_audio_path = MagicMock(return_value=audio_path)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Upload failed"
+
+        music_flamingo_tools.client.post = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "Upload error",
+                request=MagicMock(),
+                response=mock_response,
+            )
+        )
+
+        result = await music_flamingo_tools.analyze_music_with_flamingo("Test", "test_audio_id")
+
+        assert "error" in result
+        assert "Failed to upload audio" in result["error"]
+        assert "500" in result["error"]
+
+        audio_path.unlink()
+
+    @pytest.mark.asyncio
+    async def test_analyze_music_audio_upload_general_error(self, music_flamingo_tools):
+        """Test error handling when audio upload fails with general error"""
+        audio_path = Path("test_audio.wav")
+        audio_path.write_bytes(b"fake audio")
+        music_flamingo_tools.audio_service.get_audio_path = MagicMock(return_value=audio_path)
+
+        music_flamingo_tools.client.post = AsyncMock(side_effect=Exception("Network error"))
+
+        result = await music_flamingo_tools.analyze_music_with_flamingo("Test", "test_audio_id")
+
+        assert "error" in result
+        assert "Error uploading audio" in result["error"]
+
+        audio_path.unlink()
+
+    @pytest.mark.asyncio
+    async def test_analyze_music_inference_http_error(self, music_flamingo_tools):
+        """Test error handling when inference fails with HTTP error"""
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        mock_response.text = "Service unavailable"
+
+        music_flamingo_tools.client.post = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "Inference error",
+                request=MagicMock(),
+                response=mock_response,
+            )
+        )
+
+        result = await music_flamingo_tools.analyze_music_with_flamingo("Test")
+
+        assert "error" in result
+        assert "Music Flamingo service error" in result["error"]
+        assert "503" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_music_inference_request_error(self, music_flamingo_tools):
+        """Test error handling when inference fails with request error"""
+        import httpx
+
+        music_flamingo_tools.client.post = AsyncMock(
+            side_effect=httpx.RequestError("Connection failed", request=MagicMock())
+        )
+
+        result = await music_flamingo_tools.analyze_music_with_flamingo("Test")
+
+        assert "error" in result
+        assert "Failed to connect to Music Flamingo service" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_music_inference_general_error(self, music_flamingo_tools):
+        """Test error handling when inference fails with general error"""
+        music_flamingo_tools.client.post = AsyncMock(side_effect=Exception("Unexpected error"))
+
+        result = await music_flamingo_tools.analyze_music_with_flamingo("Test")
+
+        assert "error" in result
+        assert "Unexpected error" in result["error"]

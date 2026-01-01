@@ -494,6 +494,130 @@ Track 1:
             pytest.skip("fluidsynth or music21 not available")
 
     @pytest.mark.asyncio
+    async def test_synthesize_with_pyfluidsynth_success(self, midi_tools, temp_dir):
+        """Test _synthesize_with_pyfluidsynth success path (lines 268-280, 285-299)"""
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+
+        import numpy as np
+
+        from zikos.config import settings
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
+
+        try:
+            import fluidsynth
+            import music21
+        except ImportError:
+            pytest.skip("fluidsynth or music21 not available")
+
+        with patch.object(settings, "midi_storage_path", temp_dir):
+            with patch.object(settings, "audio_storage_path", temp_dir):
+                midi_file_id = "test_pyfluidsynth_success"
+                midi_path = temp_dir / f"{midi_file_id}.mid"
+
+                midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+  E4 velocity=60 duration=0.5
+  G4 velocity=60 duration=0.5
+[/MIDI]
+"""
+                midi_text_to_file(midi_text, midi_path)
+
+                soundfont_path = temp_dir / "test.sf2"
+                soundfont_path.touch()
+
+                mock_synth = MagicMock()
+                mock_synth.sfload.return_value = 1
+                mock_synth.get_samples.return_value = np.array([1000, 2000, 3000], dtype=np.int16)
+                mock_synth.start = MagicMock()
+                mock_synth.delete = MagicMock()
+
+                mock_note = MagicMock()
+                mock_note.pitch.midi = 60
+                mock_note.duration.quarterLength = 0.5
+                mock_note.volume.velocity = 60
+
+                mock_stream = MagicMock()
+                mock_stream.flat.notes = [mock_note]
+
+                with patch("music21.midi.translate.midiFilePathToStream", return_value=mock_stream):
+                    with patch("fluidsynth.Synth", return_value=mock_synth):
+                        result = await midi_tools._synthesize_with_pyfluidsynth(
+                            midi_path, soundfont_path, "piano"
+                        )
+
+                        assert "audio_file_id" in result
+                        assert result["midi_file_id"] == midi_file_id
+                        assert result["instrument"] == "piano"
+                        assert "duration" in result
+                        assert result["synthesis_method"] == "fluidsynth"
+                        mock_synth.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_synthesize_with_pyfluidsynth_note_with_volume(self, midi_tools, temp_dir):
+        """Test _synthesize_with_pyfluidsynth with notes that have volume attributes"""
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+
+        import numpy as np
+
+        from zikos.config import settings
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
+
+        try:
+            import fluidsynth
+            import music21
+        except ImportError:
+            pytest.skip("fluidsynth or music21 not available")
+
+        with patch.object(settings, "midi_storage_path", temp_dir):
+            with patch.object(settings, "audio_storage_path", temp_dir):
+                midi_file_id = "test_pyfluidsynth_volume"
+                midi_path = temp_dir / f"{midi_file_id}.mid"
+
+                midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=80 duration=1.0
+[/MIDI]
+"""
+                midi_text_to_file(midi_text, midi_path)
+
+                soundfont_path = temp_dir / "test.sf2"
+                soundfont_path.touch()
+
+                mock_synth = MagicMock()
+                mock_synth.sfload.return_value = 1
+                mock_synth.get_samples.return_value = np.array([1000, 2000], dtype=np.int16)
+                mock_synth.start = MagicMock()
+                mock_synth.delete = MagicMock()
+
+                mock_note = MagicMock()
+                mock_note.pitch.midi = 60
+                mock_note.duration.quarterLength = 1.0
+                mock_volume = MagicMock()
+                mock_volume.velocity = 80
+                mock_note.volume = mock_volume
+
+                mock_stream = MagicMock()
+                mock_stream.flat.notes = [mock_note]
+
+                with patch("music21.midi.translate.midiFilePathToStream", return_value=mock_stream):
+                    with patch("fluidsynth.Synth", return_value=mock_synth):
+                        result = await midi_tools._synthesize_with_pyfluidsynth(
+                            midi_path, soundfont_path, "piano"
+                        )
+
+                        assert "audio_file_id" in result
+                        mock_synth.noteon.assert_called()
+                        call_args = mock_synth.noteon.call_args[0]
+                        assert call_args[2] == 80
+
+    @pytest.mark.asyncio
     async def test_midi_to_notation_sheet_music_error(self, midi_tools, temp_dir):
         """Test midi_to_notation when sheet music generation fails"""
         from pathlib import Path

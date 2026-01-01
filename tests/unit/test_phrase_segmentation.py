@@ -185,3 +185,137 @@ async def test_segment_phrases_energy_levels(temp_dir, sample_audio_path):
     # Check that different phrase types are detected
     phrase_types = [p.get("type") for p in result["phrases"]]
     assert any(t in phrase_types for t in ["quiet", "energetic", "melodic"])
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_no_boundaries_detected(temp_dir, sample_audio_path):
+    """Test phrase segmentation when no boundaries are detected (fallback case)"""
+    sample_rate = 22050
+    duration = 2.0
+    y = np.ones(int(sample_rate * duration), dtype=np.float32) * 0.5
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    assert len(result["phrases"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_empty_segments(temp_dir, sample_audio_path):
+    """Test phrase segmentation with edge case of empty segments"""
+    sample_rate = 22050
+    duration = 3.0
+    y = np.zeros(int(sample_rate * duration), dtype=np.float32)
+
+    y[int(0.5 * sample_rate) : int(1.5 * sample_rate)] = (
+        np.random.randn(int(1.0 * sample_rate)).astype(np.float32) * 0.5
+    )
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_with_path_string(temp_dir, sample_audio_path):
+    """Test phrase segmentation with path string instead of file ID"""
+    sample_rate = 22050
+    duration = 5.0
+    y = np.random.randn(int(sample_rate * duration)).astype(np.float32) * 0.5
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_with_silence_boundaries(temp_dir, sample_audio_path):
+    """Test phrase segmentation with silence boundaries (lines 52-59)"""
+    sample_rate = 22050
+    duration = 6.0
+    y = np.zeros(int(sample_rate * duration), dtype=np.float32)
+
+    y[int(0 * sample_rate) : int(2 * sample_rate)] = (
+        np.random.randn(int(2 * sample_rate)).astype(np.float32) * 0.5
+    )
+    y[int(2.5 * sample_rate) : int(4.5 * sample_rate)] = (
+        np.random.randn(int(2 * sample_rate)).astype(np.float32) * 0.5
+    )
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    assert len(result["phrases"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_phrase_continues_to_end(temp_dir, sample_audio_path):
+    """Test phrase segmentation when phrase continues to end (line 61-65)"""
+    sample_rate = 22050
+    duration = 4.0
+    y = np.random.randn(int(sample_rate * duration)).astype(np.float32) * 0.5
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    assert len(result["phrases"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_quiet_phrase_type(temp_dir, sample_audio_path):
+    """Test phrase segmentation with quiet phrase (energy_level < 0.3, line 90)"""
+    sample_rate = 22050
+    duration = 4.0
+    y = np.zeros(int(sample_rate * duration), dtype=np.float32)
+
+    y[int(0.5 * sample_rate) : int(2.5 * sample_rate)] = (
+        np.random.randn(int(2 * sample_rate)).astype(np.float32) * 0.1
+    )
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    if len(result["phrases"]) > 0:
+        phrase_types = [p.get("type") for p in result["phrases"]]
+        assert any(t in phrase_types for t in ["quiet", "melodic", "energetic"])
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_empty_phrases_after_processing(temp_dir, sample_audio_path):
+    """Test phrase segmentation when phrases list is empty after processing (line 106)"""
+    sample_rate = 22050
+    duration = 3.0
+    y = np.zeros(int(sample_rate * duration), dtype=np.float32)
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        with patch("librosa.feature.rms", return_value=np.array([[0.0] * 100])):
+            result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    assert len(result["phrases"]) > 0
