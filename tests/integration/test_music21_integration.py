@@ -52,18 +52,40 @@ class TestMusic21Integration:
     @pytest.mark.asyncio
     async def test_midi_to_notation_with_music21(self, temp_dir):
         """Test MIDI to notation rendering using music21 (when implemented)"""
+        from unittest.mock import patch
+
+        from zikos.config import settings
         from zikos.mcp.tools.processing.midi import MidiTools
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
-        tools = MidiTools()
-        result = await tools.midi_to_notation("test_midi", "both")
+        try:
+            with patch.object(settings, "midi_storage_path", temp_dir):
+                with patch.object(settings, "notation_storage_path", temp_dir):
+                    tools = MidiTools()
+                    with patch.object(tools, "storage_path", temp_dir):
+                        midi_file_id = "test_midi"
+                        midi_path = temp_dir / f"{midi_file_id}.mid"
 
-        assert "midi_file_id" in result
-        assert "format" in result
+                        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+                        midi_text_to_file(midi_text, midi_path)
 
-        if "sheet_music_url" in result:
-            assert isinstance(result["sheet_music_url"], str)
-        if "tabs_url" in result:
-            assert isinstance(result["tabs_url"], str)
+                        result = await tools.midi_to_notation(midi_file_id, "both")
+
+                        assert "midi_file_id" in result
+                        assert "format" in result
+
+                        if "sheet_music_url" in result:
+                            assert isinstance(result["sheet_music_url"], str)
+                        if "tabs_url" in result:
+                            assert isinstance(result["tabs_url"], str)
+        except ImportError:
+            pytest.skip("music21 not available")
 
     @pytest.mark.asyncio
     async def test_music21_stream_creation(self):
