@@ -30,7 +30,6 @@ class TestKeyDetection:
     """Tests for key detection with real audio"""
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_detect_key_c_major(self, c_major_scale_audio):
         """Test key detection for C major scale"""
         result = await detect_key(str(c_major_scale_audio))
@@ -48,7 +47,6 @@ class TestKeyDetection:
         assert "c" in key_lower
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_detect_key_alternative_keys(self, c_major_scale_audio):
         """Test alternative key suggestions"""
         result = await detect_key(str(c_major_scale_audio))

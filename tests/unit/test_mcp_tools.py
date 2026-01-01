@@ -99,6 +99,15 @@ async def test_create_metronome():
 
 
 @pytest.mark.asyncio
+async def test_metronome_call_tool_unknown_tool():
+    """Test metronome call_tool with unknown tool"""
+    tools = MetronomeTools()
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await tools.call_tool("unknown_tool", bpm=120)
+
+
+@pytest.mark.asyncio
 async def test_create_tuner():
     """Test tuner creation tool"""
     tools = TunerTools()
@@ -192,3 +201,48 @@ async def test_request_audio_recording():
     assert result["prompt"] == "Play C major scale"
     assert result["max_duration"] == 60.0
     assert "recording_id" in result
+
+
+@pytest.mark.asyncio
+async def test_tuner_call_tool_unknown_tool():
+    """Test tuner call_tool with unknown tool"""
+    tools = TunerTools()
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await tools.call_tool("unknown_tool", reference_frequency=440.0)
+
+
+@pytest.mark.asyncio
+async def test_tempo_trainer_call_tool_unknown_tool():
+    """Test tempo trainer call_tool with unknown tool"""
+    tools = TempoTrainerTools()
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await tools.call_tool("unknown_tool", start_bpm=60)
+
+
+@pytest.mark.asyncio
+async def test_chord_progression_call_tool_unknown_tool():
+    """Test chord progression call_tool with unknown tool"""
+    tools = ChordProgressionTools()
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await tools.call_tool("unknown_tool", chords=["C"])
+
+
+@pytest.mark.asyncio
+async def test_ear_trainer_call_tool_unknown_tool():
+    """Test ear trainer call_tool with unknown tool"""
+    tools = EarTrainerTools()
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await tools.call_tool("unknown_tool", mode="intervals")
+
+
+@pytest.mark.asyncio
+async def test_practice_timer_call_tool_unknown_tool():
+    """Test practice timer call_tool with unknown tool"""
+    tools = PracticeTimerTools()
+
+    with pytest.raises(ValueError, match="Unknown tool"):
+        await tools.call_tool("unknown_tool", duration_minutes=30)

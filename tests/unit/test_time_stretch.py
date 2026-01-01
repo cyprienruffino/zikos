@@ -1,4 +1,8 @@
-"""Tests for time-stretching and pitch-shifting tools"""
+"""Tests for time-stretching and pitch-shifting tools
+
+Note: These tests require pyrubberband which may not be available in all environments.
+They will be skipped if pyrubberband is not installed.
+"""
 
 from pathlib import Path
 from unittest.mock import patch

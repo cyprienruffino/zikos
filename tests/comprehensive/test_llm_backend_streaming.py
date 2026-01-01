@@ -1,4 +1,9 @@
-"""Unit tests for LLM backend streaming functionality"""
+"""Unit tests for LLM backend streaming functionality
+
+Note: This file imports excluded backend implementations (llama_cpp, transformers).
+These are only tested in comprehensive tests that require real models.
+For unit tests, we test the base interface only.
+"""
 
 from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock, patch
@@ -8,6 +13,8 @@ import pytest
 from zikos.services.llm_backends.base import LLMBackend
 from zikos.services.llm_backends.llama_cpp import LlamaCppBackend
 from zikos.services.llm_backends.transformers import TransformersBackend
+
+pytestmark = pytest.mark.comprehensive
 
 
 class MockBackend(LLMBackend):

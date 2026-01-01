@@ -25,7 +25,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsndfile1 libsndfile1-dev rubberband-cli ffmpeg
+          sudo apt-get install -y libsndfile1 libsndfile1-dev rubberband-cli ffmpeg fluidsynth
 
       - name: Cache pip packages
         uses: actions/cache@v4
@@ -49,6 +49,10 @@ jobs:
       - name: Run unit tests
         run: |
           pytest tests/unit/ -v -m "not comprehensive and not integration" --cov=backend/zikos --cov-report=term-missing --cov-report=xml
+
+      - name: Run comprehensive tests
+        run: |
+          pytest tests/comprehensive/ -v --no-cov
 
       - name: Run integration tests
         run: |

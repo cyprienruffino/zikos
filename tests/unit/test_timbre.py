@@ -52,7 +52,6 @@ class TestTimbreAnalysis:
     """Tests for timbre analysis with real audio"""
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_timbre_basic(self, bright_audio_file):
         """Test basic timbre analysis"""
         result = await analyze_timbre(str(bright_audio_file))
@@ -68,7 +67,6 @@ class TestTimbreAnalysis:
         assert result["spectral_centroid"] > 0
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_timbre_bright_vs_warm(self, bright_audio_file, warm_audio_file):
         """Test that bright audio has higher brightness than warm"""
         bright_result = await analyze_timbre(str(bright_audio_file))
@@ -79,7 +77,6 @@ class TestTimbreAnalysis:
         assert warm_result["warmth"] > bright_result["warmth"]
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_timbre_spectral_features(self, bright_audio_file):
         """Test spectral feature extraction"""
         result = await analyze_timbre(str(bright_audio_file))

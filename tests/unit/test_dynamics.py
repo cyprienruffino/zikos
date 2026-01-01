@@ -34,7 +34,6 @@ class TestDynamicsAnalysis:
     """Tests for dynamics analysis with real audio"""
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_dynamics_basic(self, real_audio_file):
         """Test basic dynamics analysis with real audio"""
         result = await analyze_dynamics(str(real_audio_file))
@@ -50,7 +49,6 @@ class TestDynamicsAnalysis:
         assert 0.0 <= result["dynamic_consistency"] <= 1.0
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_dynamics_amplitude_envelope(self, real_audio_file):
         """Test amplitude envelope extraction"""
         result = await analyze_dynamics(str(real_audio_file))
@@ -63,7 +61,6 @@ class TestDynamicsAnalysis:
             assert "rms" in envelope_point
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_dynamics_consistent_volume(self, temp_dir):
         """Test dynamics analysis with consistent volume"""
         sr = 22050
@@ -79,7 +76,6 @@ class TestDynamicsAnalysis:
         assert result["dynamic_consistency"] > 0.8
 
     @pytest.mark.asyncio
-    @pytest.mark.comprehensive
     async def test_analyze_dynamics_varying_volume(self, temp_dir):
         """Test dynamics analysis with varying volume"""
         sr = 22050

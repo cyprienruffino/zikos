@@ -113,3 +113,75 @@ async def test_segment_phrases_via_call_tool(temp_dir, sample_audio_path):
 
     assert "error" not in result
     assert "phrases" in result
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_no_phrases_detected(temp_dir, sample_audio_path):
+    """Test phrase segmentation when no phrases are detected (returns fallback)"""
+    sample_rate = 22050
+    duration = 2.0
+    # Create very quiet audio that might not trigger phrase detection
+    y = np.random.randn(int(sample_rate * duration)).astype(np.float32) * 0.01
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    assert "phrase_count" in result
+    # Should return at least one phrase (fallback or detected)
+    assert len(result["phrases"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_processing_failure(temp_dir, sample_audio_path):
+    """Test phrase segmentation when processing fails"""
+    sample_rate = 22050
+    duration = 2.0
+    y = np.random.randn(int(sample_rate * duration)).astype(np.float32) * 0.5
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        with patch("librosa.load", side_effect=Exception("Processing error")):
+            result = await segment_phrases(str(sample_audio_path))
+
+    assert result["error"] is True
+    assert result["error_type"] == "PROCESSING_FAILED"
+    assert "message" in result
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_energy_levels(temp_dir, sample_audio_path):
+    """Test phrase segmentation with different energy levels"""
+    sample_rate = 22050
+    duration = 6.0
+    y = np.zeros(int(sample_rate * duration), dtype=np.float32)
+
+    # Create quiet phrase
+    y[int(0 * sample_rate) : int(2 * sample_rate)] = (
+        np.random.randn(int(2 * sample_rate)).astype(np.float32) * 0.1
+    )
+    # Create energetic phrase
+    y[int(2 * sample_rate) : int(4 * sample_rate)] = (
+        np.random.randn(int(2 * sample_rate)).astype(np.float32) * 0.9
+    )
+    # Create melodic phrase
+    y[int(4 * sample_rate) : int(6 * sample_rate)] = (
+        np.random.randn(int(2 * sample_rate)).astype(np.float32) * 0.5
+    )
+
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result
+    assert "phrases" in result
+    assert len(result["phrases"]) > 0
+
+    # Check that different phrase types are detected
+    phrase_types = [p.get("type") for p in result["phrases"]]
+    assert any(t in phrase_types for t in ["quiet", "energetic", "melodic"])
