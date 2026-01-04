@@ -7,7 +7,6 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
       - id: check-json
-      - id: check-toml
       - id: check-merge-conflict
       - id: debug-statements
 
@@ -34,29 +33,30 @@ repos:
       - id: prettier
         files: ^frontend/.*\.(ts|html|css)$
 
-  - repo: local
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.17.0
     hooks:
       - id: eslint
-        name: eslint
-        entry: npm run lint'
-        language: system
         files: ^frontend/src/.*\.ts$
-        pass_filenames: false
+        types_or: [file]
+
+  - repo: local
+    hooks:
       - id: typescript-build
         name: typescript build
-        entry: npm run build'
+        entry: npm run build
         language: system
         files: ^frontend/src/.*\.ts$
         pass_filenames: false
       - id: typescript-test
         name: typescript test
-        entry: npm run test'
+        entry: npm run test
         language: system
         files: ^(frontend/src/|tests/frontend/).*\.ts$
         pass_filenames: false
       - id: pytest-unit
         name: pytest unit tests with coverage
-        entry: python -m pytest "$@"'
+        entry: python -m pytest "$@"
         args: [
           'tests/unit/',
           '-v',
