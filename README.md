@@ -91,6 +91,67 @@ python run.py
 
 API will be available at `http://localhost:8000`
 
+## Docker
+
+Zikos can be run using Docker, which handles all dependencies and setup automatically.
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- LLM model file downloaded to `./models/` directory (see [Downloading Models](#downloading-models))
+
+### Using Docker Compose (Recommended)
+
+The easiest way to run Zikos with Docker:
+
+```bash
+# Set the model filename (optional, defaults to Llama-3.1-8B-Instruct-Q4_K_M.gguf)
+export LLM_MODEL_FILE=Qwen2.5-7B-Instruct-Q4_K_M.gguf
+
+# Build and start the container
+docker-compose up --build
+
+# Or run in detached mode
+docker-compose up -d --build
+```
+
+The API will be available at `http://localhost:8000`. The container automatically:
+- Builds the frontend TypeScript code
+- Mounts your `./models` directory (read-only) for model access
+- Creates and mounts storage directories for audio, MIDI, and notation files
+- Sets up environment variables with sensible defaults
+
+### Using Docker Directly
+
+```bash
+# Build the image
+docker build -t zikos .
+
+# Run the container
+docker run -d \
+  --name zikos \
+  -p 8000:8000 \
+  -v ./models:/app/models:ro \
+  -v ./audio_storage:/app/audio_storage \
+  -v ./midi_storage:/app/midi_storage \
+  -v ./notation_storage:/app/notation_storage \
+  -e LLM_MODEL_PATH=/app/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf \
+  -e LLM_N_CTX=32768 \
+  -e LLM_N_GPU_LAYERS=0 \
+  zikos
+```
+
+### Docker Configuration
+
+The Docker setup uses volumes to persist data:
+- `./models` → `/app/models` (read-only): Model files
+- `./audio_storage` → `/app/audio_storage`: Uploaded audio files
+- `./midi_storage` → `/app/midi_storage`: Generated MIDI files
+- `./notation_storage` → `/app/notation_storage`: Generated notation files
+
+Environment variables can be customized in `docker-compose.yml` or passed via `-e` flags when using `docker run`. See [Environment Variables](#environment-variables) for available options.
+
+**Note**: For GPU support, you'll need to configure Docker with GPU access (e.g., `--gpus all` flag or Docker Compose GPU configuration) and adjust `LLM_N_GPU_LAYERS` accordingly.
 
 ## Development
 ### Dependencies
@@ -167,3 +228,30 @@ pytest -m not comprehensive  # Run all but comprehensive tests
 pytest -m integration    # Run integration tests
 pytest -m ""             # Run all tests including comprehensive and integration
 ```
+
+### Continuous Integration
+
+The project uses GitHub Actions for CI/CD. The workflow (`.github/workflows/ci.yml`) runs automatically on pushes and pull requests to `main` and `develop` branches.
+
+#### CI Jobs
+
+1. **Test** (Python 3.11, 3.12, 3.13)
+   - Runs unit tests with coverage (minimum 75% required)
+   - Runs integration tests (excluding comprehensive tests)
+   - Uploads coverage to Codecov (Python 3.13 only)
+   - Installs system dependencies (libsndfile, ffmpeg, fluidsynth, etc.)
+
+2. **Lint**
+   - Runs `ruff` for linting
+   - Runs `black --check` for code formatting
+   - Runs `mypy` for type checking
+
+3. **TypeScript Type Check**
+   - Runs TypeScript type checking
+   - Runs ESLint for frontend code quality
+
+4. **Frontend Tests**
+   - Runs frontend test suite with coverage
+   - Uploads coverage to Codecov
+
+All jobs must pass for a PR to be mergeable. The CI ensures code quality, type safety, and test coverage across multiple Python versions and the frontend.
