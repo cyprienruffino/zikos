@@ -30,6 +30,12 @@ class LLMConstants:
     # Default max_tokens for _prepare_messages (legacy, can be overridden)
     DEFAULT_MAX_TOKENS: int = 3000
 
+    # LLM configuration defaults
+    DEFAULT_N_CTX: int = 32768
+    DEFAULT_N_GPU_LAYERS: int = -1
+    DEFAULT_TEMPERATURE: float = 0.7
+    DEFAULT_TOP_P: float = 0.9
+
 
 class AudioAnalysisConstants:
     """Constants for audio analysis tools"""

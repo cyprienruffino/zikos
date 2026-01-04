@@ -47,9 +47,12 @@ Track 1:
                 assert result["duration"] > 0
                 assert result["synthesis_method"] == "fluidsynth"
 
-                audio_path = Path(settings.audio_storage_path) / f"{result['audio_file_id']}.wav"
-                assert audio_path.exists()
-                assert audio_path.stat().st_size > 0
+                from unittest.mock import patch
+
+                with patch.object(settings, "audio_storage_path", temp_dir):
+                    audio_path = temp_dir / f"{result['audio_file_id']}.wav"
+                    assert audio_path.exists()
+                    assert audio_path.stat().st_size > 0
 
             except (RuntimeError, FileNotFoundError, ImportError) as e:
                 error_msg = str(e).lower()
@@ -133,15 +136,17 @@ Track 1:
                 assert result["midi_file_id"] == midi_file_id
                 assert "format" in result
 
-                if "sheet_music_url" in result:
-                    notation_path = Path(settings.notation_storage_path)
-                    sheet_path = notation_path / f"sheet_{midi_file_id}.png"
-                    if sheet_path.exists():
-                        assert sheet_path.stat().st_size > 0
-                elif "sheet_music_error" in result:
-                    error = result["sheet_music_error"]
-                    if "lilypond" in error.lower() or "musescore" in error.lower():
-                        pytest.skip(f"Notation rendering backend not available: {error}")
+                from unittest.mock import patch
+
+                with patch.object(settings, "notation_storage_path", temp_dir):
+                    if "sheet_music_url" in result:
+                        sheet_path = temp_dir / f"sheet_{midi_file_id}.png"
+                        if sheet_path.exists():
+                            assert sheet_path.stat().st_size > 0
+                    elif "sheet_music_error" in result:
+                        error = result["sheet_music_error"]
+                        if "lilypond" in error.lower() or "musescore" in error.lower():
+                            pytest.skip(f"Notation rendering backend not available: {error}")
             except Exception as e:
                 error_msg = str(e).lower()
                 if "lilypond" in error_msg or "musescore" in error_msg:

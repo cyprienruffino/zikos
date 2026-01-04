@@ -1,7 +1,6 @@
 # Music Flamingo Migration Analysis
 
-## Current Architecture Summary
-
+## Current Architecture
 - **Text-only LLM** (Qwen2.5/Qwen3) for chat interactions
 - **Audio analysis** via librosa-based signal processing tools (tempo, pitch, rhythm, etc.)
 - **Tool-based approach**: LLM receives analysis results as text/JSON
@@ -12,7 +11,7 @@
 ### 1. Backend Architecture Changes
 
 **A. New Backend Implementation**
-- Create a new `MusicFlamingoBackend` class (or extend `TransformersBackend`)
+- Create `MusicFlamingoBackend` class (or extend `TransformersBackend`)
 - Use `AudioFlamingo3ForConditionalGeneration` instead of `AutoModelForCausalLM`
 - Use `AutoProcessor` instead of `AutoTokenizer`
 - Handle multimodal inputs (text + audio)
@@ -68,38 +67,16 @@ conversation = [{
 - Handle model download from HuggingFace
 
 ### 4. Dependencies
-
-**A. New Requirements**
 - Already have `transformers` and `torch`
 - May need `accelerate` for model loading
 - Verify audio processing libraries compatibility
 
-**B. Hardware Requirements**
-- Music Flamingo requires NVIDIA GPU (A100/H100 recommended)
-- Higher VRAM requirements than current Qwen models
-- Update documentation and configuration
-
 ## Potential Improvements
 
-### 1. Direct Audio Understanding
-- Model processes audio directly instead of librosa-derived features
-- Better musical understanding (genre, emotion, production style)
-- Can analyze full tracks (up to 20 minutes)
-
-### 2. Unified Model
-- Single model for chat and audio analysis
-- Reduces complexity vs. separate LLM + analysis tools
-- More coherent responses
-
-### 3. Enhanced Musical Reasoning
-- Chain-of-thought reasoning
-- Better interpretation of musical context
-- More nuanced feedback
-
-### 4. Reduced Tool Dependency
-- Less reliance on librosa analysis tools
-- Simpler architecture (fewer moving parts)
-- Faster feedback (no separate analysis step)
+1. **Direct Audio Understanding**: Model processes audio directly instead of librosa-derived features
+2. **Unified Model**: Single model for chat and audio analysis
+3. **Enhanced Musical Reasoning**: Chain-of-thought reasoning, better interpretation
+4. **Reduced Tool Dependency**: Less reliance on librosa analysis tools
 
 ## Potential Issues & Concerns
 
@@ -141,12 +118,7 @@ conversation = [{
 - Tool-based analysis may still be needed for some features
 - Consider keeping both paths (hybrid approach)
 
-### 8. Model Availability & Licensing
-- Verify HuggingFace model availability
-- Check licensing for commercial use
-- Model size and download requirements
-
-## Design Questions to Consider
+## Design Questions
 
 1. **Tool Calling**: Does Music Flamingo support function calling? If not, how do we handle MCP tools?
 2. **Hybrid Approach**: Use Music Flamingo for audio understanding + Qwen for tool orchestration?
@@ -155,23 +127,6 @@ conversation = [{
 5. **Conversation Flow**: How to handle multi-turn conversations with audio context?
 
 ## Recommended Approach
-
-### Phase 1: Proof of Concept
-- Create `MusicFlamingoBackend` class
-- Test basic audio + text inference
-- Verify tool calling support
-
-### Phase 2: Integration
-- Integrate with existing audio upload flow
-- Update `handle_audio_ready()` to use Music Flamingo
-- Keep librosa tools as fallback
-
-### Phase 3: Optimization
-- Handle tool calling (or hybrid approach)
-- Optimize performance and memory
-- Update tests and documentation
-
-## User Feedback & Decisions
 
 ### Hybrid Approach (Preferred)
 - **Qwen orchestrates tools** and handles analysis
@@ -182,6 +137,11 @@ conversation = [{
   - Leverages both signal processing (exact) and model predictions (semantic)
   - Easier incremental rollout
   - Better resource management
+
+### Implementation Strategy
+- **Option 1**: Add Music Flamingo as optional tool (recommended for incremental rollout)
+- **Option 2**: Replace model completely (simpler but loses tool calling)
+- **Decision**: Prefer Option 1 - keeps current workflow, adds capability
 
 ### Streaming Strategies
 - **Context window extension**: Need to explore sliding window, summarization, or retrieval-augmented generation
@@ -197,7 +157,19 @@ conversation = [{
 - **Complementary information**: Both approaches valuable
 - **Hybrid analysis**: Combine librosa precision with Music Flamingo semantic understanding
 
-### Implementation Strategy
-- **Option 1**: Add Music Flamingo as optional tool (recommended for incremental rollout)
-- **Option 2**: Replace model completely (simpler but loses tool calling)
-- **Decision**: Prefer Option 1 - keeps current workflow, adds capability
+## Model Details
+
+**Model**: `nvidia/music-flamingo-hf` (Audio Flamingo 3, 8B parameters)
+
+**Key Constraints**:
+- Max audio length: 20 minutes total
+- Processing: 30-second windows
+- Per-sample cap: 10 minutes (truncated if longer)
+- Formats: WAV, MP3, FLAC
+- Max input text: 24,000 tokens
+- Max output text: 2,048 tokens
+
+**Architecture**:
+- AF-Whisper unified audio encoder
+- MLP-based audio adaptor
+- Qwen2.5-7B decoder-only LLM backbone

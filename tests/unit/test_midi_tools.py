@@ -172,7 +172,7 @@ Track 1:
         try:
             with patch.object(settings, "midi_storage_path", temp_dir):
                 with patch.object(settings, "audio_storage_path", temp_dir):
-                    midi_path = Path(settings.midi_storage_path) / "test_midi.mid"
+                    midi_path = temp_dir / "test_midi.mid"
                     midi_path.parent.mkdir(parents=True, exist_ok=True)
 
                     midi_text = """
@@ -755,17 +755,21 @@ Track 1:
         assert result["valid"] is False
 
     @pytest.mark.asyncio
-    async def test_midi_to_notation_sheet_music(self, midi_tools, temp_dir):
+    async def test_midi_to_notation_sheet_music(self, midi_tools, storage_paths):
         """Test MIDI to notation with sheet_music format"""
         from pathlib import Path
+        from unittest.mock import patch
 
         from zikos.config import settings
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
-            midi_file_id = "test_notation_sheet"
-            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
-            midi_path.parent.mkdir(parents=True, exist_ok=True)
+            with patch.object(settings, "midi_storage_path", storage_paths):
+                with patch.object(settings, "notation_storage_path", storage_paths):
+                    with patch.object(midi_tools, "storage_path", storage_paths):
+                        midi_file_id = "test_notation_sheet"
+                        midi_path = storage_paths / f"{midi_file_id}.mid"
+                        midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """
 [MIDI]
@@ -784,17 +788,21 @@ Track 1:
             pytest.skip("music21 not available")
 
     @pytest.mark.asyncio
-    async def test_midi_to_notation_tabs(self, midi_tools, temp_dir):
+    async def test_midi_to_notation_tabs(self, midi_tools, storage_paths):
         """Test MIDI to notation with tabs format"""
         from pathlib import Path
+        from unittest.mock import patch
 
         from zikos.config import settings
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
-            midi_file_id = "test_notation_tabs"
-            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
-            midi_path.parent.mkdir(parents=True, exist_ok=True)
+            with patch.object(settings, "midi_storage_path", storage_paths):
+                with patch.object(settings, "notation_storage_path", storage_paths):
+                    with patch.object(midi_tools, "storage_path", storage_paths):
+                        midi_file_id = "test_notation_tabs"
+                        midi_path = storage_paths / f"{midi_file_id}.mid"
+                        midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """
 [MIDI]

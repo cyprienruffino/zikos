@@ -53,16 +53,15 @@ Track 1:
 
         assert response.status_code in [200, 400]
 
-    def test_synthesize_midi(self, client, temp_dir):
+    def test_synthesize_midi(self, client, storage_paths):
         """Test MIDI synthesis with real implementation"""
         from pathlib import Path
 
-        from zikos.config import settings
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_synth"
-            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
+            midi_path = storage_paths / f"{midi_file_id}.mid"
             midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """
@@ -93,16 +92,15 @@ Track 1:
         except ImportError:
             pytest.skip("music21 not available")
 
-    def test_render_notation(self, client, temp_dir):
+    def test_render_notation(self, client, storage_paths):
         """Test notation rendering with real implementation"""
         from pathlib import Path
 
-        from zikos.config import settings
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_notation"
-            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
+            midi_path = storage_paths / f"{midi_file_id}.mid"
             midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """
@@ -146,16 +144,15 @@ Track 1:
         data = response.json()
         assert "detail" in data
 
-    def test_get_midi_file(self, client, temp_dir):
+    def test_get_midi_file(self, client, storage_paths):
         """Test getting MIDI file with real implementation"""
         from pathlib import Path
 
-        from zikos.config import settings
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_get_midi"
-            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
+            midi_path = storage_paths / f"{midi_file_id}.mid"
             midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """

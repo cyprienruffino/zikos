@@ -56,7 +56,7 @@ repos:
         pass_filenames: false
       - id: pytest-unit
         name: pytest unit tests with coverage
-        entry: python -m pytest "$@"
+        entry: pytest
         args: [
           'tests/unit/',
           '-v',

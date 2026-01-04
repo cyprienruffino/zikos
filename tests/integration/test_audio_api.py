@@ -91,17 +91,15 @@ class TestAudioAPI:
         data = response.json()
         assert "audio_file_id" in data
 
-    def test_get_audio_info(self, client, temp_dir):
+    def test_get_audio_info(self, client, storage_paths):
         """Test getting audio info with real implementation"""
         import math
         import uuid
         import wave
         from pathlib import Path
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = storage_paths / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
 
         sample_rate = 44100
@@ -137,17 +135,15 @@ class TestAudioAPI:
         assert data["error"] is True
         assert data["error_type"] == "FILE_NOT_FOUND"
 
-    def test_get_audio_file(self, client, temp_dir):
+    def test_get_audio_file(self, client, storage_paths):
         """Test getting audio file with real implementation"""
         import math
         import uuid
         import wave
         from pathlib import Path
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = storage_paths / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
 
         sample_rate = 44100

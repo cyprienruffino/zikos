@@ -1,7 +1,6 @@
 # Coverage Strategy
 
 ## Current Status
-
 - **Current Coverage**: 71%
 - **Required Coverage**: 75%
 - **Gap**: 4 percentage points
@@ -9,12 +8,11 @@
 ## Files Excluded from Coverage
 
 These files are excluded because they require expensive resources or are hard to test in CI:
-
 1. **LLM Service** (`services/llm.py`) - Requires real LLM models and good hardware
 2. **LLM Backends** (`llm_backends/*`) - Require real models, good hardware, and are integration-tested
 3. **GPU Utils** (`utils/gpu.py`) - Environment-specific, hard to test in CI
 
-**Note**: Audio analysis modules (articulation, chords, dynamics, groove, key, timbre, time_stretch) are now included in coverage as they can be tested with real librosa on synthetic audio without requiring expensive resources.
+**Note**: Audio analysis modules (articulation, chords, dynamics, groove, key, timbre, time_stretch) are included in coverage as they can be tested with real librosa on synthetic audio without requiring expensive resources.
 
 ## Test Organization
 
@@ -39,7 +37,6 @@ These files are excluded because they require expensive resources or are hard to
 ## Files Needing More Tests
 
 ### High Priority (Low Coverage, Testable)
-
 1. **`mcp/tools/processing/midi/midi.py`** - 48% coverage
    - ✅ Added: Synthesis error cases, SoundFont handling
    - ✅ Added: Notation rendering error cases
@@ -55,7 +52,6 @@ These files are excluded because they require expensive resources or are hard to
    - Remaining: Edge cases for parameter validation
 
 ## Strategy
-
 1. **Exclude untestable code**: Files that require external tools or real models should be excluded
 2. **Add unit tests for testable code**: Focus on error cases and edge cases that can be tested without external dependencies
 3. **Comprehensive tests cover the rest**: Comprehensive tests verify full functionality with real dependencies
@@ -70,13 +66,3 @@ Integration tests could be added to cover:
 - Real-time audio processing scenarios
 
 These would run separately from unit tests and provide additional confidence in system behavior.
-
-## Next Steps
-
-1. ✅ Verify `omit` configuration is working correctly
-2. ✅ Add unit tests for error cases in `midi.py`
-3. ✅ Add unit tests for `openai.py` and `qwen.py`
-4. ✅ Add edge case tests for widgets and phrase_segmentation
-5. ✅ Mark tests that import excluded files as comprehensive
-6. Continue adding unit tests for remaining testable code paths
-7. Consider adding integration tests for full workflows

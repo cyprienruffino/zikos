@@ -56,9 +56,7 @@ async def test_analyze_tempo_with_real_audio(temp_dir):
     import uuid
 
     audio_file_id = str(uuid.uuid4())
-    storage_path = Path(settings.audio_storage_path)
-    storage_path.mkdir(parents=True, exist_ok=True)
-    target_path = storage_path / f"{audio_file_id}.wav"
+    target_path = temp_dir / f"{audio_file_id}.wav"
     shutil.copy(audio_file, target_path)
 
     try:

@@ -82,10 +82,8 @@ class TestChatService:
         from pathlib import Path
         from unittest.mock import AsyncMock
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = temp_dir / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
 
@@ -108,10 +106,8 @@ class TestChatService:
         import uuid
         from pathlib import Path
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = temp_dir / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
 
@@ -215,10 +211,8 @@ class TestChatService:
         from pathlib import Path
         from unittest.mock import AsyncMock
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = temp_dir / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
 
@@ -242,10 +236,8 @@ class TestChatService:
         from pathlib import Path
         from unittest.mock import AsyncMock
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = temp_dir / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
 
@@ -266,10 +258,8 @@ class TestChatService:
         from pathlib import Path
         from unittest.mock import AsyncMock
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        audio_path = Path(settings.audio_storage_path) / f"{audio_file_id}.wav"
+        audio_path = temp_dir / f"{audio_file_id}.wav"
         audio_path.parent.mkdir(parents=True, exist_ok=True)
         audio_path.touch()
 

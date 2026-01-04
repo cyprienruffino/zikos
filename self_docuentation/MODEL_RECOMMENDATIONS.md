@@ -1,11 +1,8 @@
 # Model Recommendations
 
-Quick guide to choosing the right LLM model for your hardware.
-
 ## Quick Decision Guide
 
-**Choose based on your GPU VRAM:**
-
+**By GPU VRAM:**
 - **8GB VRAM or less** → Qwen2.5-7B-Instruct
 - **16GB VRAM** → Qwen2.5-14B-Instruct
 - **80GB VRAM (H100)** → Qwen3-32B-Instruct
@@ -18,22 +15,22 @@ Quick guide to choosing the right LLM model for your hardware.
 - **Best for**: Standard GPUs (8GB VRAM), CPU-only setups
 - **Size**: ~4.5GB
 - **Performance**: Excellent function calling, fast responses
-- **Context**: 32K tokens (handles long conversations)
-- **Why choose this**: Best balance of quality, speed, and resource usage
+- **Context**: 32K tokens
+- **Why**: Best balance of quality, speed, and resource usage
 
 ### Qwen2.5-14B-Instruct (If You Have More VRAM)
 - **Best for**: GPUs with 16GB+ VRAM
 - **Size**: ~8GB
 - **Performance**: Better quality than 7B, slightly slower
 - **Context**: 32K tokens
-- **Why choose this**: Better responses if you have the resources
+- **Why**: Better responses if you have the resources
 
 ### Qwen3-32B-Instruct (High-End GPUs Only)
 - **Best for**: H100 or similar high-VRAM GPUs (80GB+)
 - **Size**: ~65GB VRAM
 - **Performance**: Best quality, largest context window
-- **Context**: 128K tokens (handles very long conversations)
-- **Why choose this**: Maximum quality and context capacity
+- **Context**: 128K tokens
+- **Why**: Maximum quality and context capacity
 
 ## Alternative Models
 
@@ -63,12 +60,7 @@ Quick guide to choosing the right LLM model for your hardware.
 
 ## Why Qwen Models?
 
-Qwen models are specifically optimized for function calling and tool use, making them ideal for this application:
-
+Qwen models are specifically optimized for function calling and tool use:
 1. **Better function calling**: More reliable at using tools correctly
 2. **Larger context**: 32K tokens vs 8K for most alternatives
 3. **Better instruction following**: Handles complex requests more accurately
-
-## Next Steps
-
-For setup and installation instructions, see [CONFIGURATION.md](./CONFIGURATION.md).

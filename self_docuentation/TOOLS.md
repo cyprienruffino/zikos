@@ -1,11 +1,8 @@
-# MCP Tools Specification
-
-Complete reference for all MCP tools available in Zikos.
+# MCP Tools Reference
 
 ## Design Principles
 
 ### Tool Output Design
-
 All tools must return **LLM-interpretable** structured data:
 
 1. **Musical Context**: Metrics have clear musical meaning
@@ -17,7 +14,7 @@ All tools must return **LLM-interpretable** structured data:
 
 3. **Musical Terminology**: Use note names, chord names, keys (not just frequencies)
    - ✅ Good: `"pitch": "C4", "chord": "Cmaj", "key": "C major"`
-   - ❌ Bad: `"frequency": 261.63` without note name (include both if needed)
+   - ❌ Bad: `"frequency": 261.63` without note name
 
 4. **Time References**: Include precise time locations for all events/issues
    - ✅ Good: `{"time": 2.3, "issue": "wrong_note", "expected": "E4", "played": "F4"}`
@@ -35,565 +32,145 @@ All tools must return **LLM-interpretable** structured data:
    - ✅ Good: `{"error": true, "error_type": "TOO_SHORT", "message": "Audio is too short (minimum 0.5 seconds required)"}`
    - ❌ Bad: Generic exceptions or unclear error messages
 
-See [SYSTEM_PROMPT.md](./SYSTEM_PROMPT.md) for metric interpretation guidelines.
+## Baseline Tools (Always Run)
 
-## Tool Categories
+These tools are automatically called for every audio submission.
 
-### Baseline Tools (Always Run)
-
-These tools are automatically called for every audio submission to provide fundamental analysis.
-
-#### `analyze_tempo(audio_file_id: str) -> dict`
+### `analyze_tempo(audio_file_id: str) -> dict`
 **Purpose**: Detect tempo/BPM and timing consistency
 
-**Returns**:
-```json
-{
-  "bpm": 120.5,
-  "confidence": 0.9,
-  "is_steady": true,
-  "tempo_stability_score": 0.91,
-  "tempo_changes": [
-    {"time": 0.0, "bpm": 120.0, "confidence": 0.9},
-    {"time": 15.3, "bpm": 121.2, "confidence": 0.9}
-  ],
-  "rushing_detected": false,
-  "dragging_detected": false
-}
-```
+**Returns**: BPM, confidence, is_steady, tempo_stability_score, tempo_changes, rushing_detected, dragging_detected
 
-**Implementation**: Uses librosa tempo detection and autocorrelation-based beat tracking.
+**Implementation**: librosa tempo detection and autocorrelation-based beat tracking
 
-#### `detect_pitch(audio_file_id: str) -> dict`
+### `detect_pitch(audio_file_id: str) -> dict`
 **Purpose**: Note-by-note pitch detection and intonation analysis
 
-**Returns**:
-```json
-{
-  "notes": [
-    {
-      "start_time": 0.0,
-      "end_time": 0.5,
-      "duration": 0.5,
-      "pitch": "C4",
-      "frequency": 261.63,
-      "confidence": 0.95
-    },
-    {
-      "start_time": 0.5,
-      "end_time": 1.0,
-      "duration": 0.5,
-      "pitch": "D4",
-      "frequency": 293.66,
-      "confidence": 0.92
-    }
-  ],
-  "intonation_accuracy": 0.88,
-  "pitch_stability": 0.91,
-  "detected_key": "C major",
-  "sharp_tendency": 0.12,
-  "flat_tendency": 0.08
-}
-```
+**Returns**: notes (with start_time, end_time, duration, pitch, frequency, confidence), intonation_accuracy, pitch_stability, detected_key, sharp_tendency, flat_tendency
 
-**Implementation**: Uses CREPE (deep learning) or PYIN for pitch tracking, with note segmentation via onset/offset detection.
+**Implementation**: CREPE (deep learning) or PYIN for pitch tracking, with note segmentation via onset/offset detection
 
-#### `analyze_rhythm(audio_file_id: str) -> dict`
+### `analyze_rhythm(audio_file_id: str) -> dict`
 **Purpose**: Onset detection, timing accuracy, rhythmic patterns
 
-**Returns**:
-```json
-{
-  "onsets": [
-    {"time": 0.0, "confidence": 0.94},
-    {"time": 0.5, "confidence": 0.91}
-  ],
-  "timing_accuracy": 0.87,
-  "rhythmic_pattern": "regular",
-  "is_on_beat": true,
-  "beat_deviations": [
-    {"time": 2.3, "deviation_ms": -15, "severity": "minor"}
-  ],
-  "average_deviation_ms": -8.5,
-  "rushing_tendency": 0.12,
-  "dragging_tendency": 0.08
-}
-```
+**Returns**: onsets, timing_accuracy, rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency
 
-**Implementation**: Uses librosa onset detection (spectral flux-based) and timing deviation analysis.
+**Implementation**: librosa onset detection (spectral flux-based) and timing deviation analysis
 
-### Optional Analysis Tools (LLM Decides)
+## Optional Analysis Tools (LLM Decides)
 
-#### `detect_key(audio_file_id: str) -> dict`
-**Purpose**: Musical key detection
+### `detect_key(audio_file_id: str) -> dict`
+**Returns**: key, confidence, mode, tonic
 
-**Returns**:
-```json
-{
-  "key": "C major",
-  "confidence": 0.89,
-  "mode": "major",
-  "tonic": "C"
-}
-```
+**Implementation**: Chroma-based key detection using librosa or music21 Krumhansl-Schmuckler algorithm
 
-**Implementation**: Chroma-based key detection using librosa or music21 Krumhansl-Schmuckler algorithm.
+### `detect_chords(audio_file_id: str) -> dict`
+**Returns**: chords (with time, duration, chord, confidence), progression
 
-#### `detect_chords(audio_file_id: str) -> dict`
-**Purpose**: Chord progression analysis
+**Implementation**: Chroma feature extraction with template matching or music21 chord recognition
 
-**Returns**:
-```json
-{
-  "chords": [
-    {"time": 0.0, "duration": 2.0, "chord": "Cmaj", "confidence": 0.93},
-    {"time": 2.0, "duration": 2.0, "chord": "Amin", "confidence": 0.91}
-  ],
-  "progression": ["Cmaj", "Amin", "Fmaj", "Gmaj"]
-}
-```
+### `analyze_timbre(audio_file_id: str) -> dict`
+**Returns**: brightness, warmth, sharpness, spectral_centroid, spectral_rolloff, spectral_bandwidth, timbre_consistency, attack_time, harmonic_ratio
 
-**Implementation**: Chroma feature extraction with template matching or music21 chord recognition.
+**Implementation**: Spectral analysis using FFT/STFT, spectral centroid (brightness), rolloff, and harmonic-to-noise ratio
 
-#### `analyze_timbre(audio_file_id: str) -> dict`
-**Purpose**: Spectral characteristics, tone quality
+### `segment_phrases(audio_file_id: str) -> dict`
+**Returns**: phrases (with start, end, type, confidence), phrase_count, average_phrase_length
 
-**Returns**:
-```json
-{
-  "brightness": 0.72,
-  "warmth": 0.65,
-  "sharpness": 0.58,
-  "spectral_centroid": 2500.0,
-  "spectral_rolloff": 5000.0,
-  "spectral_bandwidth": 1500.0,
-  "timbre_consistency": 0.84,
-  "attack_time": 0.015,
-  "harmonic_ratio": 0.85
-}
-```
+**Implementation**: Energy-based segmentation with repetition detection and silence/pause analysis
 
-**Implementation**: Spectral analysis using FFT/STFT, spectral centroid (brightness), rolloff, and harmonic-to-noise ratio.
+### `comprehensive_analysis(audio_file_id: str) -> dict`
+**Returns**: Structured summary with timing, pitch, dynamics, frequency (timbre), musical_structure (key, chords, phrases), articulation, overall_score, strengths, weaknesses, recommendations
 
-#### `segment_phrases(audio_file_id: str) -> dict`
-**Purpose**: Detect musical phrase boundaries
+**Note**: Runs all available analysis tools in parallel and provides comprehensive summary
 
-**Returns**:
-```json
-{
-  "phrases": [
-    {"start": 0.0, "end": 4.0, "type": "melodic", "confidence": 0.92},
-    {"start": 4.0, "end": 8.0, "type": "melodic", "confidence": 0.89}
-  ],
-  "phrase_count": 2,
-  "average_phrase_length": 4.0
-}
-```
+### `analyze_groove(audio_file_id: str) -> dict`
+**Returns**: groove_type ("straight" | "swung" | "reverse_swing"), swing_ratio, microtiming_pattern, feel_score, groove_consistency, average_microtiming_deviation_ms, microtiming_std_ms
 
-**Implementation**: Energy-based segmentation with repetition detection and silence/pause analysis.
+**Implementation**: Microtiming histogram analysis and swing ratio calculation
 
-#### `comprehensive_analysis(audio_file_id: str) -> dict`
-**Purpose**: Run all analyses and provide structured summary with strengths, weaknesses, and recommendations
+### `detect_repetitions(audio_file_id: str) -> dict`
+**Returns**: repetitions (with pattern_start, pattern_end, repetition_times, similarity), form
 
-**Returns**:
-```json
-{
-  "timing": {
-    "tempo": {...},
-    "rhythm": {...}
-  },
-  "pitch": {...},
-  "dynamics": {...},
-  "frequency": {
-    "timbre": {...}
-  },
-  "musical_structure": {
-    "key": {...},
-    "chords": {...},
-    "phrases": {...}
-  },
-  "articulation": {...},
-  "overall_score": 0.87,
-  "strengths": ["timing", "intonation"],
-  "weaknesses": ["dynamic_consistency"],
-  "recommendations": ["Practice with metronome to improve tempo consistency"]
-}
-```
+**Implementation**: Self-similarity matrix and pattern recognition via chroma features
 
-**Note**: Runs all available analysis tools in parallel and provides a comprehensive summary.
+### `analyze_dynamics(audio_file_id: str) -> dict`
+**Returns**: average_rms, average_loudness, peak_amplitude, dynamic_range_db, dynamic_range, lufs, amplitude_envelope, dynamic_consistency, is_consistent, peaks
 
-#### `analyze_groove(audio_file_id: str) -> dict`
-**Purpose**: Analyze microtiming patterns, swing, and groove feel
+**Implementation**: RMS energy calculation, peak detection, and LUFS measurement
 
-**Returns**:
-```json
-{
-  "groove_type": "straight",
-  "swing_ratio": 1.0,
-  "microtiming_pattern": "consistent",
-  "feel_score": 0.89,
-  "groove_consistency": 0.92,
-  "average_microtiming_deviation_ms": 8.5,
-  "microtiming_std_ms": 12.3
-}
-```
+### `analyze_articulation(audio_file_id: str) -> dict`
+**Returns**: articulation_types, legato_percentage, staccato_percentage, articulation_consistency, accents
 
-**Note**: `groove_type` can be "straight", "swung", or "reverse_swing". `swing_ratio` of 1.0 means straight time, >1.3 indicates swing.
+**Implementation**: Note duration vs. inter-note gap analysis, energy envelope analysis, and pattern classification
 
-**Implementation**: Microtiming histogram analysis and swing ratio calculation.
+## Comparison Tools
 
-#### `detect_repetitions(audio_file_id: str) -> dict`
-**Purpose**: Detect repeated patterns and identify musical form
+### `compare_audio(audio_file_id_1: str, audio_file_id_2: str, comparison_type: str) -> dict`
+**Parameters**: `comparison_type`: "rhythm" | "pitch" | "tempo" | "overall" (default: "overall")
 
-**Returns**:
-```json
-{
-  "repetitions": [
-    {
-      "pattern_start": 0.0,
-      "pattern_end": 4.0,
-      "repetition_times": [4.0, 8.0],
-      "similarity": 0.92
-    }
-  ],
-  "form": "A-A-B-A"
-}
-```
+**Returns**: comparison_type, similarity_score (only for "overall"), differences (tempo, pitch_accuracy, pitch_stability, rhythm_accuracy, timing_deviation), improvements, regressions
 
-**Note**: Identifies repeated patterns using chroma-based similarity analysis. Form labels (A, B, C, etc.) represent different patterns.
-
-**Implementation**: Self-similarity matrix and pattern recognition via chroma features.
-
-#### `analyze_dynamics(audio_file_id: str) -> dict`
-**Purpose**: Volume/amplitude analysis
-
-**Returns**:
-```json
-{
-  "average_rms": -12.5,
-  "average_loudness": -12.5,
-  "peak_amplitude": -8.1,
-  "dynamic_range_db": 15.3,
-  "dynamic_range": 15.3,
-  "lufs": -14.2,
-  "amplitude_envelope": [
-    {"time": 0.0, "rms": -12.5},
-    {"time": 0.1, "rms": -12.3}
-  ],
-  "dynamic_consistency": 0.87,
-  "is_consistent": true,
-  "peaks": [
-    {"time": 3.2, "amplitude": -8.1}
-  ]
-}
-```
-
-**Note**: Both `average_rms`/`average_loudness` and `dynamic_range_db`/`dynamic_range` are provided for compatibility. `is_consistent` is derived from `dynamic_consistency` (threshold: 0.75).
-
-**Implementation**: RMS energy calculation, peak detection, and LUFS measurement.
-
-#### `analyze_articulation(audio_file_id: str) -> dict`
-**Purpose**: Staccato, legato, accents analysis
-
-**Returns**:
-```json
-{
-  "articulation_types": ["legato", "staccato"],
-  "legato_percentage": 0.65,
-  "staccato_percentage": 0.35,
-  "articulation_consistency": 0.82,
-  "accents": [
-    {
-      "time": 1.5,
-      "intensity": 0.82,
-      "relative_loudness": 1.25
-    }
-  ]
-}
-```
-
-**Implementation**: Note duration vs. inter-note gap analysis, energy envelope analysis, and pattern classification.
-
-### Comparison Tools
-
-#### `compare_audio(audio_file_id_1: str, audio_file_id_2: str, comparison_type: str) -> dict`
-**Purpose**: Compare two audio recordings
-
+### `compare_to_reference(audio_file_id: str, reference_type: str, reference_params: dict) -> dict`
 **Parameters**:
-- `audio_file_id_1`: First audio file ID
-- `audio_file_id_2`: Second audio file ID
-- `comparison_type`: "rhythm" | "pitch" | "tempo" | "overall" (default: "overall")
+- `reference_type`: "scale" | "midi_file"
+- `reference_params`: For "scale": `{"scale": "C major", "tempo": 120}` (tempo optional), For "midi_file": `{"midi_file_id": "midi_123"}`
 
-**Returns**:
-```json
-{
-  "comparison_type": "overall",
-  "similarity_score": 0.78,
-  "differences": {
-    "tempo": {
-      "audio1": 120.0,
-      "audio2": 118.5,
-      "difference": 1.5,
-      "stability_audio1": 0.91,
-      "stability_audio2": 0.93
-    },
-    "pitch_accuracy": {
-      "audio1": 0.88,
-      "audio2": 0.92,
-      "improvement": 0.04
-    },
-    "pitch_stability": {
-      "audio1": 0.85,
-      "audio2": 0.87,
-      "improvement": 0.02
-    },
-    "rhythm_accuracy": {
-      "audio1": 0.85,
-      "audio2": 0.87,
-      "improvement": 0.02
-    },
-    "timing_deviation": {
-      "audio1": -8.5,
-      "audio2": -6.2,
-      "improvement": 2.3
-    }
-  },
-  "improvements": ["pitch_accuracy", "rhythm_accuracy"],
-  "regressions": []
-}
-```
+**Returns**: reference_type, comparison (pitch_accuracy, rhythm_accuracy, tempo_match), errors, detected_key (for scale)
 
-**Note**: `similarity_score` is only calculated when `comparison_type` is "overall".
+## Audio Recording Tools
 
-#### `compare_to_reference(audio_file_id: str, reference_type: str, reference_params: dict) -> dict`
-**Purpose**: Compare student performance to a reference (scale, exercise, MIDI file)
+### `request_audio_recording(prompt: str, max_duration: float) -> dict`
+**Parameters**: `prompt`: Instructions for what to record, `max_duration`: Maximum recording duration in seconds (optional, default: 60.0)
 
-**Parameters**:
-- `audio_file_id`: Audio file ID to compare
-- `reference_type`: "scale" | "midi_file" (note: "exercise" not yet implemented)
-- `reference_params`: Parameters for reference:
-  - For "scale": `{"scale": "C major", "tempo": 120}` (tempo optional)
-  - For "midi_file": `{"midi_file_id": "midi_123"}`
-
-**Returns** (for scale):
-```json
-{
-  "reference_type": "scale",
-  "scale": "C major",
-  "comparison": {
-    "pitch_accuracy": 0.89,
-    "rhythm_accuracy": 0.82,
-    "tempo_match": 0.91
-  },
-  "errors": [
-    {
-      "time": 2.3,
-      "type": "wrong_note",
-      "expected": "note in C major",
-      "played": "F4"
-    }
-  ],
-  "detected_key": "C major"
-}
-```
-
-**Returns** (for MIDI file):
-```json
-{
-  "reference_type": "midi_file",
-  "midi_file_id": "midi_123",
-  "comparison": {
-    "pitch_accuracy": 0.89,
-    "rhythm_accuracy": 0.82,
-    "tempo_match": 0.91
-  },
-  "errors": []
-}
-```
-
-### Audio Recording Tools
-
-#### `request_audio_recording(prompt: str, max_duration: float) -> dict`
-**Purpose**: Request user to record audio sample
-
-**Parameters**:
-- `prompt`: Instructions for what to record (e.g., "Please play the C major scale")
-- `max_duration`: Maximum recording duration in seconds (optional, default: 60.0)
-
-**Returns**:
-```json
-{
-  "status": "recording_requested",
-  "prompt": "Please play the C major scale",
-  "max_duration": 60.0,
-  "recording_id": "rec_abc123"
-}
-```
+**Returns**: status ("recording_requested" | "completed"), prompt, max_duration, recording_id, audio_file_id (when completed), duration (when completed)
 
 **UI Behavior**: When this tool is called, UI should show recording interface with the prompt displayed.
 
-**After Recording**:
-```json
-{
-  "status": "completed",
-  "audio_file_id": "audio_xyz789",
-  "recording_id": "rec_abc123",
-  "duration": 8.5
-}
-```
+## MIDI Processing Tools
 
-### MIDI Processing Tools
-
-#### `validate_midi(midi_text: str) -> dict`
-**Purpose**: Validate MIDI syntax generated by LLM
-
-**Parameters**:
-- `midi_text`: MIDI text generated by LLM (in standard MIDI format or simplified format)
-
-**Returns**:
-```json
-{
-  "valid": true,
-  "midi_file_id": "midi_abc123",
-  "errors": [],
-  "warnings": [],
-  "metadata": {
-    "duration": 8.0,
-    "tempo": 120,
-    "tracks": 1,
-    "note_count": 8
-  }
-}
-```
-
-**Error Example**:
-```json
-{
-  "valid": false,
-  "errors": [
-    "Invalid note format at line 5: 'C5' should be 'C5 60'",
-    "Missing tempo marker"
-  ],
-  "warnings": [
-    "No time signature specified, defaulting to 4/4"
-  ]
-}
-```
+### `validate_midi(midi_text: str) -> dict`
+**Returns**: valid, midi_file_id (if valid), errors, warnings, metadata (duration, tempo, tracks, note_count)
 
 **Note**: LLM generates MIDI directly in its response. This tool validates and parses it.
 
-#### `midi_to_audio(midi_file_id: str, instrument: str) -> dict`
-**Purpose**: Synthesize MIDI to audio
+### `midi_to_audio(midi_file_id: str, instrument: str) -> dict`
+**Parameters**: `instrument`: "piano" | "guitar" | "violin" | "bass" | etc. (maps to FluidSynth soundfont)
 
-**Parameters**:
-- `instrument`: "piano" | "guitar" | "violin" | "bass" | etc. (maps to FluidSynth soundfont)
-
-**Returns**:
-```json
-{
-  "audio_file_id": "audio_xyz789",
-  "midi_file_id": "midi_abc123",
-  "instrument": "piano",
-  "duration": 8.0,
-  "synthesis_method": "fluidsynth"
-}
-```
+**Returns**: audio_file_id, midi_file_id, instrument, duration, synthesis_method
 
 **Note**: Uses FluidSynth for synthesis. Future: neural synthesis for better timbre/technique demonstration.
 
-#### `midi_to_notation(midi_file_id: str, format: str) -> dict`
-**Purpose**: Render MIDI to sheet music/tabs
+### `midi_to_notation(midi_file_id: str, format: str) -> dict`
+**Parameters**: `format`: "sheet_music" | "tabs" | "both"
 
-**Parameters**:
-- `format`: "sheet_music" | "tabs" | "both"
+**Returns**: midi_file_id, sheet_music_url, tabs_url, format
 
-**Returns**:
-```json
-{
-  "midi_file_id": "midi_abc123",
-  "sheet_music_url": "/notation/sheet_abc123.png",
-  "tabs_url": "/notation/tabs_abc123.png",
-  "format": "both"
-}
-```
+## Utility Tools
 
-### Utility Tools
+### `get_audio_info(audio_file_id: str) -> dict`
+**Returns**: duration, sample_rate, channels, format, file_size_bytes
 
-#### `get_audio_info(audio_file_id: str) -> dict`
-**Purpose**: Get basic audio file metadata
+### `segment_audio(audio_file_id: str, start_time: float, end_time: float) -> dict`
+**Parameters**: `start_time`: >= 0, `end_time`: > start_time
 
-**Returns**:
-```json
-{
-  "duration": 10.5,
-  "sample_rate": 44100,
-  "channels": 1,
-  "format": "wav",
-  "file_size_bytes": 925440
-}
-```
+**Returns**: new_audio_file_id, original_audio_file_id, start_time, end_time, duration
 
-#### `segment_audio(audio_file_id: str, start_time: float, end_time: float) -> dict`
-**Purpose**: Extract segment from audio
+### `time_stretch(audio_file_id: str, rate: float) -> dict`
+**Parameters**: `rate`: 0.25-4.0 (1.0 = no change, 0.5 = half speed, 2.0 = double speed)
 
-**Parameters**:
-- `audio_file_id`: Audio file ID to segment
-- `start_time`: Start time in seconds (must be >= 0)
-- `end_time`: End time in seconds (must be > start_time)
-
-**Returns**:
-```json
-{
-  "new_audio_file_id": "audio_segmented_xyz",
-  "original_audio_file_id": "audio_abc123",
-  "start_time": 2.0,
-  "end_time": 5.0,
-  "duration": 3.0
-}
-```
-
-#### `time_stretch(audio_file_id: str, rate: float) -> dict`
-**Purpose**: Time-stretch audio without changing pitch (slow down or speed up)
-
-**Parameters**:
-- `audio_file_id`: Audio file ID to stretch
-- `rate`: Stretch rate (0.25-4.0). 1.0 = no change, 0.5 = half speed, 2.0 = double speed
-
-**Returns**:
-```json
-{
-  "new_audio_file_id": "audio_stretched_xyz",
-  "original_audio_file_id": "audio_abc123",
-  "rate": 0.5,
-  "original_duration": 4.0,
-  "new_duration": 8.0
-}
-```
+**Returns**: new_audio_file_id, original_audio_file_id, rate, original_duration, new_duration
 
 **Note**: Requires `pyrubberband` library. Useful for practice (slow down difficult passages) or demonstration (speed up).
 
-#### `pitch_shift(audio_file_id: str, semitones: float) -> dict`
-**Purpose**: Pitch-shift audio without changing tempo (transpose)
+### `pitch_shift(audio_file_id: str, semitones: float) -> dict`
+**Parameters**: `semitones`: -24 to 24 (positive = higher, negative = lower)
 
-**Parameters**:
-- `audio_file_id`: Audio file ID to shift
-- `semitones`: Number of semitones to shift (-24 to 24). Positive = higher, negative = lower
-
-**Returns**:
-```json
-{
-  "new_audio_file_id": "audio_shifted_xyz",
-  "original_audio_file_id": "audio_abc123",
-  "semitones": 2.0,
-  "duration": 4.0
-}
-```
+**Returns**: new_audio_file_id, original_audio_file_id, semitones, duration
 
 **Note**: Requires `pyrubberband` library. Useful for transposition or demonstrating different keys.
 
-## Implementation Notes
-
-### Error Handling
+## Error Handling
 
 All tools should return structured errors:
 ```json
@@ -605,13 +182,7 @@ All tools should return structured errors:
 }
 ```
 
-### Performance Considerations
-
-- Tools should cache results when possible
-- Long-running tools should support async processing
-- Tools should validate input audio format and duration
-
-### Implementation Libraries
+## Implementation Libraries
 
 **Core Libraries**:
 - **librosa**: Comprehensive audio analysis (tempo, pitch, onset, chroma, MFCCs)
@@ -622,12 +193,6 @@ All tools should return structured errors:
 - **scipy**: Signal processing utilities
 - **numpy**: Numerical operations
 
-### Tool Discovery
-
-Tools should provide metadata for LLM discovery:
-- Name and description
-- Required parameters
-- Return type schema
-- Example usage
+## Tool Discovery
 
 Tool schemas are generated dynamically from code and injected into the system prompt at runtime.

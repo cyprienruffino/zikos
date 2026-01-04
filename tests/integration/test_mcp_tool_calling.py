@@ -145,29 +145,19 @@ class TestMCPToolCalling:
         import shutil
         import uuid
 
-        from zikos.config import settings
-
         audio_file_id = str(uuid.uuid4())
-        storage_path = Path(settings.audio_storage_path)
-        storage_path.mkdir(parents=True, exist_ok=True)
-        target_path = storage_path / f"{audio_file_id}.wav"
+        target_path = temp_dir / f"{audio_file_id}.wav"
         shutil.copy(audio_file, target_path)
 
-        try:
-            # Test tempo analysis
-            result = await mcp_server.call_tool("analyze_tempo", audio_file_id=audio_file_id)
+        # Test tempo analysis
+        result = await mcp_server.call_tool("analyze_tempo", audio_file_id=audio_file_id)
 
-            assert isinstance(result, dict)
-            assert "bpm" in result or "error" in result  # May have error if analysis fails
+        assert isinstance(result, dict)
+        assert "bpm" in result or "error" in result  # May have error if analysis fails
 
-            # Test pitch detection
-            result = await mcp_server.call_tool("detect_pitch", audio_file_id=audio_file_id)
+        # Test pitch detection
+        result = await mcp_server.call_tool("detect_pitch", audio_file_id=audio_file_id)
 
-            assert isinstance(result, dict)
-            # Should have some pitch information or error
-            assert "notes" in result or "error" in result
-
-        finally:
-            # Cleanup
-            if target_path.exists():
-                target_path.unlink()
+        assert isinstance(result, dict)
+        # Should have some pitch information or error
+        assert "notes" in result or "error" in result

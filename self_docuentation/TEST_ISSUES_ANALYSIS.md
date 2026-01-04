@@ -11,7 +11,6 @@ Found several critical issues in `tests/unit/test_llm_service.py` that indicate 
 ## Critical Issues
 
 ### Issue 1: Checking Wrong Method (Lines 499, 521, 548)
-
 **Problem**: Tests check `llm_service.backend.create_chat_completion.call_args` but the actual implementation uses `stream_chat_completion`.
 
 **Affected Tests**:
@@ -19,14 +18,13 @@ Found several critical issues in `tests/unit/test_llm_service.py` that indicate 
 - `test_handle_audio_ready_includes_interpretation_reminder` (line 521)
 - `test_generate_response_includes_interpretation_reminder_for_audio_context` (line 548)
 
-**Impact**: These tests will always pass incorrectly because `create_chat_completion` is never called in the actual code path. The tests are checking a method that doesn't exist in the execution flow.
+**Impact**: These tests will always pass incorrectly because `create_chat_completion` is never called in the actual code path.
 
 **Evidence**:
 - `backend/zikos/services/llm.py` lines 333 and 531: Only `stream_chat_completion` is called
 - Tests mock `stream_chat_completion` correctly but then check the wrong method
 
 ### Issue 2: Weak Assertions (Lines 500, 522, 549)
-
 **Problem**: Tests use `if call_args:` before assertions, meaning they silently pass if the method wasn't called.
 
 **Example**:
@@ -42,7 +40,6 @@ if call_args:  # This silently passes if call_args is None!
 **Fix**: Should use `assert call_args is not None` or check `stream_chat_completion.call_args` instead.
 
 ### Issue 3: Tests Validate Mock Responses, Not Behavior
-
 **Problem**: Some tests mock the stream to return specific responses, then just verify those responses were returned. This doesn't test the actual logic.
 
 **Example**: `test_generate_response_no_analysis_found` (line 349)
@@ -52,10 +49,7 @@ if call_args:  # This silently passes if call_args is None!
 
 **Impact**: Tests pass even if the actual logic is broken, as long as the mock returns the expected value.
 
-## Additional Issues
-
 ### Issue 4: Weak Assertions in Audio Analysis Test (Line 342)
-
 `test_generate_response_injects_audio_analysis` checks:
 ```python
 assert (
@@ -68,24 +62,11 @@ assert (
 This is too permissive - it could pass even if audio analysis wasn't properly injected, as long as the word "audio" appears somewhere.
 
 ### Issue 5: Missing Validation of Actual Behavior
-
 Tests don't verify:
 - That `audio_context_enricher.enrich_message()` was actually called
 - That the correct messages were passed to `stream_chat_completion`
 - That the conversation history was properly updated
 - That tool injection logic worked correctly
-
-## Recommendations
-
-1. **Fix method checks**: Change all `create_chat_completion.call_args` to `stream_chat_completion.call_args`
-2. **Remove weak assertions**: Replace `if call_args:` with proper assertions
-3. **Add behavior validation**: Verify that orchestration components were called correctly
-4. **Use call tracking**: Track calls to `stream_chat_completion` and verify arguments
-5. **Test actual logic**: Don't just verify mock responses, verify the actual behavior
-
-## Files to Fix
-
-- `tests/unit/test_llm_service.py` - Lines 499-503, 521-527, 548-558
 
 ## Fixes Applied
 
@@ -104,3 +85,15 @@ Tests don't verify:
 - `test_generate_response_injects_audio_analysis` (line 342): Improved assertion to check for specific markers like `[Audio Analysis Context]` or actual data like "120"
 
 **Result**: All tests now properly validate behavior rather than just checking if mocks were called. Tests pass and actually verify the functionality works correctly.
+
+## Recommendations
+
+1. ✅ **Fix method checks**: Changed to validate conversation history instead
+2. ✅ **Remove weak assertions**: Replaced `if call_args:` with proper behavior validation
+3. ✅ **Add behavior validation**: Verify that orchestration components were called correctly
+4. ✅ **Use call tracking**: Track calls to `stream_chat_completion` and verify arguments
+5. ✅ **Test actual logic**: Don't just verify mock responses, verify the actual behavior
+
+## Files Fixed
+
+- `tests/unit/test_llm_service.py` - Lines 499-503, 521-527, 548-558
