@@ -36,6 +36,10 @@ class LLMConstants:
     DEFAULT_TEMPERATURE: float = 0.7
     DEFAULT_TOP_P: float = 0.9
 
+    # Default model keys (for download_model.py MODEL_CONFIGS)
+    DEFAULT_GPU_MODEL: str = "mistral-7b-instruct-v0.3-q4"
+    DEFAULT_CPU_MODEL: str = "tinyllama-1.1b-chat-q4"
+
 
 class AudioAnalysisConstants:
     """Constants for audio analysis tools"""

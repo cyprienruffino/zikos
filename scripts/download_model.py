@@ -51,6 +51,12 @@ MODEL_CONFIGS = {
         "description": "Phi-3 Mini 4K Instruct Q4 (small, ~2.3GB, fast, limited function calling)",
         "function_calling": "limited",
     },
+    "tinyllama-1.1b-chat-q4": {
+        "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+        "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+        "description": "TinyLlama 1.1B Chat Q4_K_M (very small, ~670MB, CPU-friendly, limited function calling)",
+        "function_calling": "limited",
+    },
     "llama-3.1-8b-instruct-q4": {
         "repo_id": "TheBloke/Llama-3.1-8B-Instruct-GGUF",
         "filename": "llama-3.1-8b-instruct.Q4_K_M.gguf",
