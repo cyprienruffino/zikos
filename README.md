@@ -193,13 +193,15 @@ zikos/
 ├── MODEL_RECOMMENDATIONS.md # Model recommendations
 ├── DESIGN.md           # Architecture design and future roadmap
 ├── TOOLS.md            # MCP tools specification
-├── SYSTEM_PROMPT.md    # LLM system prompt
-└── requirements.txt    # Python dependencies
+└── SYSTEM_PROMPT.md    # LLM system prompt
 ```
 
 ### Python env setup
-```
+```bash
 pip install .[dev]
+
+# Optional: generate a pinned requirements.txt for reproducible builds
+pip-compile pyproject.toml -o requirements.txt
 ```
 
 ### Pre-commit Hooks

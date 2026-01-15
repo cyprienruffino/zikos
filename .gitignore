@@ -80,3 +80,6 @@ frontend/dist/**/*.js.map
 music-flamingo-hf-service/
 
 .mypy_cache/
+
+# Generated dependency lock file (regenerate with: pip-compile pyproject.toml)
+requirements.txt
