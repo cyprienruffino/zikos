@@ -9,8 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile as sf
-
-from zikos.mcp.tools.analysis import AudioAnalysisTools
+from src.zikos.mcp.tools.audio import AudioAnalysisTools
 
 
 def generate_test_audio(

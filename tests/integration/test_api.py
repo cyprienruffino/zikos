@@ -2,8 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-
-from zikos.main import app
+from src.zikos.main import app
 
 
 @pytest.fixture
@@ -16,11 +15,7 @@ def test_root_endpoint(client):
     """Test root endpoint"""
     response = client.get("/")
     assert response.status_code == 200
-    # Root endpoint serves HTML if index.html exists, otherwise JSON
-    if response.headers.get("content-type", "").startswith("text/html"):
-        assert b"<!doctype html>" in response.content or b"<html" in response.content
-    else:
-        assert "message" in response.json()
+    assert "message" in response.json()
 
 
 def test_health_endpoint(client):

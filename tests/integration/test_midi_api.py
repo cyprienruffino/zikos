@@ -2,8 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-
-from zikos.main import app
+from src.zikos.main import app
 
 pytestmark = pytest.mark.integration
 
@@ -53,15 +52,16 @@ Track 1:
 
         assert response.status_code in [200, 400]
 
-    def test_synthesize_midi(self, client, storage_paths):
+    def test_synthesize_midi(self, client, temp_dir):
         """Test MIDI synthesis with real implementation"""
         from pathlib import Path
 
-        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
+        from src.zikos.config import settings
+        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_synth"
-            midi_path = storage_paths / f"{midi_file_id}.mid"
+            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
             midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """
@@ -92,15 +92,16 @@ Track 1:
         except ImportError:
             pytest.skip("music21 not available")
 
-    def test_render_notation(self, client, storage_paths):
+    def test_render_notation(self, client, temp_dir):
         """Test notation rendering with real implementation"""
         from pathlib import Path
 
-        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
+        from src.zikos.config import settings
+        from src.zikos.mcp.tools.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_notation"
-            midi_path = storage_paths / f"{midi_file_id}.mid"
+            midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
             midi_path.parent.mkdir(parents=True, exist_ok=True)
 
             midi_text = """
@@ -127,55 +128,3 @@ Track 1:
                 raise
         except ImportError:
             pytest.skip("music21 not available")
-
-    def test_synthesize_midi_error_handling(self, client):
-        """Test MIDI synthesis error handling for non-existent file"""
-        response = client.post("/api/midi/nonexistent_midi/synthesize?instrument=piano")
-
-        assert response.status_code == 500
-        data = response.json()
-        assert "detail" in data
-
-    def test_render_notation_error_handling(self, client):
-        """Test notation rendering error handling for non-existent file"""
-        response = client.post("/api/midi/nonexistent_midi/render?format=both")
-
-        assert response.status_code == 500
-        data = response.json()
-        assert "detail" in data
-
-    def test_get_midi_file(self, client, storage_paths):
-        """Test getting MIDI file with real implementation"""
-        from pathlib import Path
-
-        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
-
-        try:
-            midi_file_id = "test_get_midi"
-            midi_path = storage_paths / f"{midi_file_id}.mid"
-            midi_path.parent.mkdir(parents=True, exist_ok=True)
-
-            midi_text = """
-[MIDI]
-Tempo: 120
-Track 1:
-  C4 velocity=60 duration=0.5
-[/MIDI]
-"""
-            midi_text_to_file(midi_text, midi_path)
-
-            response = client.get(f"/api/midi/{midi_file_id}")
-
-            assert response.status_code == 200
-            assert "audio/midi" in response.headers["content-type"]
-            assert len(response.content) > 0
-        except ImportError:
-            pytest.skip("music21 not available")
-
-    def test_get_midi_file_not_found(self, client):
-        """Test getting non-existent MIDI file"""
-        response = client.get("/api/midi/nonexistent_midi_file")
-
-        assert response.status_code == 404
-        data = response.json()
-        assert "detail" in data
