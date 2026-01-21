@@ -66,12 +66,41 @@ class LlamaCppBackend(LLMBackend):
                     print(f"Using {n_gpu_layers} GPU layers")
 
         self.n_ctx = n_ctx
-        self.llm = Llama(
-            model_path=model_path,
-            n_ctx=n_ctx,
-            n_gpu_layers=n_gpu_layers,
-            **kwargs,
-        )
+
+        init_kwargs = {
+            "model_path": model_path,
+            "n_ctx": n_ctx,
+            "n_gpu_layers": n_gpu_layers,
+        }
+
+        init_kwargs.update(kwargs)
+
+        if "rope_freq_base" not in init_kwargs:
+            init_kwargs["rope_freq_base"] = 0.0
+        if "rope_freq_scale" not in init_kwargs:
+            init_kwargs["rope_freq_scale"] = 0.0
+
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"Initializing Llama with: {init_kwargs}")
+
+        self.llm = Llama(**init_kwargs)
+
+        try:
+            if hasattr(self.llm, "n_ctx"):
+                actual_ctx = self.llm.n_ctx()
+                if actual_ctx < n_ctx:
+                    logger.warning(
+                        f"Model context window ({actual_ctx}) is smaller than requested ({n_ctx}). "
+                        f"Using model's limit to prevent garbled output."
+                    )
+                    self.n_ctx = actual_ctx
+
+                    if hasattr(self.llm, "ctx_params"):
+                        self.llm.ctx_params.n_ctx = actual_ctx
+        except Exception as e:
+            logger.warning(f"Could not verify model context window: {e}")
 
     def create_chat_completion(
         self,
@@ -125,26 +154,18 @@ class LlamaCppBackend(LLMBackend):
         if tools is not None:
             completion_kwargs["tools"] = tools
 
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        logger.debug(f"Streaming with kwargs: {completion_kwargs}")
+        logger.debug(f"Messages being sent: {messages}")
+
         stream = self.llm.create_chat_completion(**completion_kwargs)
 
         for chunk in stream:
             chunk_dict = dict(chunk)
-
-            choice = chunk_dict.get("choices", [{}])[0]
-            delta = choice.get("delta", {})
-            content = delta.get("content", "")
-
-            if content and isinstance(content, str):
-                printable_ratio = sum(1 for c in content if c.isprintable() or c.isspace()) / len(
-                    content
-                )
-                if printable_ratio < 0.5:
-                    import logging
-
-                    logging.warning(
-                        f"Detected potentially garbled content from llama-cpp: "
-                        f"{repr(content[:100])}"
-                    )
+            logger.debug(f"Received chunk: {chunk_dict}")
 
             yield chunk_dict
 

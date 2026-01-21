@@ -359,19 +359,15 @@ class LLMService:
                     if delta.get("content"):
                         token = delta.get("content", "")
                         if not isinstance(token, str):
+                            import logging
+
+                            logging.warning(f"Non-string token received: {type(token)} = {token}")
                             continue
 
-                        if len(token) > 0:
-                            printable_ratio = sum(
-                                1 for c in token if c.isprintable() or c.isspace()
-                            ) / len(token)
-                            if printable_ratio < 0.5:
-                                import logging
+                        import logging
 
-                                logging.warning(
-                                    f"Detected garbled token from LLM backend: {repr(token[:50])}"
-                                )
-                                continue
+                        logger = logging.getLogger(__name__)
+                        logger.debug(f"Token received: {repr(token)}")
 
                         accumulated_content += token
                         yield {"type": "token", "content": token}
