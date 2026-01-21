@@ -25,7 +25,6 @@ from zikos.services.prompt import SystemPromptBuilder
 from zikos.services.prompt.sections import (
     AudioAnalysisContextFormatter,
     CorePromptSection,
-    MusicFlamingoSection,
     ToolInstructionsSection,
 )
 from zikos.services.tool_providers import get_tool_provider
@@ -603,7 +602,6 @@ class LLMService:
 
         builder = SystemPromptBuilder()
         builder.add_section(CorePromptSection(prompt_file_path))
-        builder.add_section(MusicFlamingoSection())
 
         result: str = builder.build()
         return result

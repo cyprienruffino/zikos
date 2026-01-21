@@ -34,51 +34,6 @@
 - Replaced all `print()` statements with proper `logging.getLogger()` calls
 - Appropriate log levels: `debug()`, `info()`, `warning()`, `error()`
 
-## Music Flamingo Integration
-
-### Status: ⏳ Planned
-
-**Model**: `nvidia/music-flamingo-hf` (Audio Flamingo 3, 8B parameters)
-
-**Key Constraints**:
-- Max audio length: 20 minutes total
-- Processing: 30-second windows
-- Per-sample cap: 10 minutes (truncated if longer)
-- Formats: WAV, MP3, FLAC
-- Max input text: 24,000 tokens
-- Max output text: 2,048 tokens
-
-**Usage Pattern**:
-```python
-conversation = [{
-    "role": "user",
-    "content": [
-        {"type": "text", "text": "Analyze this performance"},
-        {"type": "audio", "path": "/path/to/audio.wav"}
-    ]
-}]
-```
-
-**Implementation Considerations**:
-1. New backend: `MusicFlamingoBackend` (or extend `TransformersBackend`)
-2. Input format: Multimodal (text + audio paths)
-3. Audio preprocessing: Format conversion, sample rate, duration handling
-4. Tool calling: Verify if Music Flamingo supports function calling (CRITICAL)
-5. Output limitations: 2,048 token max (may truncate detailed feedback)
-
-**Recommended Approach**: Hybrid
-- Qwen orchestrates tools and handles analysis
-- Music Flamingo as sophisticated tool - can be called when needed
-- Remote service option - Music Flamingo can run on dedicated service
-- Benefits: Keeps existing architecture, leverages both signal processing and model predictions
-
-**Challenges**:
-- Tool calling support unknown (may need hybrid approach)
-- Output token limit (2,048 vs current flexible length)
-- Context window (24K tokens vs current 32K+)
-- Audio preprocessing pipeline needed
-- Higher VRAM requirements
-
 ## Prompt System Architecture
 
 ### Status: ✅ Completed
@@ -94,7 +49,6 @@ prompt/
     ├── __init__.py          # Section exports
     ├── base.py              # PromptSection abstract base class
     ├── core.py              # CorePromptSection - loads from SYSTEM_PROMPT.md
-    ├── music_flamingo.py    # MusicFlamingoSection - conditional Music Flamingo info
     ├── tools.py             # ToolInstructionsSection - dynamic tool documentation
     └── audio_context.py     # Audio analysis context formatters
 ```
@@ -103,7 +57,6 @@ prompt/
 - `PromptSection` base class: `render()` and `should_include()` methods
 - `SystemPromptBuilder`: Composes sections, filters by `should_include()`
 - `CorePromptSection`: Loads core prompt from SYSTEM_PROMPT.md
-- `MusicFlamingoSection`: Conditionally includes Music Flamingo instructions
 - `ToolInstructionsSection`: Dynamically generates tool documentation at runtime
 - `AudioAnalysisContextFormatter`: Static methods for formatting analysis context
 

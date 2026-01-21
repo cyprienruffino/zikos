@@ -36,9 +36,6 @@ class Settings(BaseModel):
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 8001
 
-    # Music Flamingo Service
-    music_flamingo_service_url: str = ""
-
     # Debug
     debug_tool_calls: bool = False
 
@@ -68,9 +65,6 @@ class Settings(BaseModel):
             ),
             mcp_server_host=os.getenv("MCP_SERVER_HOST", defaults.mcp_server_host),
             mcp_server_port=int(os.getenv("MCP_SERVER_PORT", str(defaults.mcp_server_port))),
-            music_flamingo_service_url=os.getenv(
-                "MUSIC_FLAMINGO_SERVICE_URL", defaults.music_flamingo_service_url
-            ),
             debug_tool_calls=os.getenv(
                 "DEBUG_TOOL_CALLS", str(defaults.debug_tool_calls).lower()
             ).lower()

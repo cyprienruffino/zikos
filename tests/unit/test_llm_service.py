@@ -124,35 +124,6 @@ class TestSystemPrompt:
         prompt = llm_service._get_system_prompt(prompt_file_path=non_existent_file)
         assert "expert music teacher" in prompt.lower()
 
-    def test_get_system_prompt_injects_music_flamingo_when_configured(self, llm_service, tmp_path):
-        """Test that Music Flamingo section is injected when service URL is configured"""
-        prompt_file = tmp_path / "SYSTEM_PROMPT.md"
-        prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
-
-        from unittest.mock import patch
-
-        # Patch settings in the MusicFlamingoSection module where it's actually used
-        with patch("zikos.services.prompt.sections.music_flamingo.settings") as mock_settings:
-            mock_settings.music_flamingo_service_url = "http://localhost:8001"
-            prompt = llm_service._get_system_prompt(prompt_file_path=prompt_file)
-            assert "Music Flamingo" in prompt
-            assert "analyze_music_with_flamingo" in prompt
-            assert "multimodal AI model" in prompt
-
-    def test_get_system_prompt_no_music_flamingo_when_not_configured(self, llm_service, tmp_path):
-        """Test that Music Flamingo section is NOT injected when service URL is not configured"""
-        prompt_file = tmp_path / "SYSTEM_PROMPT.md"
-        prompt_file.write_text("# System Prompt\n\n```\nYou are a helpful assistant.\n```\n")
-
-        from unittest.mock import patch
-
-        # Ensure music_flamingo_service_url is not set
-        with patch("zikos.services.prompt.sections.music_flamingo.settings") as mock_settings:
-            mock_settings.music_flamingo_service_url = ""
-            prompt = llm_service._get_system_prompt(prompt_file_path=prompt_file)
-            assert "Music Flamingo" not in prompt
-            assert "analyze_music_with_flamingo" not in prompt
-
 
 class TestConversationHistory:
     """Tests for conversation history management"""

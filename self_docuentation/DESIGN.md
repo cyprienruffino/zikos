@@ -74,7 +74,6 @@
 **Modular Architecture**:
 - `SystemPromptBuilder` - Composes sections
 - `CorePromptSection` - Loads from SYSTEM_PROMPT.md
-- `MusicFlamingoSection` - Conditional Music Flamingo info
 - `ToolInstructionsSection` - Dynamic tool documentation
 - `AudioAnalysisContextFormatter` - Formats analysis context messages
 
