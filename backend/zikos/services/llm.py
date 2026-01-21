@@ -57,6 +57,7 @@ class LLMService:
 
     def __init__(self):
         self.backend = None
+        self.initialization_error: str | None = None
         self.audio_service = AudioService()
         self.tool_provider = None
         self.thinking_extractor = ThinkingExtractor()
@@ -92,6 +93,7 @@ class LLMService:
     def _initialize_llm(self):
         """Initialize LLM backend"""
         if not settings.llm_model_path:
+            self.initialization_error = "LLM_MODEL_PATH is not set in environment variables"
             return
 
         model_path_str = settings.llm_model_path
@@ -102,7 +104,8 @@ class LLMService:
             and not model_path_str.startswith("Qwen/")
             and "/" not in model_path_str
         ):
-            _logger.warning(f"Model file not found at {model_path}")
+            error_msg = f"Model file not found at {model_path.resolve()}"
+            _logger.warning(error_msg)
             _logger.warning("The application will start but LLM features will be unavailable.")
             _logger.info(
                 f"To download a model, run: python scripts/download_model.py qwen2.5-7b-instruct-q4 -o {model_path.parent}"
@@ -110,6 +113,7 @@ class LLMService:
             _logger.info(
                 "See MODEL_RECOMMENDATIONS.md for recommended models with better function calling support."
             )
+            self.initialization_error = error_msg
             return
 
         try:
@@ -117,7 +121,9 @@ class LLMService:
             self.backend = create_backend(model_path_str, backend_type)
 
             if self.backend is None:
-                _logger.warning("Could not create LLM backend")
+                error_msg = "Could not create LLM backend"
+                _logger.warning(error_msg)
+                self.initialization_error = error_msg
                 return
 
             n_gpu_layers = settings.llm_n_gpu_layers
@@ -143,9 +149,11 @@ class LLMService:
             )
             _logger.info(f"Using tool provider: {type(self.tool_provider).__name__}")
         except Exception as e:
+            error_msg = str(e)
             _logger.error(f"Error initializing LLM: {e}", exc_info=True)
             _logger.warning("The application will start but LLM features will be unavailable.")
             self.backend = None
+            self.initialization_error = error_msg
             self.tool_provider = get_tool_provider()
 
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -279,9 +287,11 @@ class LLMService:
         from collections.abc import AsyncGenerator
 
         if not self.backend or not self.backend.is_initialized():
-            yield self._yield_error(
-                "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH."
-            )
+            if self.initialization_error:
+                error_msg = f"LLM not available: {self.initialization_error}"
+            else:
+                error_msg = "LLM not available. Please ensure the model file exists at the path specified by LLM_MODEL_PATH."
+            yield self._yield_error(error_msg)
             return
 
         history = self._get_conversation_history(session_id)
@@ -348,6 +358,21 @@ class LLMService:
 
                     if delta.get("content"):
                         token = delta.get("content", "")
+                        if not isinstance(token, str):
+                            continue
+
+                        if len(token) > 0:
+                            printable_ratio = sum(
+                                1 for c in token if c.isprintable() or c.isspace()
+                            ) / len(token)
+                            if printable_ratio < 0.5:
+                                import logging
+
+                                logging.warning(
+                                    f"Detected garbled token from LLM backend: {repr(token[:50])}"
+                                )
+                                continue
+
                         accumulated_content += token
                         yield {"type": "token", "content": token}
 

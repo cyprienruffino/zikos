@@ -67,6 +67,8 @@ Returns: dict with:
 - duration (float): Duration of generated audio in seconds
 - synthesis_method (str): Method used ("fluidsynth")
 
+Available instruments: "piano", "guitar", "violin", "bass", "drums"
+
 Error Handling:
 - If MIDI file not found: You must call validate_midi first to create the MIDI file
 - If synthesis fails: Check that FluidSynth and SoundFont are properly installed""",
@@ -74,7 +76,12 @@ Error Handling:
                             "type": "object",
                             "properties": {
                                 "midi_file_id": {"type": "string"},
-                                "instrument": {"type": "string", "default": "piano"},
+                                "instrument": {
+                                    "type": "string",
+                                    "default": "piano",
+                                    "enum": ["piano", "guitar", "violin", "bass", "drums"],
+                                    "description": "Instrument to use for synthesis. Available: piano, guitar, violin, bass, drums",
+                                },
                             },
                             "required": ["midi_file_id"],
                         },

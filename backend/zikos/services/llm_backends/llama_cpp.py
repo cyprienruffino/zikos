@@ -128,7 +128,25 @@ class LlamaCppBackend(LLMBackend):
         stream = self.llm.create_chat_completion(**completion_kwargs)
 
         for chunk in stream:
-            yield dict(chunk)
+            chunk_dict = dict(chunk)
+
+            choice = chunk_dict.get("choices", [{}])[0]
+            delta = choice.get("delta", {})
+            content = delta.get("content", "")
+
+            if content and isinstance(content, str):
+                printable_ratio = sum(1 for c in content if c.isprintable() or c.isspace()) / len(
+                    content
+                )
+                if printable_ratio < 0.5:
+                    import logging
+
+                    logging.warning(
+                        f"Detected potentially garbled content from llama-cpp: "
+                        f"{repr(content[:100])}"
+                    )
+
+            yield chunk_dict
 
     def supports_tools(self) -> bool:
         """LlamaCpp supports tools via create_chat_completion"""

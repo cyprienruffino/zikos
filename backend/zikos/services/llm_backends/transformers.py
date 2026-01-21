@@ -5,7 +5,6 @@ import re
 import threading
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from queue import Queue
 from typing import Any
 
 try:
@@ -231,18 +230,60 @@ class TransformersBackend(LLMBackend):
         if top_p is not None:
             generation_kwargs["top_p"] = top_p
 
-        streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
+        if not hasattr(self.tokenizer, "decode") or not callable(self.tokenizer.decode):
+            raise RuntimeError("Tokenizer does not support decoding")
+
+        streamer = TextIteratorStreamer(
+            self.tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=True,
+            timeout=60.0,
+        )
         generation_kwargs["streamer"] = streamer
 
         def generate():
-            with torch.no_grad():
-                self.model.generate(**inputs, **generation_kwargs)
+            try:
+                with torch.no_grad():
+                    self.model.generate(**inputs, **generation_kwargs)
+            except Exception as e:
+                import logging
 
-        generation_thread = threading.Thread(target=generate)
+                logging.error(f"Error in generation thread: {e}", exc_info=True)
+
+        generation_thread = threading.Thread(target=generate, daemon=True)
         generation_thread.start()
 
         accumulated_text = ""
+        consecutive_garbage_count = 0
+        max_garbage_chunks = 10
+
         for new_text in streamer:
+            if new_text is None:
+                break
+            if not isinstance(new_text, str):
+                continue
+
+            if not new_text or (not new_text.strip() and not accumulated_text):
+                continue
+
+            if len(new_text) > 0:
+                printable_ratio = sum(1 for c in new_text if c.isprintable() or c.isspace()) / len(
+                    new_text
+                )
+                if printable_ratio < 0.5:
+                    consecutive_garbage_count += 1
+                    if consecutive_garbage_count >= max_garbage_chunks:
+                        import logging
+
+                        logging.error(
+                            f"Detected garbled output from model. "
+                            f"Accumulated text length: {len(accumulated_text)}"
+                        )
+                        break
+                else:
+                    consecutive_garbage_count = 0
+
             accumulated_text += new_text
             yield {
                 "choices": [
@@ -256,7 +297,7 @@ class TransformersBackend(LLMBackend):
                 ]
             }
 
-        generation_thread.join()
+        generation_thread.join(timeout=30)
 
         tool_calls = self._extract_tool_calls(accumulated_text)
         finish_reason = "tool_calls" if tool_calls else "stop"
