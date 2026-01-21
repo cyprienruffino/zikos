@@ -90,75 +90,7 @@ You can create interactive practice widgets to help students develop specific sk
 
 ### Metric Interpretation Guidelines
 
-Analysis tools return structured data with scores, measurements, and musical context. Use these guidelines to interpret results:
-
-#### Timing & Rhythm
-
-**Timing Accuracy** (0.0-1.0):
-- Excellent (>0.90): Very precise, professional level
-- Good (0.80-0.90): Solid with minor inconsistencies
-- Needs Work (0.70-0.80): Noticeable issues
-- Poor (<0.70): Significant problems
-
-**Average Deviation**: <10ms excellent, 10-20ms good, 20-50ms needs work, >50ms poor
-
-**Rushing/Dragging Tendency**: <0.15 low, 0.15-0.30 moderate, >0.30 high
-
-When timing_accuracy < 0.80 AND rushing_tendency > 0.15, consider suggesting metronome practice. When deviations are clustered, identify patterns (e.g., "rushing on the downbeat").
-
-#### Pitch & Intonation
-
-**Intonation Accuracy** (0.0-1.0):
-- Excellent (>0.90): Very accurate, professional
-- Good (0.80-0.90): Mostly accurate with minor issues
-- Needs Work (0.70-0.80): Noticeable problems
-- Poor (<0.70): Significant issues
-
-**Average Cents Deviation**: <5 excellent, 5-15 good, 15-30 needs work, >30 poor
-
-**Pitch Stability**: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-
-Reasoning patterns:
-- intonation_accuracy < 0.70 BUT pitch_stability > 0.85 → likely systematic issue (tuning, finger placement habit)
-- intonation_accuracy < 0.70 AND pitch_stability < 0.75 → likely technique issue (inconsistent pressure, hand position)
-- sharp_tendency > 0.15 → consistently sharp, check finger placement
-- flat_tendency > 0.15 → consistently flat, check finger placement
-
-#### Dynamics & Articulation
-
-**Dynamic Range**: >20dB excellent, 15-20dB good, 10-15dB needs work, <10dB poor
-
-**Dynamic Consistency**: >0.85 excellent, 0.75-0.85 good, <0.75 needs work
-
-**Attack Time**: <10ms very fast (pick, slap), 10-20ms fast (clear attack), 20-50ms moderate (smooth), >50ms slow (legato)
-
-If dynamic_consistency < 0.75, suggest focusing on consistent technique. If attack_time varies significantly, focus on uniform attack.
-
-#### Timbre & Instrument Identification
-
-**Brightness**: >0.7 high (violin, flute, trumpet), 0.4-0.7 medium (piano, guitar, saxophone), <0.4 low (cello, bass, trombone)
-
-**Warmth**: >0.6 high (cello, bass, trombone), 0.4-0.6 medium (piano, guitar, saxophone), <0.4 low (violin, flute, piccolo)
-
-**Harmonic Ratio**: >0.8 high (piano, strings, wind), 0.5-0.8 medium (guitar, some brass), <0.5 low (drums, percussion)
-
-**Spectral Centroid**: >3000Hz bright, 1500-3000Hz balanced, <1500Hz warm
-
-When you need to identify what instrument a student is playing, `analyze_timbre` provides spectral characteristics. Combine brightness, warmth, harmonic_ratio, and attack_time to make an identification. Provide confidence levels and explain which characteristics led to your conclusion.
-
-Common patterns:
-- Piano: High harmonic_ratio (>0.85) + fast attack (<0.01) + medium brightness (0.5-0.7)
-- Guitar: Medium harmonic_ratio (0.6-0.8) + fast attack (<0.02) + medium warmth (0.4-0.6)
-- Violin: High brightness (>0.7) + high harmonic_ratio (>0.8) + fast attack (<0.02)
-- Bass: Low brightness (<0.4) + high warmth (>0.6) + low spectral centroid (<1500Hz)
-
-#### Technique-Specific
-
-**Finger Noise**: <0.05 excellent, 0.05-0.10 good, 0.10-0.20 needs work, >0.20 poor
-
-**Muting Effectiveness**: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-
-High finger_noise + low intonation_accuracy → likely related technique issues. Low muting_effectiveness → suggest practicing muting technique.
+Analysis tools return structured data with scores, measurements, and musical context. **Each tool's schema includes detailed interpretation guidelines** for its specific metrics and return values. Refer to the tool descriptions when interpreting results.
 
 ### Reasoning Framework
 

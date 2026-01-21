@@ -49,7 +49,13 @@ class AudioAnalysisTools(ToolCollection):
                 "type": "function",
                 "function": {
                     "name": "analyze_tempo",
-                    "description": "Analyze tempo/BPM and timing consistency",
+                    "description": """Analyze tempo/BPM and timing consistency.
+
+Returns: dict with bpm, tempo_stability_score (0.0-1.0), is_steady, tempo_changes, rushing_detected, dragging_detected
+
+Interpretation Guidelines:
+- tempo_stability_score: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
+- When tempo_stability_score < 0.80 AND rushing_detected, consider suggesting metronome practice""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -63,7 +69,19 @@ class AudioAnalysisTools(ToolCollection):
                 "type": "function",
                 "function": {
                     "name": "detect_pitch",
-                    "description": "Detect pitch and notes with intonation analysis",
+                    "description": """Detect pitch and notes with intonation analysis.
+
+Returns: dict with notes (with start_time, end_time, duration, pitch, frequency, confidence), intonation_accuracy (0.0-1.0), pitch_stability (0.0-1.0), detected_key, sharp_tendency, flat_tendency, average_cents_deviation
+
+Interpretation Guidelines:
+- intonation_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
+- average_cents_deviation: <5 excellent, 5-15 good, 15-30 needs work, >30 poor
+- pitch_stability: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
+- Reasoning patterns:
+  * intonation_accuracy < 0.70 BUT pitch_stability > 0.85 → likely systematic issue (tuning, finger placement habit)
+  * intonation_accuracy < 0.70 AND pitch_stability < 0.75 → likely technique issue (inconsistent pressure, hand position)
+  * sharp_tendency > 0.15 → consistently sharp, check finger placement
+  * flat_tendency > 0.15 → consistently flat, check finger placement""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -77,7 +95,16 @@ class AudioAnalysisTools(ToolCollection):
                 "type": "function",
                 "function": {
                     "name": "analyze_rhythm",
-                    "description": "Analyze rhythm and timing accuracy",
+                    "description": """Analyze rhythm and timing accuracy.
+
+Returns: dict with onsets, timing_accuracy (0.0-1.0), rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency
+
+Interpretation Guidelines:
+- timing_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
+- average_deviation_ms: <10ms excellent, 10-20ms good, 20-50ms needs work, >50ms poor
+- rushing_tendency/dragging_tendency: <0.15 low, 0.15-0.30 moderate, >0.30 high
+- When timing_accuracy < 0.80 AND rushing_tendency > 0.15, consider suggesting metronome practice
+- When deviations are clustered, identify patterns (e.g., "rushing on the downbeat")""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -91,7 +118,14 @@ class AudioAnalysisTools(ToolCollection):
                 "type": "function",
                 "function": {
                     "name": "analyze_dynamics",
-                    "description": "Analyze amplitude and dynamic range",
+                    "description": """Analyze amplitude and dynamic range.
+
+Returns: dict with dynamic_range (dB), dynamic_consistency (0.0-1.0), average_amplitude, peak_amplitude
+
+Interpretation Guidelines:
+- dynamic_range: >20dB excellent, 15-20dB good, 10-15dB needs work, <10dB poor
+- dynamic_consistency: >0.85 excellent, 0.75-0.85 good, <0.75 needs work
+- If dynamic_consistency < 0.75, suggest focusing on consistent technique""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -105,7 +139,17 @@ class AudioAnalysisTools(ToolCollection):
                 "type": "function",
                 "function": {
                     "name": "analyze_articulation",
-                    "description": "Analyze articulation types (staccato, legato, etc.)",
+                    "description": """Analyze articulation types (staccato, legato, etc.).
+
+Returns: dict with attack_time (ms), articulation_types, finger_noise (0.0-1.0), muting_effectiveness (0.0-1.0)
+
+Interpretation Guidelines:
+- attack_time: <10ms very fast (pick, slap), 10-20ms fast (clear attack), 20-50ms moderate (smooth), >50ms slow (legato)
+- If attack_time varies significantly, focus on uniform attack
+- finger_noise: <0.05 excellent, 0.05-0.10 good, 0.10-0.20 needs work, >0.20 poor
+- muting_effectiveness: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
+- High finger_noise + low intonation_accuracy → likely related technique issues
+- Low muting_effectiveness → suggest practicing muting technique""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -119,7 +163,21 @@ class AudioAnalysisTools(ToolCollection):
                 "type": "function",
                 "function": {
                     "name": "analyze_timbre",
-                    "description": "Analyze timbre and spectral characteristics to assess tone quality and identify instruments. Useful for evaluating tone production and technique.",
+                    "description": """Analyze timbre and spectral characteristics to assess tone quality and identify instruments. Useful for evaluating tone production and technique.
+
+Returns: dict with brightness (0.0-1.0), warmth (0.0-1.0), sharpness, spectral_centroid (Hz), spectral_rolloff, spectral_bandwidth, timbre_consistency, attack_time, harmonic_ratio (0.0-1.0)
+
+Interpretation Guidelines:
+- brightness: >0.7 high (violin, flute, trumpet), 0.4-0.7 medium (piano, guitar, saxophone), <0.4 low (cello, bass, trombone)
+- warmth: >0.6 high (cello, bass, trombone), 0.4-0.6 medium (piano, guitar, saxophone), <0.4 low (violin, flute, piccolo)
+- harmonic_ratio: >0.8 high (piano, strings, wind), 0.5-0.8 medium (guitar, some brass), <0.5 low (drums, percussion)
+- spectral_centroid: >3000Hz bright, 1500-3000Hz balanced, <1500Hz warm
+- Instrument identification patterns:
+  * Piano: High harmonic_ratio (>0.85) + fast attack (<0.01) + medium brightness (0.5-0.7)
+  * Guitar: Medium harmonic_ratio (0.6-0.8) + fast attack (<0.02) + medium warmth (0.4-0.6)
+  * Violin: High brightness (>0.7) + high harmonic_ratio (>0.8) + fast attack (<0.02)
+  * Bass: Low brightness (<0.4) + high warmth (>0.6) + low spectral centroid (<1500Hz)
+- Combine brightness, warmth, harmonic_ratio, and attack_time to make identification. Provide confidence levels and explain which characteristics led to your conclusion.""",
                     "parameters": {
                         "type": "object",
                         "properties": {

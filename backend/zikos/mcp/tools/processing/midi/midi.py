@@ -28,7 +28,18 @@ class MidiTools(ToolCollection):
                     "type": "function",
                     "function": {
                         "name": "validate_midi",
-                        "description": "Validate MIDI text syntax and convert it to a MIDI file. Use this after generating MIDI in your response to ensure it's valid before synthesizing to audio or rendering notation. Returns validation errors if the MIDI syntax is invalid.",
+                        "description": """Validate MIDI text syntax and convert it to a MIDI file. Use this after generating MIDI in your response to ensure it's valid before synthesizing to audio or rendering notation.
+
+Returns: dict with:
+- valid (bool): True if MIDI is valid, False otherwise
+- midi_file_id (str): UUID of created MIDI file (empty string if invalid)
+- errors (list[str]): List of validation error messages (empty if valid)
+- warnings (list[str]): List of warnings (non-fatal issues)
+- metadata (dict): Parsed metadata including duration, tempo, tracks, note_count
+
+Error Handling:
+- If valid=False, check errors list for specific issues. Fix the MIDI syntax and try again.
+- If valid=True, use the returned midi_file_id with midi_to_audio or midi_to_notation.""",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -47,7 +58,18 @@ class MidiTools(ToolCollection):
                     "type": "function",
                     "function": {
                         "name": "midi_to_audio",
-                        "description": "Synthesize MIDI file to playable audio. Converts a validated MIDI file into audio that can be played back. Use this after validate_midi to create audio examples for the student.",
+                        "description": """Synthesize MIDI file to playable audio. Converts a validated MIDI file into audio that can be played back. Use this after validate_midi to create audio examples for the student.
+
+Returns: dict with:
+- audio_file_id (str): UUID of generated audio file
+- midi_file_id (str): The MIDI file ID that was synthesized
+- instrument (str): Instrument used for synthesis
+- duration (float): Duration of generated audio in seconds
+- synthesis_method (str): Method used ("fluidsynth")
+
+Error Handling:
+- If MIDI file not found: You must call validate_midi first to create the MIDI file
+- If synthesis fails: Check that FluidSynth and SoundFont are properly installed""",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -67,7 +89,19 @@ class MidiTools(ToolCollection):
                     "type": "function",
                     "function": {
                         "name": "midi_to_notation",
-                        "description": "Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.",
+                        "description": """Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.
+
+Returns: dict with:
+- midi_file_id (str): The MIDI file ID that was rendered
+- format (str): Requested format ("sheet_music", "tabs", or "both")
+- sheet_music_url (str, optional): URL to sheet music image (if format includes "sheet_music")
+- tabs_url (str, optional): URL to tabs image (if format includes "tabs")
+- sheet_music_error (str, optional): Error message if sheet music generation failed
+- tabs_error (str, optional): Error message if tabs generation failed
+
+Error Handling:
+- If MIDI file not found: You must call validate_midi first to create the MIDI file
+- If rendering fails: Check sheet_music_error or tabs_error fields for details""",
                         "parameters": {
                             "type": "object",
                             "properties": {

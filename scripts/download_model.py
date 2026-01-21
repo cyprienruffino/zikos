@@ -196,7 +196,12 @@ def download_model(
     if model_key not in MODEL_CONFIGS:
         print(f"Error: Unknown model '{model_key}'")
         print("\nAvailable models:")
-        print("\n⭐ RECOMMENDED for Function Calling (7B-14B):")
+        print("\n⭐ RECOMMENDED (Default):")
+        for key in ["tinyllama-1.1b-chat-q4", "mistral-7b-instruct-v0.3-q4"]:
+            if key in MODEL_CONFIGS:
+                config = MODEL_CONFIGS[key]
+                print(f"  {key}: {config['description']}")
+        print("\nExcellent Function Calling (7B-14B):")
         for key, config in MODEL_CONFIGS.items():
             if config.get("function_calling") == "excellent" and (
                 "7b" in key.lower() or "14b" in key.lower()
@@ -329,8 +334,8 @@ def download_model(
                     "  - Check the repository on HuggingFace: https://huggingface.co/"
                     + config["repo_id"]
                 )
-                print("  - Try an alternative model like 'mistral-7b-instruct-v0.3-q4'")
-                print("  - Or use 'llama-3.2-8b-instruct-q4' as a fallback")
+                print("  - Try an alternative model like 'tinyllama-1.1b-chat-q4' (recommended)")
+                print("  - Or use 'mistral-7b-instruct-v0.3-q4' as a fallback")
             elif "401" in str(e) or "Unauthorized" in str(e):
                 print("\n⚠️  Authentication error or repository not found.")
                 print("This could mean:")
@@ -343,8 +348,8 @@ def download_model(
                     + config["repo_id"]
                 )
                 print("  - Try an alternative model:")
+                print("    * 'tinyllama-1.1b-chat-q4' (recommended, CPU-friendly)")
                 print("    * 'mistral-7b-instruct-v0.3-q4' (GOOD function calling)")
-                print("    * 'llama-3.2-8b-instruct-q4' (GOOD function calling)")
                 print("  - Install huggingface_hub for better download handling:")
                 print("    pip install huggingface_hub")
             if output_path.exists():
@@ -355,7 +360,18 @@ def download_model(
 def list_models():
     """List available models"""
     print("Available models:\n")
-    print("⭐ RECOMMENDED for Function Calling (7B-14B):")
+    print("⭐ RECOMMENDED (Default):")
+    print("-" * 70)
+    for key in ["tinyllama-1.1b-chat-q4", "mistral-7b-instruct-v0.3-q4"]:
+        if key in MODEL_CONFIGS:
+            config = MODEL_CONFIGS[key]
+            print(f"  {key}")
+            print(f"    {config['description']}")
+            print(f"    Repository: {config['repo_id']}")
+            print(f"    File: {config['filename']}")
+            print()
+
+    print("\nExcellent Function Calling (7B-14B):")
     print("-" * 70)
     for key, config in MODEL_CONFIGS.items():
         if config.get("function_calling") == "excellent" and (

@@ -10,7 +10,7 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 ## Quick Overview
 
 - **Audio Input**: User recordings analyzed via signal processing tools
-- **LLM**: Qwen2.5/Qwen3 models with excellent function calling support (or Llama 3.3 70B)
+- **LLM**: TinyLlama (recommended for CPU) or Mistral 7B (recommended for GPU) with good function calling support
 - **Output**: Text feedback + MIDI-generated musical examples with notation
 - **Architecture**: FastAPI backend + TypeScript frontend
 - **Backends**: Supports both llama-cpp-python (GGUF) and HuggingFace Transformers (safetensors)
@@ -19,10 +19,10 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 
 Zikos tries to support a wide range of hardware configurations:
 
-- **CPU-only**: Works without GPU (very slow, but functional)
-- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Qwen2.5-7B recommended
-- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Qwen2.5-14B or Llama 3.3 70B
-- **Large GPU (80GB+ VRAM)**: H100, A100, etc. - Qwen3-32B with 128K context window
+- **CPU-only**: Works without GPU (very slow, but functional) - TinyLlama recommended
+- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Mistral 7B recommended
+- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Mistral 7B or larger models
+- **Large GPU (80GB+ VRAM)**: H100, A100, etc. - Larger models with extended context
 
 ## Setup
 ### Prerequisites
@@ -61,7 +61,8 @@ You can download models using the provided helper script. See [MODEL_RECOMMENDAT
 ```bash
 # List available models
 python scripts/download_model.py --list
-python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models
+python scripts/download_model.py tinyllama-1.1b-chat-q4 -o ./models
+python scripts/download_model.py mistral-7b-instruct-v0.3-q4 -o ./models
 
 # With Hugging Face token (for private models)
 python scripts/download_model.py qwen3-32b-instruct -t YOUR_TOKEN
@@ -70,8 +71,9 @@ python scripts/download_model.py qwen3-32b-instruct -t YOUR_TOKEN
 The script supports both GGUF (llama-cpp-python) and Transformers (HuggingFace) formats. After downloading, the `.env` file created by the setup script will be configured automatically, or you can set `LLM_MODEL_PATH` manually:
 
 ```bash
-# For GGUF models
-export LLM_MODEL_PATH=./models/Qwen2.5-7B-Instruct-Q4_K_M.gguf
+# For GGUF models (examples)
+export LLM_MODEL_PATH=./models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+export LLM_MODEL_PATH=./models/mistral-7b-instruct-v0.3.Q4_K_M.gguf
 ```
 
 **Note**: The script requires `huggingface_hub` for Transformers models. Install with:
@@ -105,8 +107,9 @@ Zikos can be run using Docker, which handles all dependencies and setup automati
 The easiest way to run Zikos with Docker:
 
 ```bash
-# Set the model filename (optional, defaults to Llama-3.1-8B-Instruct-Q4_K_M.gguf)
-export LLM_MODEL_FILE=Qwen2.5-7B-Instruct-Q4_K_M.gguf
+# Set the model filename (optional, defaults to tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf)
+export LLM_MODEL_FILE=tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+export LLM_MODEL_FILE=mistral-7b-instruct-v0.3.Q4_K_M.gguf
 
 # Build and start the container
 docker-compose up --build
@@ -135,7 +138,7 @@ docker run -d \
   -v ./audio_storage:/app/audio_storage \
   -v ./midi_storage:/app/midi_storage \
   -v ./notation_storage:/app/notation_storage \
-  -e LLM_MODEL_PATH=/app/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf \
+  -e LLM_MODEL_PATH=/app/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf \
   -e LLM_N_CTX=32768 \
   -e LLM_N_GPU_LAYERS=0 \
   zikos
@@ -156,8 +159,8 @@ Environment variables can be customized in `docker-compose.yml` or passed via `-
 ## Development
 ### Dependencies
 
-- **LLM**: Qwen2.5-7B/14B (recommended), Qwen3-32B (for H100) or similar models, via dual backend support
-  - **llama-cpp-python**: For GGUF models (Qwen2.5, Llama 3.3)
+- **LLM**: TinyLlama (recommended for CPU), Mistral 7B (recommended for GPU), or similar models, via dual backend support
+  - **llama-cpp-python**: For GGUF models (TinyLlama, Mistral, Llama, Qwen)
   - **HuggingFace Transformers**: For safetensors models (Qwen3)
 - **Audio Processing**: librosa, torchaudio, soundfile
 - **MIDI**: Music21 for processing, FluidSynth for synthesis

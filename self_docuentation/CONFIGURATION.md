@@ -26,22 +26,23 @@
 ## Model Selection by Hardware
 
 ### CPU-Only
-- Model: Qwen2.5-7B-Instruct Q4_K_M (~4.5GB RAM)
-- Config: `LLM_N_GPU_LAYERS=0`, `LLM_N_CTX=16384`
-- Performance: 2-10x slower than GPU
+- Model: TinyLlama 1.1B Chat Q4_K_M (~670MB RAM) - **RECOMMENDED**
+- Config: `LLM_N_GPU_LAYERS=0`, `LLM_N_CTX=2048`
+- Performance: Fast on CPU, limited function calling
+- Alternative: Mistral 7B Instruct Q4_K_M (~4.5GB RAM, slower but better quality)
 
 ### 8GB VRAM (RTX 3060Ti, 3070, 4060Ti)
-- Model: Qwen2.5-7B-Instruct Q4_K_M (~4.5GB VRAM)
-- Config: `LLM_N_GPU_LAYERS=-1`, `LLM_N_CTX=32768`
-- Alternative: Qwen2.5-14B-Instruct Q4_K_M (~8GB, tight fit)
+- Model: Mistral 7B Instruct v0.3 Q4_K_M (~4.5GB VRAM) - **RECOMMENDED**
+- Config: `LLM_N_GPU_LAYERS=-1`, `LLM_N_CTX=8192`
+- Alternative: Qwen2.5-7B-Instruct Q4_K_M (~4.5GB VRAM, better function calling)
 
 ### 16-24GB VRAM (RTX 3090, 4090, A4000)
-- Model: Qwen2.5-14B-Instruct Q4/Q5_K_M (~8-10GB VRAM)
-- Config: `LLM_N_GPU_LAYERS=-1`, `LLM_N_CTX=32768-65536`
+- Model: Mistral 7B Instruct v0.3 Q5_K_M (~5.5GB VRAM) or Qwen2.5-14B-Instruct Q4_K_M (~8GB VRAM)
+- Config: `LLM_N_GPU_LAYERS=-1`, `LLM_N_CTX=8192-32768`
 - Alternative: Llama 3.3 70B Q4_K_M (~40GB VRAM)
 
 ### 80GB+ VRAM (H100, A100)
-- Model: Qwen3-32B-Instruct (~65GB VRAM) - **RECOMMENDED**
+- Model: Qwen3-32B-Instruct (~65GB VRAM)
 - Backend: `transformers` (not `llama_cpp`)
 - Config: `LLM_BACKEND=transformers`, `LLM_N_CTX=131072`, `LLM_N_GPU_LAYERS=-1`
 - Alternative: Qwen3-30B-A3B MoE (~40GB VRAM, faster inference)
@@ -51,6 +52,8 @@
 
 | Model | Native Context | Extended Context | Backend |
 |-------|---------------|------------------|---------|
+| TinyLlama 1.1B | 2K | 2K (native) | llama_cpp |
+| Mistral 7B | 8K | 8K (native) | llama_cpp |
 | Qwen2.5-7B | 32K | 32K (native) | llama_cpp |
 | Qwen2.5-14B | 32K | 32K (native) | llama_cpp |
 | Qwen3-32B | 128K | 128K (native) | transformers |
@@ -63,7 +66,7 @@
 - `auto`: Detects based on model path
   - `.gguf` file → `llama_cpp`
   - Directory → `transformers`
-- `llama_cpp`: GGUF models (Qwen2.5, Llama, Mistral)
+- `llama_cpp`: GGUF models (TinyLlama, Mistral, Qwen2.5, Llama)
 - `transformers`: HuggingFace models (Qwen3)
 
 ## GPU Configuration
