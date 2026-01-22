@@ -30,11 +30,11 @@ class TestMessagePreparer:
         messages = preparer.prepare(history, max_tokens=1000, for_user=False)
 
         assert len(messages) == 1
-        assert messages[0]["role"] == "user"
+        assert messages[0]["role"] == "system"
         assert "helpful assistant" in messages[0]["content"]
 
-    def test_prepare_combines_system_prompt_with_first_user_message(self, preparer):
-        """Test preparing messages combines system prompt with first user message"""
+    def test_prepare_keeps_system_prompt_separate(self, preparer):
+        """Test preparing messages keeps system prompt separate"""
         history = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "Hello"},
@@ -42,10 +42,11 @@ class TestMessagePreparer:
 
         messages = preparer.prepare(history, max_tokens=1000, for_user=False)
 
-        assert len(messages) >= 1
-        assert messages[0]["role"] == "user"
+        assert len(messages) >= 2
+        assert messages[0]["role"] == "system"
         assert "helpful assistant" in messages[0]["content"]
-        assert "Hello" in messages[0]["content"]
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "Hello"
 
     def test_prepare_no_system_prompt_uses_first_message(self, preparer):
         """Test preparing messages uses first message when no system prompt"""

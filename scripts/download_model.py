@@ -48,8 +48,8 @@ MODEL_CONFIGS = {
     "phi-3-mini-q4": {
         "repo_id": "microsoft/Phi-3-mini-4k-instruct-gguf",
         "filename": "Phi-3-mini-4k-instruct-q4.gguf",
-        "description": "Phi-3 Mini 4K Instruct Q4 (small, ~2.3GB, fast, limited function calling)",
-        "function_calling": "limited",
+        "description": "Phi-3 Mini 4K Instruct Q4 (small, ~2.3GB, CPU-friendly, better instruction following than TinyLlama) - **RECOMMENDED FOR CPU**",
+        "function_calling": "moderate",
     },
     "tinyllama-1.1b-chat-q4": {
         "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
@@ -334,7 +334,7 @@ def download_model(
                     "  - Check the repository on HuggingFace: https://huggingface.co/"
                     + config["repo_id"]
                 )
-                print("  - Try an alternative model like 'tinyllama-1.1b-chat-q4' (recommended)")
+                print("  - Try an alternative model like 'phi-3-mini-q4' (recommended for CPU)")
                 print("  - Or use 'mistral-7b-instruct-v0.3-q4' as a fallback")
             elif "401" in str(e) or "Unauthorized" in str(e):
                 print("\n⚠️  Authentication error or repository not found.")
@@ -348,7 +348,7 @@ def download_model(
                     + config["repo_id"]
                 )
                 print("  - Try an alternative model:")
-                print("    * 'tinyllama-1.1b-chat-q4' (recommended, CPU-friendly)")
+                print("    * 'phi-3-mini-q4' (recommended for CPU)")
                 print("    * 'mistral-7b-instruct-v0.3-q4' (GOOD function calling)")
                 print("  - Install huggingface_hub for better download handling:")
                 print("    pip install huggingface_hub")
@@ -362,7 +362,7 @@ def list_models():
     print("Available models:\n")
     print("⭐ RECOMMENDED (Default):")
     print("-" * 70)
-    for key in ["tinyllama-1.1b-chat-q4", "mistral-7b-instruct-v0.3-q4"]:
+    for key in ["phi-3-mini-q4", "mistral-7b-instruct-v0.3-q4"]:
         if key in MODEL_CONFIGS:
             config = MODEL_CONFIGS[key]
             print(f"  {key}")

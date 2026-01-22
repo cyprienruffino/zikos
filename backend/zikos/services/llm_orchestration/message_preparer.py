@@ -20,8 +20,8 @@ class MessagePreparer:
     ) -> list[dict[str, Any]]:
         """Prepare messages for LLM, ensuring system prompt is included
 
-        For models that don't properly handle system messages (like Phi3),
-        prepend the system prompt to the first user message and remove the system message.
+        System messages are always kept separate. All supported models (Phi-3, Qwen, Llama 3.x, Mistral)
+        support system messages natively.
 
         Also truncates conversation history if it exceeds max_tokens to prevent context overflow.
         IMPORTANT: Always preserves audio analysis messages even if they're older.
@@ -46,7 +46,7 @@ class MessagePreparer:
 
         messages = []
         system_prompt = None
-        system_prepended = False
+        system_added = False
         total_tokens = 0
 
         audio_analysis_messages = []
@@ -125,27 +125,12 @@ class MessagePreparer:
                 for marker in ["[Audio Analysis", "Audio analysis complete", "audio_file_id"]
             )
 
-            if msg.get("role") == "user" and system_prompt and not system_prepended:
-                # Prepend system prompt to first user message
-                combined_content = f"{system_prompt}\n\n{msg_content}"
-
-                # Check if adding this would exceed limit
-                # Note: final_total_tokens already includes system_prompt_tokens, so we only add msg_tokens
-                if context_window and final_total_tokens + msg_tokens > max_tokens:
-                    # System prompt is too large, truncate it or skip this message
-                    # For now, still add it but log a warning
-                    import logging
-
-                    _logger = logging.getLogger(__name__)
-                    _logger.warning(
-                        f"System prompt ({system_prompt_tokens} tokens) + message ({msg_tokens} tokens) "
-                        f"exceeds available tokens. Total would be {final_total_tokens + msg_tokens}, "
-                        f"max is {max_tokens}"
-                    )
-
-                messages.append({"role": "user", "content": combined_content})
+            if msg.get("role") == "user" and system_prompt and not system_added:
+                # Always use system messages (all supported models support them)
+                messages.append({"role": "system", "content": system_prompt})
+                messages.append(msg)
                 final_total_tokens += msg_tokens
-                system_prepended = True
+                system_added = True
             elif msg.get("role") != "system":
                 # Always include audio analysis messages, even if they exceed the limit
                 # Other messages are checked against the limit
@@ -159,12 +144,12 @@ class MessagePreparer:
                 final_total_tokens += msg_tokens
 
         if not messages and system_prompt:
-            messages.append({"role": "user", "content": system_prompt})
+            messages.append({"role": "system", "content": system_prompt})
         elif not messages and other_messages:
             first_msg = other_messages[0]
             if system_prompt:
-                combined_content = f"{system_prompt}\n\n{first_msg.get('content', '')}"
-                messages.append({"role": "user", "content": combined_content})
+                messages.append({"role": "system", "content": system_prompt})
+                messages.append(first_msg)
             else:
                 messages.append(first_msg)
 

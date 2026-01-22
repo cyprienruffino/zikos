@@ -38,7 +38,7 @@ class LLMConstants:
 
     # Default model keys (for download_model.py MODEL_CONFIGS)
     DEFAULT_GPU_MODEL: str = "mistral-7b-instruct-v0.3-q4"
-    DEFAULT_CPU_MODEL: str = "tinyllama-1.1b-chat-q4"
+    DEFAULT_CPU_MODEL: str = "phi-3-mini-q4"
 
 
 class AudioAnalysisConstants:

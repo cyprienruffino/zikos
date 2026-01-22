@@ -9,18 +9,12 @@ from zikos.services.tool_provider import ToolProvider
 
 
 class XMLToolProvider(ToolProvider):
-    """Tool provider for models using XML-based tool calling (e.g., TinyLlama, Mistral, Qwen)"""
+    """Tool provider for models using XML-based tool calling (e.g., Phi-3, Mistral, Qwen)"""
 
     def format_tool_instructions(self) -> str:
         """XML-based tool calling instructions"""
-        return """**CRITICAL**: Call tools directly - NEVER describe them or tell users to use them.
-
-**Practice requests**: User wants to practice/improve something → IMMEDIATELY call `request_audio_recording`. Don't explain - just call it.
-
-**FORBIDDEN**: "You can use tools like..." or "Use tools such as..." - just call the tools directly.
-
+        return """
 **TOOL CALL FORMAT**: <tool_call>{"name": "tool_name", "arguments": {"param": "value"}}</tool_call>
-
 **TOOL DETAILS**: Tool list shows names/categories only. Call `get_tool_definition` for full details."""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:

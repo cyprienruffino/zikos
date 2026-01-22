@@ -12,12 +12,7 @@ class StructuredToolProvider(ToolProvider):
 
     def format_tool_instructions(self) -> str:
         """Structured function calling instructions"""
-        return """**CRITICAL**: Call tools directly - NEVER describe them or tell users to use them.
-
-**Practice requests**: User wants to practice/improve something → IMMEDIATELY call `request_audio_recording`. Don't explain - just call it.
-
-**FORBIDDEN**: "You can use tools like..." or "Use tools such as..." - just call the tools directly.
-
+        return """
 **TOOL DETAILS**: Call `get_tool_definition` with tool name for full details."""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:

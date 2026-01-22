@@ -207,8 +207,8 @@ class LLMService:
     ) -> list[dict[str, Any]]:
         """Prepare messages for LLM, ensuring system prompt is included
 
-        For models that don't properly handle system messages (like Phi3),
-        prepend the system prompt to the first user message and remove the system message.
+        System messages are always kept separate. All supported models (Phi-3, Qwen, Llama 3.x, Mistral)
+        support system messages natively.
 
         Also truncates conversation history if it exceeds max_tokens to prevent context overflow.
         IMPORTANT: Always preserves audio analysis messages even if they're older.
@@ -221,6 +221,7 @@ class LLMService:
         """
         if context_window is None:
             context_window = self.context_window
+
         result: list[dict[str, Any]] = self.message_preparer.prepare(
             history, max_tokens, for_user, context_window
         )

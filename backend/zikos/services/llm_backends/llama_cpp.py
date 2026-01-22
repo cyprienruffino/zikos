@@ -17,6 +17,7 @@ class LlamaCppBackend(LLMBackend):
     def __init__(self):
         self.llm: Llama | None = None
         self.n_ctx: int = 32768
+        self.model_path: str | None = None
 
     def initialize(
         self,
@@ -66,6 +67,7 @@ class LlamaCppBackend(LLMBackend):
                     print(f"Using {n_gpu_layers} GPU layers")
 
         self.n_ctx = n_ctx
+        self.model_path = model_path
 
         init_kwargs = {
             "model_path": model_path,
@@ -171,6 +173,14 @@ class LlamaCppBackend(LLMBackend):
 
     def supports_tools(self) -> bool:
         """LlamaCpp supports tools via create_chat_completion"""
+        return True
+
+    def supports_system_messages(self) -> bool:
+        """All supported models support system messages natively
+
+        Supported models (Phi-3, Qwen2.5, Llama 3.x, Mistral) all support
+        system messages through llama-cpp-python's create_chat_completion.
+        """
         return True
 
     def get_context_window(self) -> int:

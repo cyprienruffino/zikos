@@ -3,18 +3,19 @@
 ## Quick Decision Guide
 
 **By GPU VRAM:**
-- **No GPU / CPU-only** → TinyLlama 1.1B (recommended)
+- **No GPU / CPU-only** → Phi-3 Mini 4K (recommended) or Llama 3.2 8B if you have enough RAM
 - **8GB VRAM or less** → Mistral 7B Instruct
 - **16GB+ VRAM** → Mistral 7B Instruct or larger models
 
 ## Recommended Models
 
-### ⭐ TinyLlama 1.1B Chat (Best for CPU-Only)
+### ⭐ Phi-3 Mini 4K Instruct (Best for CPU-Only)
 - **Best for**: CPU-only setups, low-resource environments
-- **Size**: ~670MB
-- **Performance**: Limited function calling, very fast on CPU
-- **Context**: 2K tokens
-- **Why**: Smallest model, runs well on CPU without GPU
+- **Size**: ~2.3GB
+- **Performance**: Moderate function calling, better instruction following than TinyLlama
+- **Context**: 4K tokens
+- **Why**: Small enough for CPU, but handles system messages and instructions much better than TinyLlama
+- **Note**: TinyLlama is no longer recommended due to poor instruction following
 
 ### ⭐ Mistral 7B Instruct v0.3 (Best for GPU)
 - **Best for**: GPUs with 8GB+ VRAM
@@ -56,7 +57,7 @@
 
 | Model | Quality | Size | Context | Speed | Best For |
 |-------|---------|------|---------|-------|----------|
-| TinyLlama 1.1B | ⭐⭐⭐ | 670MB | 2K | Very Fast | **CPU-only** |
+| Phi-3 Mini 4K | ⭐⭐⭐⭐ | 2.3GB | 4K | Fast | **CPU-only** |
 | Mistral 7B | ⭐⭐⭐⭐ | 4.5GB | 8K | Fast | **GPU users** |
 | Qwen2.5-7B | ⭐⭐⭐⭐⭐ | 4.5GB | 32K | Fast | Better function calling |
 | Qwen2.5-14B | ⭐⭐⭐⭐⭐ | 8GB | 32K | Medium | More VRAM available |

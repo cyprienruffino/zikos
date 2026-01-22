@@ -26,10 +26,11 @@
 ## Model Selection by Hardware
 
 ### CPU-Only
-- Model: TinyLlama 1.1B Chat Q4_K_M (~670MB RAM) - **RECOMMENDED**
-- Config: `LLM_N_GPU_LAYERS=0`, `LLM_N_CTX=2048`
-- Performance: Fast on CPU, limited function calling
-- Alternative: Mistral 7B Instruct Q4_K_M (~4.5GB RAM, slower but better quality)
+- Model: Phi-3 Mini 4K Instruct Q4 (~2.3GB RAM) - **RECOMMENDED**
+- Config: `LLM_N_GPU_LAYERS=0`, `LLM_N_CTX=4096`
+- Performance: Moderate speed on CPU, better instruction following than TinyLlama
+- Alternative: Llama 3.2 8B Instruct Q4_K_M (~4.5GB RAM, slower but much better quality and function calling)
+- Note: TinyLlama is no longer recommended due to poor instruction following and system message handling
 
 ### 8GB VRAM (RTX 3060Ti, 3070, 4060Ti)
 - Model: Mistral 7B Instruct v0.3 Q4_K_M (~4.5GB VRAM) - **RECOMMENDED**

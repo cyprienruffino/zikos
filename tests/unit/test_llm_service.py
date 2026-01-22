@@ -162,7 +162,7 @@ class TestMessagePreparation:
     """Tests for message preparation and truncation"""
 
     def test_prepare_messages_with_system_prompt(self, llm_service):
-        """Test preparing messages with system prompt prepended"""
+        """Test preparing messages with system prompt"""
         history = [
             {"role": "system", "content": "You are helpful"},
             {"role": "user", "content": "Hello"},
@@ -170,10 +170,11 @@ class TestMessagePreparation:
 
         messages = llm_service._prepare_messages(history)
 
-        assert len(messages) == 1
-        assert messages[0]["role"] == "user"
-        assert "You are helpful" in messages[0]["content"]
-        assert "Hello" in messages[0]["content"]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"] == "You are helpful"
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "Hello"
 
     def test_prepare_messages_truncates_long_history(self, llm_service):
         """Test that long conversation history is truncated"""
@@ -512,7 +513,7 @@ class TestHandleAudioReady:
     async def test_generate_response_includes_interpretation_reminder_for_audio_context(
         self, llm_service, mock_mcp_server
     ):
-        """Test that interpretation reminder is included when prepending audio analysis context"""
+        """Test that interpretation reminder is included when adding audio analysis context"""
         session_id = "test_session"
         history = llm_service._get_conversation_history(session_id)
         history.append(
@@ -532,7 +533,7 @@ class TestHandleAudioReady:
         user_messages = [msg for msg in final_history if msg.get("role") == "user"]
         assert len(user_messages) > 0, "Should have user messages in history"
         last_user_msg = user_messages[-1].get("content", "")
-        # Should have the reminder when audio context is prepended
+        # Should have the reminder when audio context is included
         if "Audio Analysis Context" in last_user_msg:
             assert "CRITICAL:" in last_user_msg or "CRITICAL INSTRUCTIONS" in last_user_msg
             assert (

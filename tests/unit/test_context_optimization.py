@@ -102,7 +102,7 @@ class TestContextOptimization:
         messages = llm_service._prepare_messages(history)
 
         assert len(messages) > 0
-        # System prompt should be prepended to first user message or included
+        # System prompt should be included as a separate system message
         assert any("System prompt" in str(msg.get("content", "")) for msg in messages)
 
     def test_context_window_optimization_with_sliding_window(self, llm_service):
