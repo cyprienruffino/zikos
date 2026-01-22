@@ -281,11 +281,27 @@ class LlamaCppBackend(LLMBackend):
             return
 
         try:
-            llama_state_load_file(self.llm.ctx, str(cache_path_obj))
-            state = self.llm.save_state()
+            from ctypes import byref, c_int, c_size_t
+
+            max_tokens = self.n_ctx
+            tokens_array = (c_int * max_tokens)()
+            n_token_count = c_size_t(0)
+
+            result = llama_state_load_file(
+                self.llm.ctx,
+                str(cache_path_obj).encode("utf-8"),
+                tokens_array,
+                max_tokens,
+                byref(n_token_count),
+            )
+
+            if not result:
+                logger.warning(f"Failed to load system prompt cache from {cache_path}")
+                return
+
             logger.info(
                 f"Loaded system prompt KV cache from {cache_path} "
-                f"({state.n_tokens} tokens cached)"
+                f"({n_token_count.value} tokens cached)"
             )
             self.system_prompt_cache_path = cache_path
         except Exception as e:
