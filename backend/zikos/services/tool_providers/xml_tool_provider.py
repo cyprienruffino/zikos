@@ -23,56 +23,18 @@ class XMLToolProvider(ToolProvider):
 }
 </tool_call>
 
-**CRITICAL**: Don't ask users to call tools or describe actions - just include the tool call directly."""
+**CRITICAL**: Don't ask users to call tools or describe actions - just include the tool call directly.
 
-    def _compress_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
-        """Compress a tool schema by abbreviating keys and removing redundancy"""
-        if schema.get("type") != "function" or "function" not in schema:
-            return schema
-
-        func = schema["function"]
-        compressed_func: dict[str, Any] = {"n": func["name"]}
-
-        if "description" in func:
-            desc = func["description"]
-            compressed_func["d"] = desc
-
-        if "parameters" in func:
-            params = func["parameters"]
-            compressed_params: dict[str, Any] = {"t": "object"}
-
-            if "properties" in params:
-                compressed_props: dict[str, Any] = {}
-                for prop_name, prop_def in params["properties"].items():
-                    compressed_prop: dict[str, Any] = {"t": prop_def["type"]}
-                    if "description" in prop_def:
-                        desc = prop_def["description"]
-                        if desc.lower() != prop_name.lower() and not desc.startswith(prop_name):
-                            compressed_prop["d"] = desc
-                    if "default" in prop_def:
-                        compressed_prop["def"] = prop_def["default"]
-                    compressed_props[prop_name] = compressed_prop
-                compressed_params["pr"] = compressed_props
-
-            if "required" in params and params["required"]:
-                compressed_params["r"] = params["required"]
-
-            compressed_func["p"] = compressed_params
-
-        return {"t": "function", "f": compressed_func}
-
-    def _minify_json(self, json_str: str) -> str:
-        """Minify JSON string by parsing and re-serializing without indentation"""
-        parsed = json.loads(json_str)
-        return json.dumps(parsed, separators=(",", ":"))
+**TOOL DETAILS**: The tool list below shows only names and categories. To get full details (description, parameters, usage guidelines) for any tool, call `get_tool_definition` with the tool name."""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:
-        """Format tools in XML format with compressed schemas"""
-        tool_schemas = [self._compress_schema(tool.to_schema_dict()) for tool in tools]
-        tools_json_readable = json.dumps(tool_schemas, indent=2)
-        tools_json = self._minify_json(tools_json_readable)
+        """Format tools in XML format with only names and categories (no descriptions/parameters)"""
+        tool_list = [{"n": tool.name, "c": tool.category.value} for tool in tools]
+        tools_json = json.dumps(tool_list, separators=(",", ":"))
         return f"""<tools>{tools_json}</tools>
-Abbr: t=type,f=function,n=name,d=desc,p=params,pr=props,r=req,def=default"""
+Abbr: n=name,c=category
+
+Note: Only tool names and categories are shown. Use `get_tool_definition` to retrieve full details (description, parameters, usage guidelines) for any tool."""
 
     def get_tool_call_examples(self) -> str:
         """Examples showing XML tool call format"""
@@ -120,7 +82,12 @@ User: "metronome 120 BPM" →
             ToolCategory.OTHER: "Other",
         }
 
-        lines = []
+        lines = ["# Available Tools"]
+        lines.append("")
+        lines.append(
+            "Use `get_tool_definition` to retrieve full details (description, parameters, usage guidelines) for any tool."
+        )
+        lines.append("")
         for category in [
             ToolCategory.AUDIO_ANALYSIS,
             ToolCategory.WIDGET,

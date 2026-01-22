@@ -18,7 +18,9 @@ class StructuredToolProvider(ToolProvider):
 3. DO NOT describe tools or ask users to call them
 4. DO NOT write text explaining what you would do - just use the tool directly
 
-The system will detect and execute tool calls automatically."""
+The system will detect and execute tool calls automatically.
+
+**TOOL DETAILS**: If you need full details (description, parameters, usage guidelines) for any tool, call `get_tool_definition` with the tool name."""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:
         """Format tools for structured function calling models"""

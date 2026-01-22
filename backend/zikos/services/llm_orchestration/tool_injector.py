@@ -1,8 +1,13 @@
 """Inject tools into system prompts"""
 
+import logging
 from typing import Any
 
+import tiktoken
+
 from zikos.services.prompt.sections import ToolInstructionsSection
+
+_logger = logging.getLogger(__name__)
 
 
 class ToolInjector:
@@ -43,11 +48,24 @@ class ToolInjector:
         tools_section = ToolInstructionsSection(tool_provider, tools, tool_schemas)
         tools_text = tools_section.render()
 
+        enc = tiktoken.get_encoding("cl100k_base")
+        tools_tokens = len(enc.encode(tools_text))
+
         if history and history[0].get("role") == "system":
             original_system = history[0].get("content", "")
+            original_tokens = len(enc.encode(original_system))
             history[0]["content"] = f"{original_system}\n\n{tools_text}"
+            final_system = history[0]["content"]
         else:
             system_prompt = system_prompt_getter()
-            history.insert(0, {"role": "system", "content": f"{system_prompt}\n\n{tools_text}"})
+            original_tokens = len(enc.encode(system_prompt))
+            final_system = f"{system_prompt}\n\n{tools_text}"
+            history.insert(0, {"role": "system", "content": final_system})
+
+        final_tokens = len(enc.encode(final_system))
+        _logger.info(
+            f"Tool injection complete: system prompt {original_tokens} -> {final_tokens} tokens "
+            f"(tools section: {tools_tokens} tokens, {len(tools)} tools)"
+        )
 
         return True
