@@ -446,8 +446,13 @@ class LLMService:
                 history.append({"role": "thinking", "content": thinking_content})
 
             tool_calls = message_obj.get("tool_calls")
+            if not tool_calls or not isinstance(tool_calls, list):
+                tool_calls = self.tool_call_parser.parse_tool_calls(message_obj, content)
+
             if tool_calls and isinstance(tool_calls, list):
-                # Yield tool call information
+                cleaned_content = self.tool_call_parser.strip_tool_call_tags(cleaned_content)
+                # Yield tool call information (only for non-widget tools)
+                # Widget tools will be handled separately with their widget_response
                 for tool_call in tool_calls:
                     if not isinstance(tool_call, dict):
                         continue
@@ -456,6 +461,11 @@ class LLMService:
                         if isinstance(tool_call.get("function"), dict)
                         else ""
                     )
+                    if tool_name:
+                        tool = tool_registry.get_tool(tool_name)
+                        if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
+                            continue
+
                     tool_args_str = (
                         tool_call.get("function", {}).get("arguments", "{}")
                         if isinstance(tool_call.get("function"), dict)
@@ -513,7 +523,7 @@ class LLMService:
                     recent_tool_calls = recent_tool_calls[-10:]
 
                 tool_results = []
-                widget_tool_found = False
+                widget_response = None
                 for tool_call in tool_calls:
                     if not isinstance(tool_call, dict):
                         continue
@@ -527,18 +537,23 @@ class LLMService:
                     if tool_name:
                         tool = tool_registry.get_tool(tool_name)
                         if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
-                            widget_tool_found = True
+                            widget_response = await self.tool_executor.execute_tool_call(
+                                tool_call,
+                                tool_registry,
+                                mcp_server,
+                                session_id,
+                                cleaned_content,
+                                self.tool_call_parser,
+                            )
+                            if widget_response:
+                                yield widget_response
+                                return
                             continue
 
                     tool_result = await self.tool_executor.execute_tool_and_get_result(
                         tool_call, tool_registry, mcp_server, session_id
                     )
                     tool_results.append(tool_result)
-
-                # If we found a widget tool, don't add results to history and let the stream end
-                # The generate_response method will catch the tool_call chunk and return it
-                if widget_tool_found:
-                    return
 
                 history.extend(tool_results)
                 continue

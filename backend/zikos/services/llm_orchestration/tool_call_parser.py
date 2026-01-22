@@ -157,6 +157,47 @@ class ToolCallParser:
         return "".join(result)
 
     def strip_tool_call_tags(self, content: str) -> str:
-        """Remove <tool_call> XML tags from content for display"""
+        """Remove <tool_call> XML tags and bare JSON tool calls from content for display"""
+        # Remove XML-wrapped tool calls: <tool_call>...</tool_call>
         pattern = r"<tool_call>.*?</tool_call>"
-        return re.sub(pattern, "", content, flags=re.DOTALL).strip()
+        content = re.sub(pattern, "", content, flags=re.DOTALL)
+
+        # Remove bare JSON tool calls that match the pattern: {"name": "...", "arguments": {...}}
+        # This handles cases where tool call JSON appears without XML tags
+        # We need to handle nested JSON in arguments, so we find balanced braces
+        lines = content.split("\n")
+        filtered_lines = []
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            # Check if this line looks like the start of a tool call JSON
+            if line.startswith('{"name"') and '"arguments"' in line:
+                # Try to collect the full JSON object by counting braces
+                json_lines = [lines[i]]
+                brace_count = lines[i].count("{") - lines[i].count("}")
+                i += 1
+                while i < len(lines) and brace_count > 0:
+                    json_lines.append(lines[i])
+                    brace_count += lines[i].count("{") - lines[i].count("}")
+                    i += 1
+                json_str = "\n".join(json_lines)
+                try:
+                    tool_obj = json.loads(json_str)
+                    # Only remove if it has "name" and "arguments" keys (tool call pattern)
+                    if (
+                        isinstance(tool_obj, dict)
+                        and "name" in tool_obj
+                        and "arguments" in tool_obj
+                    ):
+                        # This is a tool call, skip it
+                        continue
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
+                # Not a valid tool call or parsing failed, keep the lines
+                filtered_lines.extend(json_lines)
+            else:
+                filtered_lines.append(lines[i])
+                i += 1
+
+        content = "\n".join(filtered_lines)
+        return content.strip()

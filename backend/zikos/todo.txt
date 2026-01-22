@@ -1,0 +1,1 @@
+- automatic backend (gpu/cpu) detection and model suggestion
