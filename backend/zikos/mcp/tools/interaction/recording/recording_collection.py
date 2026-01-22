@@ -18,6 +18,21 @@ class RecordingTools(ToolCollection):
                 name="request_audio_recording",
                 description="Create a recording widget that allows the user to record audio. Use this when you need to hear the student's performance for analysis. The widget provides an interactive recording interface with record/stop/send controls.",
                 category=ToolCategory.RECORDING,
+                detailed_description="""Create a recording widget that allows the user to record audio.
+
+Returns: dict with status, prompt, max_duration, recording_id
+
+Interpretation Guidelines:
+- prompt: Clear instructions for what to record (e.g., 'Please play the C major scale') - be specific
+- max_duration: Maximum recording length in seconds - set based on what you're asking for
+- recording_id: Unique identifier for this recording request
+- Use when you need to hear the student's performance to provide feedback
+- Provide clear, specific prompts so students know exactly what to play
+- Set appropriate max_duration (scales: 30-60s, pieces: 2-5min, exercises: 60-120s)
+- After recording, the audio will be available for analysis using audio analysis tools
+- The widget provides an interactive interface with record, stop, and send controls
+- Essential for providing personalized feedback based on actual performance
+- Combine with audio analysis tools (pitch, rhythm, tempo) after receiving the recording""",
                 schema={
                     "type": "function",
                     "function": {

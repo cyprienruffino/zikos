@@ -24,6 +24,18 @@ class SystemTools(ToolCollection):
                 name="get_tool_definition",
                 description="Get the full detailed definition of a tool including interpretation guidelines and usage patterns",
                 category=ToolCategory.OTHER,
+                detailed_description="""Get the full detailed definition of a tool including interpretation guidelines and usage patterns.
+
+Returns: dict with name, description, category, schema, detailed_description (if available)
+
+Interpretation Guidelines:
+- Use this tool to look up detailed information about any tool in the system
+- Returns the complete tool definition including parameters, return values, and interpretation guidelines
+- detailed_description: Contains interpretation guidelines, usage patterns, and best practices
+- Useful when you need to understand how to use a tool correctly or interpret its results
+- The schema shows the exact parameter structure and types required
+- Use to refresh your understanding of tool capabilities and proper usage
+- This is a meta-tool for tool introspection and learning""",
                 schema={
                     "type": "function",
                     "function": {

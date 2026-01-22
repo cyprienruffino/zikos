@@ -12,15 +12,13 @@ class StructuredToolProvider(ToolProvider):
 
     def format_tool_instructions(self) -> str:
         """Structured function calling instructions"""
-        return """**HOW TO CALL TOOLS**: You have native function calling capabilities. When you need to use a tool:
-1. Your model will automatically include tool calls in your response
-2. You don't need to write special syntax - the system handles it automatically
-3. DO NOT describe tools or ask users to call them
-4. DO NOT write text explaining what you would do - just use the tool directly
+        return """**CRITICAL**: Call tools directly - NEVER describe them or tell users to use them.
 
-The system will detect and execute tool calls automatically.
+**Practice requests**: User wants to practice/improve something → IMMEDIATELY call `request_audio_recording`. Don't explain - just call it.
 
-**TOOL DETAILS**: If you need full details (description, parameters, usage guidelines) for any tool, call `get_tool_definition` with the tool name."""
+**FORBIDDEN**: "You can use tools like..." or "Use tools such as..." - just call the tools directly.
+
+**TOOL DETAILS**: Call `get_tool_definition` with tool name for full details."""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:
         """Format tools for structured function calling models"""
@@ -35,15 +33,12 @@ Use these tools by calling them directly - your model handles the function calli
 
     def get_tool_call_examples(self) -> str:
         """Examples for structured function calling models"""
-        return """**Tool Usage Examples**:
+        return """**Examples**:
+User: "I want to practice rhythm" → Call `request_audio_recording` immediately
+User: "Help me with timing" → Call `request_audio_recording` immediately
+User: "metronome 120 BPM" → Call `create_metronome` with bpm=120
 
-User: "Let's record a sample"
-→ Call `request_audio_recording` with appropriate prompt
-
-User: "I need a metronome at 120 BPM"
-→ Call `create_metronome` with bpm=120
-
-**Remember**: Your model handles the technical format - just use the tools when needed."""
+**Remember**: For practice requests, call `request_audio_recording` first - don't explain."""
 
     def should_inject_tools_as_text(self) -> bool:
         """Structured providers typically don't need text injection"""

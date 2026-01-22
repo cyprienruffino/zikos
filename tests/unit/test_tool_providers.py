@@ -19,9 +19,10 @@ class TestStructuredToolProvider:
         """Test formatting tool instructions"""
         instructions = provider.format_tool_instructions()
 
-        assert "HOW TO CALL TOOLS" in instructions
-        assert "native function calling" in instructions
-        assert "automatically" in instructions
+        assert "CRITICAL" in instructions
+        assert "Call tools directly" in instructions
+        assert "request_audio_recording" in instructions
+        assert "TOOL DETAILS" in instructions
 
     def test_format_tool_schemas(self, provider):
         """Test formatting tool schemas"""
@@ -58,7 +59,7 @@ class TestStructuredToolProvider:
         """Test getting tool call examples"""
         examples = provider.get_tool_call_examples()
 
-        assert "Tool Usage Examples" in examples
+        assert "Examples" in examples
         assert "request_audio_recording" in examples
         assert "create_metronome" in examples
 

@@ -128,10 +128,10 @@ class MessagePreparer:
             if msg.get("role") == "user" and system_prompt and not system_prepended:
                 # Prepend system prompt to first user message
                 combined_content = f"{system_prompt}\n\n{msg_content}"
-                combined_tokens = len(enc.encode(combined_content))
 
                 # Check if adding this would exceed limit
-                if context_window and final_total_tokens + combined_tokens > max_tokens:
+                # Note: final_total_tokens already includes system_prompt_tokens, so we only add msg_tokens
+                if context_window and final_total_tokens + msg_tokens > max_tokens:
                     # System prompt is too large, truncate it or skip this message
                     # For now, still add it but log a warning
                     import logging
@@ -139,12 +139,12 @@ class MessagePreparer:
                     _logger = logging.getLogger(__name__)
                     _logger.warning(
                         f"System prompt ({system_prompt_tokens} tokens) + message ({msg_tokens} tokens) "
-                        f"exceeds available tokens. Total would be {final_total_tokens + combined_tokens}, "
+                        f"exceeds available tokens. Total would be {final_total_tokens + msg_tokens}, "
                         f"max is {max_tokens}"
                     )
 
                 messages.append({"role": "user", "content": combined_content})
-                final_total_tokens += combined_tokens
+                final_total_tokens += msg_tokens
                 system_prepended = True
             elif msg.get("role") != "system":
                 # Always include audio analysis messages, even if they exceed the limit

@@ -17,6 +17,20 @@ class TunerTools(ToolCollection):
                 name="create_tuner",
                 description="Create a tuner widget that detects pitch in real-time. Useful for tuning instruments before recording or practicing intonation.",
                 category=ToolCategory.WIDGET,
+                detailed_description="""Create a tuner widget that detects pitch in real-time.
+
+Returns: dict with status, tuner_id, reference_frequency, note, octave, description
+
+Interpretation Guidelines:
+- reference_frequency: Standard tuning frequency (440Hz for A4, 432Hz for A432 tuning)
+- note: Target note name (e.g., 'A', 'E', 'C') - helps with visual display
+- octave: Target octave (e.g., 4 for A4) - helps with visual display
+- Use before recording to ensure instruments are in tune
+- Use for intonation practice, especially for string instruments
+- Standard tuning is 440Hz (A4), but some styles use 432Hz or other tunings
+- The widget provides real-time visual feedback showing how close the pitch is to the target
+- Essential for string instruments (guitar, violin, etc.) and wind instruments
+- Combine with intonation analysis tools to track improvement over time""",
                 schema={
                     "type": "function",
                     "function": {

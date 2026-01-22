@@ -8,15 +8,16 @@ if (sendButton) {
     sendButton.addEventListener("click", () => {
         const message = messageInput?.value.trim();
         if (message) {
-            if (sendMessage(message)) {
-                addMessage(message, "user");
-                if (messageInput) {
-                    messageInput.value = "";
+            addMessage(message, "user");
+            if (messageInput) {
+                messageInput.value = "";
+            }
+            if (!sendMessage(message)) {
+                if (getIsProcessing()) {
+                    addMessage("Please wait for the current response to complete", "error");
+                } else {
+                    addMessage("Not connected. Please wait for connection...", "error");
                 }
-            } else if (getIsProcessing()) {
-                addMessage("Please wait for the current response to complete", "error");
-            } else {
-                addMessage("Not connected. Please wait for connection...", "error");
             }
         }
     });

@@ -13,19 +13,15 @@ class XMLToolProvider(ToolProvider):
 
     def format_tool_instructions(self) -> str:
         """XML-based tool calling instructions"""
-        return """**HOW TO CALL TOOLS**: Use XML format:
-<tool_call>
-{
-  "name": "tool_name",
-  "arguments": {
-    "param": "value"
-  }
-}
-</tool_call>
+        return """**CRITICAL**: Call tools directly - NEVER describe them or tell users to use them.
 
-**CRITICAL**: Don't ask users to call tools or describe actions - just include the tool call directly.
+**Practice requests**: User wants to practice/improve something → IMMEDIATELY call `request_audio_recording`. Don't explain - just call it.
 
-**TOOL DETAILS**: The tool list below shows only names and categories. To get full details (description, parameters, usage guidelines) for any tool, call `get_tool_definition` with the tool name."""
+**FORBIDDEN**: "You can use tools like..." or "Use tools such as..." - just call the tools directly.
+
+**TOOL CALL FORMAT**: <tool_call>{"name": "tool_name", "arguments": {"param": "value"}}</tool_call>
+
+**TOOL DETAILS**: Tool list shows names/categories only. Call `get_tool_definition` for full details."""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:
         """Format tools in XML format with only names and categories (no descriptions/parameters)"""
@@ -39,26 +35,10 @@ Note: Only tool names and categories are shown. Use `get_tool_definition` to ret
     def get_tool_call_examples(self) -> str:
         """Examples showing XML tool call format"""
         return """**Examples**:
-User: "record a sample" →
-<tool_call>
-{
-  "name": "request_audio_recording",
-  "arguments": {
-    "prompt": "play something"
-  }
-}
-</tool_call>
+User: "I want to practice rhythm" → <tool_call>{"name": "request_audio_recording", "arguments": {"prompt": "Play something to practice rhythm"}}</tool_call>
+User: "metronome 120 BPM" → <tool_call>{"name": "create_metronome", "arguments": {"bpm": 120, "time_signature": "4/4"}}</tool_call>
 
-User: "metronome 120 BPM" →
-<tool_call>
-{
-  "name": "create_metronome",
-  "arguments": {
-    "bpm": 120,
-    "time_signature": "4/4"
-  }
-}
-</tool_call>"""
+**Remember**: For practice requests, call `request_audio_recording` first - don't explain."""
 
     def should_inject_tools_as_text(self) -> bool:
         """XML-based providers need tools injected as text"""

@@ -72,6 +72,7 @@ export function connect(): void {
             }
 
             // Handle tool calls during streaming
+            let justFinishedStreaming = false;
             if (data.type === "tool_call") {
                 if (isProcessing) {
                     finishStreamingMessage();
@@ -83,6 +84,7 @@ export function connect(): void {
                 if (isProcessing && (data.type === "response" || data.type === "error")) {
                     finishStreamingMessage(data);
                     isProcessing = false;
+                    justFinishedStreaming = true;
                     removeTypingIndicator();
                 } else {
                     removeTypingIndicator();
@@ -90,7 +92,7 @@ export function connect(): void {
                 }
             }
 
-            if (data.type === "response") {
+            if (data.type === "response" && !justFinishedStreaming) {
                 addMessage(data.message || "", "assistant", data);
             } else if (data.type === "tool_call" && data.tool_name === "request_audio_recording") {
                 if (data.message) {

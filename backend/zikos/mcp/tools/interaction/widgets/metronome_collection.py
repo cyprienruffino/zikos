@@ -17,6 +17,20 @@ class MetronomeTools(ToolCollection):
                 name="create_metronome",
                 description="Create a metronome widget that plays a beat pattern. The metronome can play while the user is recording or playing their instrument.",
                 category=ToolCategory.WIDGET,
+                detailed_description="""Create a metronome widget that plays a beat pattern.
+
+Returns: dict with status, metronome_id, bpm, time_signature, description
+
+Interpretation Guidelines:
+- bpm: Beats per minute (tempo) - choose based on piece requirements or practice goals
+- time_signature: Musical time signature (e.g., '4/4', '3/4', '6/8') - affects beat emphasis
+- Use for rhythm practice, maintaining steady tempo, and recording with consistent timing
+- Start at slower tempos for learning, gradually increase as proficiency improves
+- Essential for developing timing accuracy and rhythmic consistency
+- Can play while recording to ensure steady tempo in performances
+- Different time signatures emphasize different beats (4/4 emphasizes beat 1, 3/4 emphasizes beat 1)
+- Combine with rhythm analysis tools to track timing improvement
+- The widget provides visual and audio feedback to help students stay on beat""",
                 schema={
                     "type": "function",
                     "function": {

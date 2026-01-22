@@ -17,6 +17,21 @@ class TempoTrainerTools(ToolCollection):
                 name="create_tempo_trainer",
                 description="Create a tempo trainer widget that gradually increases or decreases tempo over time. Useful for building speed or maintaining accuracy at higher tempos.",
                 category=ToolCategory.WIDGET,
+                detailed_description="""Create a tempo trainer widget that gradually increases or decreases tempo over time.
+
+Returns: dict with status, trainer_id, start_bpm, end_bpm, duration_minutes, time_signature, ramp_type, description
+
+Interpretation Guidelines:
+- start_bpm: Starting tempo - should be comfortable for the student
+- end_bpm: Target tempo - the goal tempo to reach
+- duration_minutes: How long the tempo ramp takes - longer is more gradual
+- ramp_type: "linear" (constant increase) or "exponential" (gradual start, faster increase)
+- Use to build speed gradually while maintaining accuracy
+- Start with a comfortable tempo and gradually increase to target tempo
+- "linear" provides steady increase, "exponential" is easier at the start
+- Longer duration_minutes gives more time to adjust at each tempo level
+- Essential for building technique and speed without sacrificing accuracy
+- Combine with rhythm analysis to track improvement at different tempos""",
                 schema={
                     "type": "function",
                     "function": {
