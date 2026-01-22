@@ -5,6 +5,34 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_detect_pitch_tool() -> Tool:
+    """Get the detect_pitch tool definition"""
+    return Tool(
+        name="detect_pitch",
+        description="Detect pitch and notes with intonation analysis. Returns: notes (start_time, end_time, duration, pitch, frequency, confidence), intonation_accuracy (0.0-1.0), pitch_stability (0.0-1.0), detected_key, sharp_tendency, flat_tendency, average_cents_deviation",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Detect pitch and notes with intonation analysis.
+
+Returns: dict with notes (with start_time, end_time, duration, pitch, frequency, confidence), intonation_accuracy (0.0-1.0), pitch_stability (0.0-1.0), detected_key, sharp_tendency, flat_tendency, average_cents_deviation
+
+Interpretation Guidelines:
+- intonation_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
+- average_cents_deviation: <5 excellent, 5-15 good, 15-30 needs work, >30 poor
+- pitch_stability: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
+- Reasoning patterns:
+  * intonation_accuracy < 0.70 BUT pitch_stability > 0.85 → likely systematic issue (tuning, finger placement habit)
+  * intonation_accuracy < 0.70 AND pitch_stability < 0.75 → likely technique issue (inconsistent pressure, hand position)
+  * sharp_tendency > 0.15 → consistently sharp, check finger placement
+  * flat_tendency > 0.15 → consistently flat, check finger placement""",
+    )
+
 
 def frequency_to_note(freq: float) -> tuple[str, int]:
     """Convert frequency to note name and octave"""

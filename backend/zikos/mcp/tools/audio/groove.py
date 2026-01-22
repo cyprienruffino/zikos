@@ -5,7 +5,35 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.audio.utils import resolve_audio_path
+
+
+def get_analyze_groove_tool() -> Tool:
+    """Get the analyze_groove tool definition"""
+    return Tool(
+        name="analyze_groove",
+        description="Analyze microtiming patterns, swing, and groove feel",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Analyze microtiming patterns, swing, and groove feel.
+
+Returns: dict with groove_type ("straight", "swung", "reverse_swing"), swing_ratio, microtiming_pattern ("consistent", "variable", "inconsistent"), feel_score (0.0-1.0), groove_consistency (0.0-1.0), average_microtiming_deviation_ms, microtiming_std_ms
+
+Interpretation Guidelines:
+- groove_type: "straight" (even timing), "swung" (long-short pattern), "reverse_swing" (short-long pattern)
+- swing_ratio: 1.0 = straight, >1.3 = swung, <0.8 = reverse swing
+- feel_score: >0.85 excellent groove, 0.75-0.85 good, <0.75 needs work
+- groove_consistency: >0.85 very consistent, 0.75-0.85 good, <0.75 inconsistent
+- average_microtiming_deviation_ms: <15ms excellent, 15-30ms good, >30ms needs work
+- When groove_type is "swung" and feel_score > 0.80, the performance has good swing feel
+- When microtiming_pattern is "inconsistent", suggest practicing with metronome to develop steady groove
+- High groove_consistency with good feel_score indicates strong rhythmic feel and musicality
+- Use to assess jazz, blues, or any style where groove and feel are important""",
+    )
 
 
 async def analyze_groove(audio_path: str) -> dict[str, Any]:

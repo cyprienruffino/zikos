@@ -30,362 +30,58 @@ class AudioAnalysisTools(ToolCollection):
     """Audio analysis MCP tools"""
 
     def get_tools(self) -> list[Tool]:
-        """Get Tool instances"""
-        schemas = self._get_schema_dicts()
-        return [
+        """Get Tool instances - collects from individual modules"""
+        tools = []
+
+        # Collect tools from individual modules
+        tools.append(tempo.get_analyze_tempo_tool())
+        tools.append(pitch.get_detect_pitch_tool())
+        tools.append(rhythm.get_analyze_rhythm_tool())
+        tools.append(dynamics.get_analyze_dynamics_tool())
+        tools.append(articulation.get_analyze_articulation_tool())
+        tools.append(timbre.get_analyze_timbre_tool())
+        tools.append(key.get_detect_key_tool())
+        tools.append(chords.get_detect_chords_tool())
+        tools.append(comparison.get_compare_audio_tool())
+        tools.append(comparison.get_compare_to_reference_tool())
+        tools.append(segmentation.get_segment_audio_tool())
+        tools.append(phrase_segmentation.get_segment_phrases_tool())
+        tools.append(comprehensive.get_comprehensive_analysis_tool())
+        tools.append(groove.get_analyze_groove_tool())
+        tools.append(time_stretch_module.get_time_stretch_tool())
+        tools.append(time_stretch_module.get_pitch_shift_tool())
+        tools.append(repetition.get_detect_repetitions_tool())
+
+        # get_audio_info is defined in this collection
+        tools.append(
             Tool(
-                name=schema["function"]["name"],
-                description=schema["function"]["description"],
+                name="get_audio_info",
+                description="Get basic audio file metadata (duration, sample rate, channels, format, file size)",
                 category=ToolCategory.AUDIO_ANALYSIS,
-                schema=schema,
+                parameters={
+                    "audio_file_id": {
+                        "type": "string",
+                        "description": "Audio file ID to get info for",
+                    },
+                },
+                required=["audio_file_id"],
+                detailed_description="""Get basic audio file metadata.
+
+Returns: dict with duration (seconds), sample_rate (Hz), channels (1=mono, 2=stereo), format (file format), file_size_bytes
+
+Interpretation Guidelines:
+- duration: Length of audio in seconds - use to check if recording is complete
+- sample_rate: Audio quality indicator - 44100Hz or 48000Hz is standard, lower may indicate quality issues
+- channels: 1 = mono, 2 = stereo - stereo provides better spatial information
+- format: File format (WAV, MP3, etc.) - WAV is uncompressed, best for analysis
+- file_size_bytes: File size - very small files may be corrupted or empty
+- Use to verify audio file before analysis or to provide context about recording quality
+- Low sample_rate (<22050Hz) may affect pitch detection accuracy
+- Very short duration (<0.5s) may not be suitable for most analyses""",
             )
-            for schema in schemas
-        ]
+        )
 
-    def _get_schema_dicts(self) -> list[dict[str, Any]]:
-        """Get tool schemas as dicts (internal helper)"""
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_tempo",
-                    "description": """Analyze tempo/BPM and timing consistency.
-
-Returns: dict with bpm, tempo_stability_score (0.0-1.0), is_steady, tempo_changes, rushing_detected, dragging_detected
-
-Interpretation Guidelines:
-- tempo_stability_score: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-- When tempo_stability_score < 0.80 AND rushing_detected, consider suggesting metronome practice""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "detect_pitch",
-                    "description": """Detect pitch and notes with intonation analysis.
-
-Returns: dict with notes (with start_time, end_time, duration, pitch, frequency, confidence), intonation_accuracy (0.0-1.0), pitch_stability (0.0-1.0), detected_key, sharp_tendency, flat_tendency, average_cents_deviation
-
-Interpretation Guidelines:
-- intonation_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
-- average_cents_deviation: <5 excellent, 5-15 good, 15-30 needs work, >30 poor
-- pitch_stability: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-- Reasoning patterns:
-  * intonation_accuracy < 0.70 BUT pitch_stability > 0.85 → likely systematic issue (tuning, finger placement habit)
-  * intonation_accuracy < 0.70 AND pitch_stability < 0.75 → likely technique issue (inconsistent pressure, hand position)
-  * sharp_tendency > 0.15 → consistently sharp, check finger placement
-  * flat_tendency > 0.15 → consistently flat, check finger placement""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_rhythm",
-                    "description": """Analyze rhythm and timing accuracy.
-
-Returns: dict with onsets, timing_accuracy (0.0-1.0), rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency
-
-Interpretation Guidelines:
-- timing_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
-- average_deviation_ms: <10ms excellent, 10-20ms good, 20-50ms needs work, >50ms poor
-- rushing_tendency/dragging_tendency: <0.15 low, 0.15-0.30 moderate, >0.30 high
-- When timing_accuracy < 0.80 AND rushing_tendency > 0.15, consider suggesting metronome practice
-- When deviations are clustered, identify patterns (e.g., "rushing on the downbeat")""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_dynamics",
-                    "description": """Analyze amplitude and dynamic range.
-
-Returns: dict with dynamic_range (dB), dynamic_consistency (0.0-1.0), average_amplitude, peak_amplitude
-
-Interpretation Guidelines:
-- dynamic_range: >20dB excellent, 15-20dB good, 10-15dB needs work, <10dB poor
-- dynamic_consistency: >0.85 excellent, 0.75-0.85 good, <0.75 needs work
-- If dynamic_consistency < 0.75, suggest focusing on consistent technique""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_articulation",
-                    "description": """Analyze articulation types (staccato, legato, etc.).
-
-Returns: dict with attack_time (ms), articulation_types, finger_noise (0.0-1.0), muting_effectiveness (0.0-1.0)
-
-Interpretation Guidelines:
-- attack_time: <10ms very fast (pick, slap), 10-20ms fast (clear attack), 20-50ms moderate (smooth), >50ms slow (legato)
-- If attack_time varies significantly, focus on uniform attack
-- finger_noise: <0.05 excellent, 0.05-0.10 good, 0.10-0.20 needs work, >0.20 poor
-- muting_effectiveness: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-- High finger_noise + low intonation_accuracy → likely related technique issues
-- Low muting_effectiveness → suggest practicing muting technique""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_timbre",
-                    "description": """Analyze timbre and spectral characteristics to assess tone quality and identify instruments. Useful for evaluating tone production and technique.
-
-Returns: dict with brightness (0.0-1.0), warmth (0.0-1.0), sharpness, spectral_centroid (Hz), spectral_rolloff, spectral_bandwidth, timbre_consistency, attack_time, harmonic_ratio (0.0-1.0)
-
-Interpretation Guidelines:
-- brightness: >0.7 high (violin, flute, trumpet), 0.4-0.7 medium (piano, guitar, saxophone), <0.4 low (cello, bass, trombone)
-- warmth: >0.6 high (cello, bass, trombone), 0.4-0.6 medium (piano, guitar, saxophone), <0.4 low (violin, flute, piccolo)
-- harmonic_ratio: >0.8 high (piano, strings, wind), 0.5-0.8 medium (guitar, some brass), <0.5 low (drums, percussion)
-- spectral_centroid: >3000Hz bright, 1500-3000Hz balanced, <1500Hz warm
-- Instrument identification patterns:
-  * Piano: High harmonic_ratio (>0.85) + fast attack (<0.01) + medium brightness (0.5-0.7)
-  * Guitar: Medium harmonic_ratio (0.6-0.8) + fast attack (<0.02) + medium warmth (0.4-0.6)
-  * Violin: High brightness (>0.7) + high harmonic_ratio (>0.8) + fast attack (<0.02)
-  * Bass: Low brightness (<0.4) + high warmth (>0.6) + low spectral centroid (<1500Hz)
-- Combine brightness, warmth, harmonic_ratio, and attack_time to make identification. Provide confidence levels and explain which characteristics led to your conclusion.""",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "detect_key",
-                    "description": "Detect the musical key and mode (major/minor) of the audio. Useful for harmonic analysis and understanding the tonal center.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "detect_chords",
-                    "description": "Detect chord progression with chord names and timing. Identifies which chords are played and when they occur in the audio.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "compare_audio",
-                    "description": "Compare two audio recordings across tempo, pitch, rhythm, or overall performance. Useful for tracking progress between practice sessions or comparing different takes.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id_1": {"type": "string"},
-                            "audio_file_id_2": {"type": "string"},
-                            "comparison_type": {
-                                "type": "string",
-                                "enum": ["rhythm", "pitch", "tempo", "overall"],
-                                "default": "overall",
-                            },
-                        },
-                        "required": ["audio_file_id_1", "audio_file_id_2"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "compare_to_reference",
-                    "description": "Compare audio to a reference (scale, exercise, MIDI file)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                            "reference_type": {
-                                "type": "string",
-                                "enum": ["scale", "exercise", "midi_file"],
-                            },
-                            "reference_params": {
-                                "type": "object",
-                                "description": "Parameters for reference (e.g., {'scale': 'C major', 'tempo': 120} or {'midi_file_id': 'midi_123'})",
-                            },
-                        },
-                        "required": ["audio_file_id", "reference_type"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "segment_audio",
-                    "description": "Extract a segment from audio file",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                            "start_time": {
-                                "type": "number",
-                                "description": "Start time in seconds",
-                            },
-                            "end_time": {"type": "number", "description": "End time in seconds"},
-                        },
-                        "required": ["audio_file_id", "start_time", "end_time"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "segment_phrases",
-                    "description": "Detect musical phrase boundaries",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "comprehensive_analysis",
-                    "description": "Run all analyses and provide structured summary with strengths, weaknesses, and recommendations",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "analyze_groove",
-                    "description": "Analyze microtiming patterns, swing, and groove feel",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "time_stretch",
-                    "description": "Time-stretch audio without changing pitch (slow down or speed up)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                            "rate": {
-                                "type": "number",
-                                "description": "Stretch rate (0.25-4.0). 1.0 = no change, 0.5 = half speed, 2.0 = double speed",
-                            },
-                        },
-                        "required": ["audio_file_id", "rate"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "pitch_shift",
-                    "description": "Pitch-shift audio without changing tempo (transpose)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                            "semitones": {
-                                "type": "number",
-                                "description": "Number of semitones to shift (-24 to 24). Positive = higher, negative = lower",
-                            },
-                        },
-                        "required": ["audio_file_id", "semitones"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "detect_repetitions",
-                    "description": "Detect repeated patterns and musical form",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {"type": "string"},
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_audio_info",
-                    "description": "Get basic audio file metadata (duration, sample rate, channels, format, file size)",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "audio_file_id": {
-                                "type": "string",
-                                "description": "Audio file ID to get info for",
-                            },
-                        },
-                        "required": ["audio_file_id"],
-                    },
-                },
-            },
-        ]
+        return tools
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
         """Call a tool"""
@@ -551,7 +247,7 @@ Interpretation Guidelines:
     async def analyze_tempo(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Analyze tempo"""
+        """Call a tool"""
         return await self.call_tool(
             "analyze_tempo", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -559,7 +255,7 @@ Interpretation Guidelines:
     async def detect_pitch(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Detect pitch"""
+        """Call a tool"""
         return await self.call_tool(
             "detect_pitch", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -567,7 +263,7 @@ Interpretation Guidelines:
     async def analyze_rhythm(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Analyze rhythm"""
+        """Call a tool"""
         return await self.call_tool(
             "analyze_rhythm", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -575,7 +271,7 @@ Interpretation Guidelines:
     async def analyze_dynamics(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Analyze dynamics"""
+        """Call a tool"""
         return await self.call_tool(
             "analyze_dynamics", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -583,7 +279,7 @@ Interpretation Guidelines:
     async def analyze_articulation(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Analyze articulation"""
+        """Call a tool"""
         return await self.call_tool(
             "analyze_articulation", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -591,7 +287,7 @@ Interpretation Guidelines:
     async def analyze_timbre(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Analyze timbre"""
+        """Call a tool"""
         return await self.call_tool(
             "analyze_timbre", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -599,7 +295,7 @@ Interpretation Guidelines:
     async def detect_key(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Detect key"""
+        """Call a tool"""
         return await self.call_tool(
             "detect_key", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -607,7 +303,7 @@ Interpretation Guidelines:
     async def detect_chords(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Detect chords"""
+        """Call a tool"""
         return await self.call_tool(
             "detect_chords", audio_file_id=audio_file_id, audio_path=audio_path
         )
@@ -615,7 +311,7 @@ Interpretation Guidelines:
     async def segment_audio(
         self, audio_file_id: str, start_time: float, end_time: float
     ) -> dict[str, Any]:
-        """Segment audio"""
+        """Call a tool"""
         return await self.call_tool(
             "segment_audio",
             audio_file_id=audio_file_id,
@@ -624,33 +320,33 @@ Interpretation Guidelines:
         )
 
     async def segment_phrases(self, audio_file_id: str) -> dict[str, Any]:
-        """Segment phrases"""
+        """Call a tool"""
         return await self.call_tool("segment_phrases", audio_file_id=audio_file_id)
 
     async def comprehensive_analysis(self, audio_file_id: str) -> dict[str, Any]:
-        """Comprehensive analysis"""
+        """Call a tool"""
         return await self.call_tool("comprehensive_analysis", audio_file_id=audio_file_id)
 
     async def analyze_groove(self, audio_file_id: str) -> dict[str, Any]:
-        """Analyze groove"""
+        """Call a tool"""
         return await self.call_tool("analyze_groove", audio_file_id=audio_file_id)
 
     async def time_stretch(self, audio_file_id: str, rate: float) -> dict[str, Any]:
-        """Time-stretch audio"""
+        """Call a tool"""
         return await self.call_tool("time_stretch", audio_file_id=audio_file_id, rate=rate)
 
     async def pitch_shift(self, audio_file_id: str, semitones: float) -> dict[str, Any]:
-        """Pitch-shift audio"""
+        """Call a tool"""
         return await self.call_tool("pitch_shift", audio_file_id=audio_file_id, semitones=semitones)
 
     async def detect_repetitions(self, audio_file_id: str) -> dict[str, Any]:
-        """Detect repetitions"""
+        """Call a tool"""
         return await self.call_tool("detect_repetitions", audio_file_id=audio_file_id)
 
     async def get_audio_info(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
-        """Get audio info"""
+        """Call a tool"""
         import soundfile as sf
 
         try:

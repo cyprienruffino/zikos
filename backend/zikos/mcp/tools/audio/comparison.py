@@ -2,8 +2,79 @@
 
 from typing import Any
 
+from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.audio import pitch, rhythm, tempo
 from zikos.mcp.tools.audio.utils import resolve_audio_path
+
+
+def get_compare_audio_tool() -> Tool:
+    """Get the compare_audio tool definition"""
+    return Tool(
+        name="compare_audio",
+        description="Compare two audio recordings across tempo, pitch, rhythm, or overall performance. Useful for tracking progress between practice sessions or comparing different takes.",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id_1": {"type": "string"},
+            "audio_file_id_2": {"type": "string"},
+            "comparison_type": {
+                "type": "string",
+                "enum": ["rhythm", "pitch", "tempo", "overall"],
+                "default": "overall",
+            },
+        },
+        required=["audio_file_id_1", "audio_file_id_2"],
+        detailed_description="""Compare two audio recordings across tempo, pitch, rhythm, or overall performance.
+
+Returns: dict with comparison_type, similarity_score (0.0-1.0), differences (detailed metrics), improvements (list), regressions (list)
+
+Interpretation Guidelines:
+- similarity_score: >0.85 very similar, 0.70-0.85 similar, 0.50-0.70 different, <0.50 very different
+- improvements: Areas where audio2 is better than audio1 - acknowledge progress
+- regressions: Areas where audio2 is worse than audio1 - address these
+- differences: Detailed metrics showing specific differences in tempo, pitch, rhythm
+- Use "overall" for general comparison, or specific types ("rhythm", "pitch", "tempo") for focused analysis
+- When improvements are present, celebrate progress and identify what worked
+- When regressions are present, identify what changed and suggest targeted practice
+- Useful for tracking progress over time or comparing different practice approaches
+- Combine with comprehensive_analysis on each file for deeper understanding of changes""",
+    )
+
+
+def get_compare_to_reference_tool() -> Tool:
+    """Get the compare_to_reference tool definition"""
+    return Tool(
+        name="compare_to_reference",
+        description="Compare audio to a reference (scale, exercise, MIDI file)",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+            "reference_type": {
+                "type": "string",
+                "enum": ["scale", "exercise", "midi_file"],
+            },
+            "reference_params": {
+                "type": "object",
+                "description": "Parameters for reference (e.g., {'scale': 'C major', 'tempo': 120} or {'midi_file_id': 'midi_123'})",
+            },
+        },
+        required=["audio_file_id", "reference_type"],
+        detailed_description="""Compare audio to a reference (scale, exercise, MIDI file).
+
+Returns: dict with reference_type, comparison (metrics), errors (list of wrong notes, timing issues), detected_key (for scale comparison)
+
+Interpretation Guidelines:
+- reference_type: "scale" (compare to scale pattern), "midi_file" (compare to MIDI reference)
+- comparison: Contains pitch_accuracy, rhythm_accuracy, tempo_match (0.0-1.0 scores)
+- errors: List of specific mistakes (wrong notes, timing issues) with timestamps
+- For scale comparison: Checks if notes match the scale, detects wrong notes
+- For MIDI comparison: Compares tempo, pitch accuracy, and rhythm to the MIDI reference
+- When errors are present, use timestamps to identify problem areas
+- pitch_accuracy < 0.75 indicates intonation issues or wrong notes
+- rhythm_accuracy < 0.75 indicates timing problems
+- tempo_match < 0.8 indicates tempo deviation from reference
+- Use to provide objective feedback on scale practice, exercises, or pieces with MIDI reference
+- Combine errors list with specific timestamps to guide focused practice""",
+    )
 
 
 async def compare_audio(

@@ -7,6 +7,28 @@ import numpy as np
 import soundfile as sf
 
 from zikos.constants import AUDIO
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_analyze_dynamics_tool() -> Tool:
+    """Get the analyze_dynamics tool definition"""
+    return Tool(
+        name="analyze_dynamics",
+        description="Analyze amplitude and dynamic range. Returns: dynamic_range (dB), dynamic_consistency (0.0-1.0), average_amplitude, peak_amplitude",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Analyze amplitude and dynamic range.
+
+Returns: dict with dynamic_range (dB), dynamic_consistency (0.0-1.0), average_amplitude, peak_amplitude
+
+Interpretation Guidelines:
+- dynamic_range: >20dB excellent, 15-20dB good, 10-15dB needs work, <10dB poor
+- dynamic_consistency: >0.85 excellent, 0.75-0.85 good, <0.75 needs work
+- If dynamic_consistency < 0.75, suggest focusing on consistent technique""",
+    )
 
 
 async def analyze_dynamics(audio_path: str) -> dict[str, Any]:

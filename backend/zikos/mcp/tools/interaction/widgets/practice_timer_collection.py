@@ -17,6 +17,20 @@ class PracticeTimerTools(ToolCollection):
                 name="create_practice_timer",
                 description="Create a practice timer widget to track practice sessions. Helps build consistent practice habits with optional goals and break reminders.",
                 category=ToolCategory.WIDGET,
+                detailed_description="""Create a practice timer widget to track practice sessions.
+
+Returns: dict with status, timer_id, duration_minutes, goal, break_interval_minutes, description
+
+Interpretation Guidelines:
+- duration_minutes: Target practice duration - set realistic goals based on student level
+- goal: Specific practice focus (e.g., 'Work on scales', 'Practice piece X') - helps maintain focus
+- break_interval_minutes: Break reminders (e.g., 25 for Pomodoro technique) - prevents fatigue
+- Use to help students build consistent practice habits and track their practice time
+- Set duration_minutes based on student's level and available time (beginners: 15-30min, advanced: 30-60min+)
+- Include specific goals to help students focus their practice session
+- Break intervals help prevent physical strain and mental fatigue
+- The timer provides visual feedback and helps students develop discipline
+- Combine with specific practice instructions in the description field""",
                 schema={
                     "type": "function",
                     "function": {

@@ -13,6 +13,7 @@ from zikos.mcp.tools import (
     MidiTools,
     PracticeTimerTools,
     RecordingTools,
+    SystemTools,
     TempoTrainerTools,
     TunerTools,
 )
@@ -46,6 +47,9 @@ class MCPServer:
         self._registry.register_many(self.recording_tools.get_tools(), self.recording_tools)
         self._registry.register_many(self.tempo_trainer_tools.get_tools(), self.tempo_trainer_tools)
         self._registry.register_many(self.tuner_tools.get_tools(), self.tuner_tools)
+
+        self.system_tools = SystemTools(self._registry)
+        self._registry.register_many(self.system_tools.get_tools(), self.system_tools)
 
     def get_tools(self) -> list[dict[str, Any]]:
         """Get all available tools as function schemas"""

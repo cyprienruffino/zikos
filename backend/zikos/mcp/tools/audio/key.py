@@ -5,6 +5,35 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_detect_key_tool() -> Tool:
+    """Get the detect_key tool definition"""
+    return Tool(
+        name="detect_key",
+        description="Detect the musical key and mode (major/minor) of the audio. Useful for harmonic analysis and understanding the tonal center.",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Detect the musical key and mode (major/minor) of the audio.
+
+Returns: dict with key (e.g., "C major"), confidence (0.0-1.0), mode ("major" or "minor"), tonic (root note), alternative_keys (list of alternative key candidates)
+
+Interpretation Guidelines:
+- confidence: >0.8 high confidence, 0.6-0.8 moderate, <0.6 low (may be ambiguous or atonal)
+- mode: "major" or "minor" - affects the emotional character and harmonic expectations
+- tonic: Root note of the key - use with chord detection to understand harmonic function
+- alternative_keys: Other possible keys if confidence is moderate - check these if the primary key seems wrong
+- Use with detect_chords to understand harmonic progressions and chord functions
+- When confidence is low, the piece may be modal, atonal, or modulate frequently
+- Major keys typically sound brighter; minor keys sound darker or more emotional
+- Combine with comprehensive_analysis for full harmonic understanding
+- Useful for explaining why certain chords work together and suggesting scale practice""",
+    )
+
 
 async def detect_key(audio_path: str) -> dict[str, Any]:
     """Detect musical key"""

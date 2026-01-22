@@ -5,6 +5,31 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_analyze_rhythm_tool() -> Tool:
+    """Get the analyze_rhythm tool definition"""
+    return Tool(
+        name="analyze_rhythm",
+        description="Analyze rhythm and timing accuracy. Returns: onsets, timing_accuracy (0.0-1.0), rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Analyze rhythm and timing accuracy.
+
+Returns: dict with onsets, timing_accuracy (0.0-1.0), rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency
+
+Interpretation Guidelines:
+- timing_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
+- average_deviation_ms: <10ms excellent, 10-20ms good, 20-50ms needs work, >50ms poor
+- rushing_tendency/dragging_tendency: <0.15 low, 0.15-0.30 moderate, >0.30 high
+- When timing_accuracy < 0.80 AND rushing_tendency > 0.15, consider suggesting metronome practice
+- When deviations are clustered, identify patterns (e.g., "rushing on the downbeat")""",
+    )
+
 
 def calculate_timing_accuracy(
     onsets: np.ndarray, expected_beats: np.ndarray, sample_rate: int

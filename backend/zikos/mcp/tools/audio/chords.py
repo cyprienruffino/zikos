@@ -5,6 +5,32 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_detect_chords_tool() -> Tool:
+    """Get the detect_chords tool definition"""
+    return Tool(
+        name="detect_chords",
+        description="Detect chord progression with chord names and timing. Identifies which chords are played and when they occur in the audio.",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Detect chord progression with chord names and timing.
+
+Returns: dict with chords (list of chord objects with time, duration, chord name, confidence) and progression (simplified list of unique chord names in order)
+
+Interpretation Guidelines:
+- confidence: >0.7 high confidence, 0.5-0.7 moderate, <0.5 low (may be ambiguous or complex chord)
+- progression: Shows the chord sequence without timing, useful for identifying song structure
+- chords: Full timing information for each chord change
+- Common progressions: I-V-vi-IV (C-G-Am-F), vi-IV-I-V (Am-F-C-G), I-vi-IV-V (C-Am-F-G)
+- When confidence is consistently low, the audio may contain complex chords (7ths, 9ths, sus chords) or multiple instruments playing different harmonies
+- Use with detect_key to understand the harmonic context and suggest chord substitutions or extensions""",
+    )
+
 
 def chroma_to_chord(chroma: np.ndarray) -> tuple[str, float]:
     """Convert chroma vector to chord name"""

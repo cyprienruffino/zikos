@@ -5,7 +5,36 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.audio.utils import resolve_audio_path
+
+
+def get_segment_phrases_tool() -> Tool:
+    """Get the segment_phrases tool definition"""
+    return Tool(
+        name="segment_phrases",
+        description="Detect musical phrase boundaries",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Detect musical phrase boundaries.
+
+Returns: dict with phrases (list of phrase objects with start, end, type, confidence), phrase_count, average_phrase_length
+
+Interpretation Guidelines:
+- phrases: List of detected phrases with timing and type ("melodic", "quiet", "energetic")
+- phrase_count: Number of distinct phrases detected
+- average_phrase_length: Average duration of phrases in seconds
+- confidence: >0.7 high confidence in phrase boundary, 0.5-0.7 moderate, <0.5 low
+- Use to identify musical phrases for practice and analysis
+- When phrase_count is low (1-2), the piece may be a single long phrase or detection missed boundaries
+- When average_phrase_length varies significantly, discuss phrase structure and breathing points
+- Type classification helps identify dynamic and expressive phrases
+- Useful for breaking down longer pieces into manageable practice sections
+- Combine with comprehensive_analysis to understand phrase-level musical structure""",
+    )
 
 
 async def segment_phrases(audio_path: str) -> dict[str, Any]:

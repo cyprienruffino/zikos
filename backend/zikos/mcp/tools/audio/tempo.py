@@ -6,6 +6,27 @@ import librosa
 import numpy as np
 
 from zikos.constants import AUDIO
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_analyze_tempo_tool() -> Tool:
+    """Get the analyze_tempo tool definition"""
+    return Tool(
+        name="analyze_tempo",
+        description="Analyze tempo/BPM and timing consistency. Returns: bpm, tempo_stability_score (0.0-1.0), is_steady, tempo_changes, rushing_detected, dragging_detected",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Analyze tempo/BPM and timing consistency.
+
+Returns: dict with bpm, tempo_stability_score (0.0-1.0), is_steady, tempo_changes, rushing_detected, dragging_detected
+
+Interpretation Guidelines:
+- tempo_stability_score: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
+- When tempo_stability_score < 0.80 AND rushing_detected, consider suggesting metronome practice""",
+    )
 
 
 async def analyze_tempo(audio_path: str) -> dict[str, Any]:

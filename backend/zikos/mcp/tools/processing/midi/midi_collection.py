@@ -24,6 +24,19 @@ class MidiTools(ToolCollection):
                 name="validate_midi",
                 description="Validate MIDI text syntax and convert it to a MIDI file. Use this after generating MIDI in your response to ensure it's valid before synthesizing to audio or rendering notation. Returns validation errors if the MIDI syntax is invalid.",
                 category=ToolCategory.MIDI,
+                detailed_description="""Validate MIDI text syntax and convert it to a MIDI file.
+
+Returns: dict with valid (bool), midi_file_id (str, empty if invalid), errors (list[str]), warnings (list[str]), metadata (dict with duration, tempo, tracks, note_count)
+
+Interpretation Guidelines:
+- valid: True if MIDI syntax is correct and file was created, False if there are syntax errors
+- midi_file_id: Use this ID with midi_to_audio or midi_to_notation if valid=True
+- errors: Specific syntax errors that need to be fixed - address these before retrying
+- warnings: Non-fatal issues that don't prevent file creation but may affect playback
+- metadata: Information about the MIDI content (duration, tempo, number of tracks, note count)
+- Always call this tool after generating MIDI text to ensure it's valid before using midi_to_audio or midi_to_notation
+- If valid=False, fix the errors and regenerate the MIDI text
+- Check metadata to verify the MIDI matches your expectations (duration, tempo, etc.)""",
                 schema={
                     "type": "function",
                     "function": {
@@ -54,6 +67,19 @@ Error Handling:
                 name="midi_to_audio",
                 description="Synthesize MIDI file to playable audio. Converts a validated MIDI file into audio that can be played back. Use this after validate_midi to create audio examples for the student.",
                 category=ToolCategory.MIDI,
+                detailed_description="""Synthesize MIDI file to playable audio.
+
+Returns: dict with audio_file_id (str), midi_file_id (str), instrument (str), duration (float), synthesis_method (str)
+
+Interpretation Guidelines:
+- audio_file_id: Use this ID to play the audio or use with other audio analysis tools
+- instrument: One of "piano", "guitar", "violin", "bass", "drums" - choose based on the musical context
+- duration: Length of generated audio in seconds - verify it matches expected length
+- synthesis_method: "fluidsynth" - indicates the synthesis engine used
+- Must call validate_midi first to get a valid midi_file_id
+- The generated audio can be played back to students or used with audio analysis tools
+- Different instruments work better for different musical contexts (piano for melodies, guitar for chords, etc.)
+- If synthesis fails, check that FluidSynth and SoundFont are properly installed on the system""",
                 schema={
                     "type": "function",
                     "function": {
@@ -92,6 +118,20 @@ Error Handling:
                 name="midi_to_notation",
                 description="Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.",
                 category=ToolCategory.MIDI,
+                detailed_description="""Render MIDI file to musical notation (sheet music and/or tabs).
+
+Returns: dict with midi_file_id (str), format (str), sheet_music_url (str, optional), tabs_url (str, optional), sheet_music_error (str, optional), tabs_error (str, optional)
+
+Interpretation Guidelines:
+- format: "sheet_music", "tabs", or "both" - choose based on student's reading preference
+- sheet_music_url: URL to sheet music image - use "both" or "sheet_music" format
+- tabs_url: URL to tabs image - use "both" or "tabs" format
+- sheet_music_error/tabs_error: Error messages if rendering failed - check these if URLs are missing
+- Must call validate_midi first to get a valid midi_file_id
+- Use "both" to provide both notation types for maximum accessibility
+- Sheet music is better for traditional notation readers, tabs are better for guitar/bass players
+- Visual notation helps students understand the structure and practice reading music
+- Combine with midi_to_audio to provide both visual and audio examples""",
                 schema={
                     "type": "function",
                     "function": {

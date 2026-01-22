@@ -5,7 +5,34 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.audio.utils import resolve_audio_path
+
+
+def get_detect_repetitions_tool() -> Tool:
+    """Get the detect_repetitions tool definition"""
+    return Tool(
+        name="detect_repetitions",
+        description="Detect repeated patterns and musical form",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Detect repeated patterns and musical form.
+
+Returns: dict with repetitions (list of pattern objects with pattern_start, pattern_end, repetition_times, similarity) and form (string like "A-B-A" or "no_repetition")
+
+Interpretation Guidelines:
+- form: Shows musical structure (A-B-A, A-A-B-A, etc.) or "no_repetition" if no clear patterns
+- similarity: >0.75 high similarity (likely same section), 0.5-0.75 moderate, <0.5 different sections
+- repetitions: Lists detected patterns and when they repeat
+- Use to identify song structure, verse/chorus patterns, or repeated motifs
+- When form shows clear structure (A-B-A), use this to help students understand the piece's organization
+- If no_repetition, the piece may be through-composed or patterns are too subtle to detect
+- Minimum 2 seconds of audio required for meaningful repetition detection
+- Useful for analyzing longer pieces and helping students understand musical form""",
+    )
 
 
 async def detect_repetitions(audio_path: str) -> dict[str, Any]:

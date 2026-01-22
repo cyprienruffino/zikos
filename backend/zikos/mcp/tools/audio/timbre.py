@@ -6,6 +6,35 @@ import librosa
 import numpy as np
 
 from zikos.constants import AUDIO
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_analyze_timbre_tool() -> Tool:
+    """Get the analyze_timbre tool definition"""
+    return Tool(
+        name="analyze_timbre",
+        description="Analyze timbre and spectral characteristics to assess tone quality and identify instruments. Returns: brightness (0.0-1.0), warmth (0.0-1.0), sharpness, spectral_centroid (Hz), spectral_rolloff, spectral_bandwidth, timbre_consistency, attack_time, harmonic_ratio (0.0-1.0)",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Analyze timbre and spectral characteristics to assess tone quality and identify instruments. Useful for evaluating tone production and technique.
+
+Returns: dict with brightness (0.0-1.0), warmth (0.0-1.0), sharpness, spectral_centroid (Hz), spectral_rolloff, spectral_bandwidth, timbre_consistency, attack_time, harmonic_ratio (0.0-1.0)
+
+Interpretation Guidelines:
+- brightness: >0.7 high (violin, flute, trumpet), 0.4-0.7 medium (piano, guitar, saxophone), <0.4 low (cello, bass, trombone)
+- warmth: >0.6 high (cello, bass, trombone), 0.4-0.6 medium (piano, guitar, saxophone), <0.4 low (violin, flute, piccolo)
+- harmonic_ratio: >0.8 high (piano, strings, wind), 0.5-0.8 medium (guitar, some brass), <0.5 low (drums, percussion)
+- spectral_centroid: >3000Hz bright, 1500-3000Hz balanced, <1500Hz warm
+- Instrument identification patterns:
+  * Piano: High harmonic_ratio (>0.85) + fast attack (<0.01) + medium brightness (0.5-0.7)
+  * Guitar: Medium harmonic_ratio (0.6-0.8) + fast attack (<0.02) + medium warmth (0.4-0.6)
+  * Violin: High brightness (>0.7) + high harmonic_ratio (>0.8) + fast attack (<0.02)
+  * Bass: Low brightness (<0.4) + high warmth (>0.6) + low spectral centroid (<1500Hz)
+- Combine brightness, warmth, harmonic_ratio, and attack_time to make identification. Provide confidence levels and explain which characteristics led to your conclusion.""",
+    )
 
 
 async def analyze_timbre(audio_path: str) -> dict[str, Any]:

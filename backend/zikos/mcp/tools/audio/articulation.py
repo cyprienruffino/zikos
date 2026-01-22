@@ -5,6 +5,32 @@ from typing import Any
 import librosa
 import numpy as np
 
+from zikos.mcp.tool import Tool, ToolCategory
+
+
+def get_analyze_articulation_tool() -> Tool:
+    """Get the analyze_articulation tool definition"""
+    return Tool(
+        name="analyze_articulation",
+        description="Analyze articulation types (staccato, legato, etc.). Returns: attack_time (ms), articulation_types, finger_noise (0.0-1.0), muting_effectiveness (0.0-1.0)",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Analyze articulation types (staccato, legato, etc.).
+
+Returns: dict with attack_time (ms), articulation_types, finger_noise (0.0-1.0), muting_effectiveness (0.0-1.0)
+
+Interpretation Guidelines:
+- attack_time: <10ms very fast (pick, slap), 10-20ms fast (clear attack), 20-50ms moderate (smooth), >50ms slow (legato)
+- If attack_time varies significantly, focus on uniform attack
+- finger_noise: <0.05 excellent, 0.05-0.10 good, 0.10-0.20 needs work, >0.20 poor
+- muting_effectiveness: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
+- High finger_noise + low intonation_accuracy → likely related technique issues
+- Low muting_effectiveness → suggest practicing muting technique""",
+    )
+
 
 async def analyze_articulation(audio_path: str) -> dict[str, Any]:
     """Analyze articulation types (staccato, legato, etc.)"""

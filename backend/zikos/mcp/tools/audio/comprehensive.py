@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.audio import (
     articulation,
     chords,
@@ -14,6 +15,32 @@ from zikos.mcp.tools.audio import (
     timbre,
 )
 from zikos.mcp.tools.audio.utils import resolve_audio_path
+
+
+def get_comprehensive_analysis_tool() -> Tool:
+    """Get the comprehensive_analysis tool definition"""
+    return Tool(
+        name="comprehensive_analysis",
+        description="Run all analyses and provide structured summary with strengths, weaknesses, and recommendations",
+        category=ToolCategory.AUDIO_ANALYSIS,
+        parameters={
+            "audio_file_id": {"type": "string"},
+        },
+        required=["audio_file_id"],
+        detailed_description="""Run all analyses and provide structured summary with strengths, weaknesses, and recommendations.
+
+Returns: dict with timing (tempo, rhythm), pitch (intonation, stability), dynamics, frequency (timbre), musical_structure (key, chords, phrases), articulation, overall_score (0.0-1.0), strengths (list), weaknesses (list), recommendations (list)
+
+Interpretation Guidelines:
+- overall_score: >0.85 excellent, 0.75-0.85 good, 0.65-0.75 needs work, <0.65 poor
+- Use this tool for initial assessment or when you need a complete picture of performance
+- strengths: Areas where the student excels - acknowledge and build on these
+- weaknesses: Areas needing improvement - prioritize these in feedback
+- recommendations: Actionable suggestions based on the analysis
+- The tool combines results from tempo, pitch, rhythm, dynamics, articulation, timbre, key, chords, and phrase segmentation
+- When overall_score is low, check which specific areas (timing, pitch, dynamics) are contributing most
+- Use strengths to encourage the student and weaknesses to guide practice focus""",
+    )
 
 
 async def comprehensive_analysis(audio_path: str) -> dict[str, Any]:
