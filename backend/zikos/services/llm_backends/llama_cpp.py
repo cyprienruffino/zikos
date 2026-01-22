@@ -4,9 +4,10 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 try:
-    from llama_cpp import Llama
+    from llama_cpp import Llama, llama_state_load_file
 except ImportError:
     Llama = None
+    llama_state_load_file = None
 
 from zikos.services.llm_backends.base import LLMBackend
 
@@ -18,6 +19,7 @@ class LlamaCppBackend(LLMBackend):
         self.llm: Llama | None = None
         self.n_ctx: int = 32768
         self.model_path: str | None = None
+        self.system_prompt_cache_path: str | None = None
 
     def initialize(
         self,
@@ -83,6 +85,7 @@ class LlamaCppBackend(LLMBackend):
             init_kwargs["rope_freq_scale"] = 0.0
 
         import logging
+        from pathlib import Path
 
         logger = logging.getLogger(__name__)
         logger.info(f"Initializing Llama with: {init_kwargs}")
@@ -103,6 +106,8 @@ class LlamaCppBackend(LLMBackend):
                         self.llm.ctx_params.n_ctx = actual_ctx
         except Exception as e:
             logger.warning(f"Could not verify model context window: {e}")
+
+        self._load_system_prompt_cache()
 
     def create_chat_completion(
         self,
@@ -127,6 +132,36 @@ class LlamaCppBackend(LLMBackend):
             completion_kwargs["top_p"] = top_p
         if tools is not None:
             completion_kwargs["tools"] = tools
+
+        # Log system prompt and tools for debugging
+        system_msg = next((msg for msg in messages if msg.get("role") == "system"), None)
+        if system_msg:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            system_content = system_msg.get("content", "")
+            logger.info(f"System prompt length: {len(system_content)} chars")
+            if "CRITICAL RULE #1" in system_content:
+                logger.info("✓ System prompt contains 'CRITICAL RULE #1'")
+            if "IMMEDIATELY call" in system_content:
+                logger.info("✓ System prompt contains 'IMMEDIATELY call' instruction")
+            if "request_audio_recording" in system_content:
+                logger.info("✓ System prompt contains 'request_audio_recording' reference")
+            if "<tools>" in system_content:
+                logger.info("✓ System prompt contains <tools> XML")
+
+        if tools is not None:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"Tools passed as parameter: {len(tools)} tools")
+            tool_names = [
+                t.get("function", {}).get("name", "unknown") for t in tools if "function" in t
+            ]
+            if tool_names:
+                logger.info(f"Tool names: {', '.join(tool_names[:5])}")
+            if "I want to practice rhythm accuracy on guitar" in system_content:
+                logger.info("✓ System prompt contains exact practice example")
 
         result = self.llm.create_chat_completion(**completion_kwargs)
         return dict(result)
@@ -163,6 +198,18 @@ class LlamaCppBackend(LLMBackend):
         logger.debug(f"Streaming with kwargs: {completion_kwargs}")
         logger.debug(f"Messages being sent: {messages}")
 
+        # Log system prompt for debugging
+        system_msg = next((msg for msg in messages if msg.get("role") == "system"), None)
+        if system_msg:
+            system_content = system_msg.get("content", "")
+            logger.info(f"System prompt length: {len(system_content)} chars")
+            if "PRACTICE REQUESTS" in system_content:
+                logger.info("System prompt contains 'PRACTICE REQUESTS' rule")
+            if "IMMEDIATELY call" in system_content:
+                logger.info("System prompt contains 'IMMEDIATELY call' instruction")
+            if "request_audio_recording" in system_content:
+                logger.info("System prompt contains 'request_audio_recording' reference")
+
         stream = self.llm.create_chat_completion(**completion_kwargs)
 
         for chunk in stream:
@@ -196,6 +243,53 @@ class LlamaCppBackend(LLMBackend):
             except Exception:
                 pass
             self.llm = None
+
+    def _load_system_prompt_cache(self) -> None:
+        """Load pre-computed system prompt KV cache if available"""
+        import logging
+        import os
+        from pathlib import Path
+
+        logger = logging.getLogger(__name__)
+
+        if self.llm is None:
+            return
+
+        cache_path = os.getenv("SYSTEM_PROMPT_CACHE_PATH")
+        if not cache_path:
+            if not self.model_path:
+                logger.debug("No model path, cannot auto-detect cache")
+                return
+            cache_file = (
+                Path(self.model_path).parent / f"{Path(self.model_path).stem}_system_cache.bin"
+            )
+            if cache_file.exists():
+                cache_path = str(cache_file)
+            else:
+                logger.debug(
+                    "No system prompt cache found, will process system prompt on first request"
+                )
+                return
+
+        cache_path_obj = Path(cache_path)
+        if not cache_path_obj.exists():
+            logger.warning(f"System prompt cache file not found: {cache_path}")
+            return
+
+        if llama_state_load_file is None:
+            logger.warning("llama-cpp-python state loading not available")
+            return
+
+        try:
+            llama_state_load_file(self.llm.ctx, str(cache_path_obj))
+            state = self.llm.save_state()
+            logger.info(
+                f"Loaded system prompt KV cache from {cache_path} "
+                f"({state.n_tokens} tokens cached)"
+            )
+            self.system_prompt_cache_path = cache_path
+        except Exception as e:
+            logger.warning(f"Failed to load system prompt cache: {e}")
 
     def is_initialized(self) -> bool:
         """Check if backend is initialized"""

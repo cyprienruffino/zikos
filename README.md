@@ -76,6 +76,20 @@ export LLM_MODEL_PATH=./models/Phi-3-mini-4k-instruct-q4.gguf
 export LLM_MODEL_PATH=./models/mistral-7b-instruct-v0.3.Q4_K_M.gguf
 ```
 
+### System Prompt KV Cache (llama-cpp-python only)
+
+For faster server startup, you can pre-compute the system prompt KV cache. This avoids reprocessing the system prompt for every conversation:
+
+```bash
+# Generate cache manually
+python scripts/generate_system_prompt_cache.py --model-path ./models/your-model.gguf
+
+# Or set SYSTEM_PROMPT_CACHE_PATH in .env - cache will be auto-generated if missing
+export SYSTEM_PROMPT_CACHE_PATH=./models/your-model_system_cache.bin
+```
+
+The cache file can be generated in CI and included in deployments. If `SYSTEM_PROMPT_CACHE_PATH` is set but the file doesn't exist, it will be automatically generated on startup.
+
 **Note**: The script requires `huggingface_hub` for Transformers models. Install with:
 ```bash
 # Recommended: install model download helpers

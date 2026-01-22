@@ -9,6 +9,10 @@
 - `LLM_N_GPU_LAYERS`: GPU layers (-1=auto/full, 0=CPU only, N=partial) (default: -1)
 - `LLM_TEMPERATURE`: Sampling temperature 0.0-1.0 (default: 0.7)
 - `LLM_TOP_P`: Top-p sampling 0.0-1.0 (default: 0.9)
+- `SYSTEM_PROMPT_CACHE_PATH`: Path to pre-computed system prompt KV cache (optional, llama-cpp only)
+  - If set and file doesn't exist, cache will be auto-generated on startup
+  - Can be manually generated with `python scripts/generate_system_prompt_cache.py`
+  - Default: auto-detected as `models/{model_name}_system_cache.bin` if exists
 
 ### API Configuration
 - `API_HOST`: Bind address (default: `0.0.0.0`)
