@@ -14,6 +14,7 @@ def mock_backend():
     """Mock LLM backend with streaming support"""
     backend = MagicMock()
     backend.is_initialized.return_value = True
+    backend.get_context_window.return_value = 4096
     backend.create_chat_completion.return_value = {
         "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
     }

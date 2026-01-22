@@ -119,6 +119,12 @@ class MessagePreparer:
             msg_content = str(msg.get("content", ""))
             msg_tokens = len(enc.encode(msg_content))
 
+            # Check if this is an audio analysis message
+            is_audio_analysis = any(
+                marker in msg_content
+                for marker in ["[Audio Analysis", "Audio analysis complete", "audio_file_id"]
+            )
+
             if msg.get("role") == "user" and system_prompt and not system_prepended:
                 # Prepend system prompt to first user message
                 combined_content = f"{system_prompt}\n\n{msg_content}"
@@ -141,8 +147,13 @@ class MessagePreparer:
                 final_total_tokens += combined_tokens
                 system_prepended = True
             elif msg.get("role") != "system":
-                # Check if adding this message would exceed limit
-                if context_window and final_total_tokens + msg_tokens > max_tokens:
+                # Always include audio analysis messages, even if they exceed the limit
+                # Other messages are checked against the limit
+                if (
+                    not is_audio_analysis
+                    and context_window
+                    and final_total_tokens + msg_tokens > max_tokens
+                ):
                     break
                 messages.append(msg)
                 final_total_tokens += msg_tokens
