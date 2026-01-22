@@ -1,0 +1,205 @@
+"""Utility to detect model context length from model files"""
+
+import json
+import logging
+from pathlib import Path
+
+_logger = logging.getLogger(__name__)
+
+
+def detect_context_length(model_path: str, backend_type: str | None = None) -> int:
+    """Detect the native context length of a model from its metadata
+
+    Args:
+        model_path: Path to the model file (GGUF) or directory (Transformers)
+        backend_type: Optional backend type hint ('llama_cpp' or 'transformers')
+
+    Returns:
+        The detected context length in tokens
+
+    Raises:
+        RuntimeError: If context length cannot be detected from the model
+    """
+    model_path_obj = Path(model_path)
+    model_path_lower = str(model_path).lower()
+
+    # Determine backend type if not provided
+    if backend_type is None:
+        if model_path_lower.endswith(".gguf"):
+            backend_type = "llama_cpp"
+        elif model_path_obj.exists() and model_path_obj.is_dir():
+            backend_type = "transformers"
+        elif any(x in model_path_lower for x in ["qwen3", "qwen/qwen3"]):
+            backend_type = "transformers"
+        elif "/" in model_path and not model_path_lower.endswith(".gguf"):
+            backend_type = "transformers"
+        else:
+            backend_type = "llama_cpp"
+
+    if backend_type in ("llama_cpp", "llama-cpp", "gguf"):
+        return _detect_gguf_context_length(model_path)
+    else:
+        return _detect_transformers_context_length(model_path)
+
+
+def _detect_gguf_context_length(model_path: str) -> int:
+    """Detect context length from GGUF model metadata"""
+    try:
+        from llama_cpp import Llama
+
+        model = None
+        try:
+            # Initialize with minimal n_ctx to read metadata
+            # Use n_ctx=1 to minimize memory usage
+            model = Llama(model_path=model_path, n_ctx=1, verbose=False, n_threads=1)
+
+            # First, try to read from model metadata (most reliable)
+            if hasattr(model, "_model"):
+                try:
+                    from llama_cpp import (
+                        llama_model_meta_key_by_index,
+                        llama_model_meta_val_str_by_index,
+                    )
+
+                    # Try to get metadata count
+                    metadata_count = 0
+                    if hasattr(model._model, "metadata_kv_count"):
+                        metadata_count = model._model.metadata_kv_count()
+                    else:
+                        # Try iterating until we get an error
+                        metadata_count = 100  # Reasonable upper bound
+
+                    # Search for context length in metadata
+                    for i in range(metadata_count):
+                        try:
+                            key = llama_model_meta_key_by_index(model._model, i)
+                            val = llama_model_meta_val_str_by_index(model._model, i)
+
+                            if key in (
+                                "llama.context_length",
+                                "general.context_length",
+                                "context_length",
+                            ):
+                                context_length = int(val)
+                                if context_length > 0:
+                                    _logger.info(
+                                        f"Detected GGUF context length from metadata: {context_length} tokens"
+                                    )
+                                    return context_length
+                        except (IndexError, ValueError, TypeError):
+                            break
+                except ImportError:
+                    # Metadata functions not available in this version
+                    pass
+                except Exception as e:
+                    _logger.debug(f"Could not read metadata: {e}")
+
+            # Fallback: Try to get from model's internal parameters
+            # Some models expose context_length as an attribute
+            if hasattr(model, "context_length"):
+                context_length = model.context_length
+                if context_length and context_length > 0:
+                    _logger.info(
+                        f"Detected GGUF context length from model attribute: {context_length} tokens"
+                    )
+                    return context_length
+
+            # Last resort: Check model's n_ctx_train or similar
+            # Note: n_ctx() returns what we passed in, not the model's limit
+            # But we can check if there's a training context length
+            if hasattr(model, "_model"):
+                try:
+                    # Try to access model params directly
+                    if hasattr(model._model, "n_ctx_train"):
+                        context_length = model._model.n_ctx_train()
+                        if context_length and context_length > 0:
+                            _logger.info(
+                                f"Detected GGUF context length from n_ctx_train: {context_length} tokens"
+                            )
+                            return context_length
+                except Exception:
+                    pass
+
+        except ImportError as err:
+            raise RuntimeError(
+                "llama-cpp-python is not installed. Cannot detect context length for GGUF models."
+            ) from err
+        finally:
+            # Clean up
+            if model is not None:
+                try:
+                    model.close()
+                except Exception:
+                    pass
+
+        raise RuntimeError(
+            f"Could not detect context length from GGUF model at {model_path}. "
+            "The model may be corrupted or in an unsupported format. "
+            "Please set LLM_N_CTX environment variable manually."
+        )
+
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(
+            f"Error detecting context length from GGUF model {model_path}: {e}"
+        ) from e
+
+
+def _detect_transformers_context_length(model_path: str) -> int:
+    """Detect context length from Transformers model config.json"""
+    model_path_obj = Path(model_path)
+
+    # If it's a HuggingFace model ID, we'd need to download config
+    # For now, assume it's a local path
+    if not model_path_obj.exists():
+        # Try to load from HuggingFace (would require transformers library)
+        # For now, raise error
+        raise RuntimeError(
+            f"Model path does not exist: {model_path}. "
+            "Cannot detect context length for remote HuggingFace models automatically."
+        )
+
+    if model_path_obj.is_file():
+        # If it's a file, try parent directory
+        config_path = model_path_obj.parent / "config.json"
+    else:
+        # It's a directory
+        config_path = model_path_obj / "config.json"
+
+    if not config_path.exists():
+        raise RuntimeError(
+            f"Could not find config.json at {config_path}. "
+            "Cannot detect context length for Transformers model."
+        )
+
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            config = json.load(f)
+
+        # Try common keys for context length
+        context_length = None
+
+        # Most common: max_position_embeddings
+        if "max_position_embeddings" in config:
+            context_length = int(config["max_position_embeddings"])
+        # Alternative: n_positions
+        elif "n_positions" in config:
+            context_length = int(config["n_positions"])
+        # Some models use: max_seq_length
+        elif "max_seq_length" in config:
+            context_length = int(config["max_seq_length"])
+
+        if context_length is not None:
+            _logger.info(f"Detected Transformers context length: {context_length} tokens")
+            return context_length
+
+        raise RuntimeError(
+            f"Could not find context length in config.json at {config_path}. "
+            "Expected one of: max_position_embeddings, n_positions, max_seq_length"
+        )
+
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Invalid JSON in config.json at {config_path}: {e}") from e
+    except Exception as e:
+        raise RuntimeError(f"Error reading config.json from {config_path}: {e}") from e

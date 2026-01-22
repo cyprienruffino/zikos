@@ -6,6 +6,7 @@ from typing import Any
 import tiktoken
 
 from zikos.constants import LLM
+from zikos.utils.token_budget import get_max_tokens_for_validation
 
 _logger = logging.getLogger("zikos.services.llm_orchestration.response_validator")
 
@@ -13,11 +14,14 @@ _logger = logging.getLogger("zikos.services.llm_orchestration.response_validator
 class ResponseValidator:
     """Validates LLM responses for safety, quality, and loop detection"""
 
-    def validate_token_limit(self, messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    def validate_token_limit(
+        self, messages: list[dict[str, Any]], context_window: int | None = None
+    ) -> dict[str, Any] | None:
         """Check if conversation exceeds token limit
 
         Args:
             messages: List of message dictionaries
+            context_window: Actual context window size. If None, uses LLM.MAX_TOKENS_SAFETY_CHECK.
 
         Returns:
             Error info dict with 'error_type' and 'error_details' if limit exceeded, None otherwise
@@ -25,10 +29,16 @@ class ResponseValidator:
         try:
             enc = tiktoken.get_encoding("cl100k_base")
             total_tokens = sum(len(enc.encode(str(msg.get("content", "")))) for msg in messages)
-            if total_tokens > LLM.MAX_TOKENS_SAFETY_CHECK:
+
+            if context_window is not None:
+                max_tokens = get_max_tokens_for_validation(context_window)
+            else:
+                max_tokens = LLM.MAX_TOKENS_SAFETY_CHECK
+
+            if total_tokens > max_tokens:
                 return {
                     "error_type": "token_limit",
-                    "error_details": f"Conversation exceeds token limit ({total_tokens} tokens, max: {LLM.MAX_TOKENS_SAFETY_CHECK})",
+                    "error_details": f"Conversation exceeds token limit ({total_tokens} tokens, max: {max_tokens}, context window: {context_window or 'unknown'})",
                 }
         except Exception:
             pass

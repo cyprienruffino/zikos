@@ -9,7 +9,7 @@ import soundfile as sf
 
 from zikos.config import settings
 from zikos.mcp.tools.analysis import AudioAnalysisTools
-from zikos.mcp.tools.analysis.audio.comprehensive import comprehensive_analysis
+from zikos.mcp.tools.audio.comprehensive import comprehensive_analysis
 
 
 @pytest.mark.asyncio
@@ -93,7 +93,7 @@ async def test_comprehensive_analysis_processing_error(temp_dir, sample_audio_pa
     """Test comprehensive analysis with processing error"""
     with patch.object(settings, "audio_storage_path", str(temp_dir)):
         with patch(
-            "zikos.mcp.tools.analysis.audio.tempo.analyze_tempo",
+            "zikos.mcp.tools.audio.tempo.analyze_tempo",
             side_effect=Exception("Processing failed"),
         ):
             result = await comprehensive_analysis(str(sample_audio_path))
@@ -131,19 +131,15 @@ async def test_comprehensive_analysis_with_high_scores(temp_dir, sample_audio_pa
 
     with patch.object(settings, "audio_storage_path", str(temp_dir)):
         with (
-            patch("zikos.mcp.tools.analysis.audio.tempo.analyze_tempo") as mock_tempo,
-            patch("zikos.mcp.tools.analysis.audio.pitch.detect_pitch") as mock_pitch,
-            patch("zikos.mcp.tools.analysis.audio.rhythm.analyze_rhythm") as mock_rhythm,
-            patch("zikos.mcp.tools.analysis.audio.dynamics.analyze_dynamics") as mock_dynamics,
-            patch(
-                "zikos.mcp.tools.analysis.audio.articulation.analyze_articulation"
-            ) as mock_articulation,
-            patch("zikos.mcp.tools.analysis.audio.timbre.analyze_timbre") as mock_timbre,
-            patch("zikos.mcp.tools.analysis.audio.key.detect_key") as mock_key,
-            patch("zikos.mcp.tools.analysis.audio.chords.detect_chords") as mock_chords,
-            patch(
-                "zikos.mcp.tools.analysis.audio.phrase_segmentation.segment_phrases"
-            ) as mock_phrases,
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+            patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
+            patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
+            patch("zikos.mcp.tools.audio.dynamics.analyze_dynamics") as mock_dynamics,
+            patch("zikos.mcp.tools.audio.articulation.analyze_articulation") as mock_articulation,
+            patch("zikos.mcp.tools.audio.timbre.analyze_timbre") as mock_timbre,
+            patch("zikos.mcp.tools.audio.key.detect_key") as mock_key,
+            patch("zikos.mcp.tools.audio.chords.detect_chords") as mock_chords,
+            patch("zikos.mcp.tools.audio.phrase_segmentation.segment_phrases") as mock_phrases,
         ):
             mock_tempo.return_value = {"tempo_stability_score": 0.90, "bpm": 120}
             mock_pitch.return_value = {"intonation_accuracy": 0.90, "pitch_stability": 0.88}
@@ -174,19 +170,15 @@ async def test_comprehensive_analysis_with_low_scores(temp_dir, sample_audio_pat
 
     with patch.object(settings, "audio_storage_path", str(temp_dir)):
         with (
-            patch("zikos.mcp.tools.analysis.audio.tempo.analyze_tempo") as mock_tempo,
-            patch("zikos.mcp.tools.analysis.audio.pitch.detect_pitch") as mock_pitch,
-            patch("zikos.mcp.tools.analysis.audio.rhythm.analyze_rhythm") as mock_rhythm,
-            patch("zikos.mcp.tools.analysis.audio.dynamics.analyze_dynamics") as mock_dynamics,
-            patch(
-                "zikos.mcp.tools.analysis.audio.articulation.analyze_articulation"
-            ) as mock_articulation,
-            patch("zikos.mcp.tools.analysis.audio.timbre.analyze_timbre") as mock_timbre,
-            patch("zikos.mcp.tools.analysis.audio.key.detect_key") as mock_key,
-            patch("zikos.mcp.tools.analysis.audio.chords.detect_chords") as mock_chords,
-            patch(
-                "zikos.mcp.tools.analysis.audio.phrase_segmentation.segment_phrases"
-            ) as mock_phrases,
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+            patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
+            patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
+            patch("zikos.mcp.tools.audio.dynamics.analyze_dynamics") as mock_dynamics,
+            patch("zikos.mcp.tools.audio.articulation.analyze_articulation") as mock_articulation,
+            patch("zikos.mcp.tools.audio.timbre.analyze_timbre") as mock_timbre,
+            patch("zikos.mcp.tools.audio.key.detect_key") as mock_key,
+            patch("zikos.mcp.tools.audio.chords.detect_chords") as mock_chords,
+            patch("zikos.mcp.tools.audio.phrase_segmentation.segment_phrases") as mock_phrases,
         ):
             mock_tempo.return_value = {
                 "tempo_stability_score": 0.65,
@@ -223,19 +215,15 @@ async def test_comprehensive_analysis_with_errors_in_sub_analyses(temp_dir, samp
 
     with patch.object(settings, "audio_storage_path", str(temp_dir)):
         with (
-            patch("zikos.mcp.tools.analysis.audio.tempo.analyze_tempo") as mock_tempo,
-            patch("zikos.mcp.tools.analysis.audio.pitch.detect_pitch") as mock_pitch,
-            patch("zikos.mcp.tools.analysis.audio.rhythm.analyze_rhythm") as mock_rhythm,
-            patch("zikos.mcp.tools.analysis.audio.dynamics.analyze_dynamics") as mock_dynamics,
-            patch(
-                "zikos.mcp.tools.analysis.audio.articulation.analyze_articulation"
-            ) as mock_articulation,
-            patch("zikos.mcp.tools.analysis.audio.timbre.analyze_timbre") as mock_timbre,
-            patch("zikos.mcp.tools.analysis.audio.key.detect_key") as mock_key,
-            patch("zikos.mcp.tools.analysis.audio.chords.detect_chords") as mock_chords,
-            patch(
-                "zikos.mcp.tools.analysis.audio.phrase_segmentation.segment_phrases"
-            ) as mock_phrases,
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+            patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
+            patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
+            patch("zikos.mcp.tools.audio.dynamics.analyze_dynamics") as mock_dynamics,
+            patch("zikos.mcp.tools.audio.articulation.analyze_articulation") as mock_articulation,
+            patch("zikos.mcp.tools.audio.timbre.analyze_timbre") as mock_timbre,
+            patch("zikos.mcp.tools.audio.key.detect_key") as mock_key,
+            patch("zikos.mcp.tools.audio.chords.detect_chords") as mock_chords,
+            patch("zikos.mcp.tools.audio.phrase_segmentation.segment_phrases") as mock_phrases,
         ):
             mock_tempo.return_value = {"tempo_stability_score": 0.80, "bpm": 120}
             mock_pitch.return_value = {"intonation_accuracy": 0.75, "pitch_stability": 0.78}

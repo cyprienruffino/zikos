@@ -228,7 +228,7 @@ async def compare_to_reference(
                     "message": "midi_file_id is required for MIDI reference comparison",
                 }
 
-            from zikos.mcp.tools.midi import MidiTools
+            from zikos.mcp.tools.processing import MidiTools
 
             midi_tools = MidiTools()
             try:

@@ -5,7 +5,7 @@ from typing import Any
 import librosa
 import numpy as np
 
-from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
+from zikos.mcp.tools.audio.utils import resolve_audio_path
 
 
 async def segment_phrases(audio_path: str) -> dict[str, Any]:

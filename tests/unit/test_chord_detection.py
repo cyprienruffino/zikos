@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from zikos.mcp.tools.analysis.audio.chords import detect_chords
+from zikos.mcp.tools.audio.chords import detect_chords
 
 
 @pytest.fixture

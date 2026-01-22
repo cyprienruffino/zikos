@@ -124,7 +124,7 @@ class TestAudioService:
         create_test_audio_file(audio_file, audio_type="single_note", duration=2.0)
 
         # Patch settings.audio_storage_path to ensure resolve_audio_path finds the file
-        with patch("zikos.mcp.tools.analysis.audio.utils.settings") as mock_settings:
+        with patch("zikos.mcp.tools.audio.utils.settings") as mock_settings:
             mock_settings.audio_storage_path = temp_dir
             result = await audio_service.get_audio_info(audio_file_id)
 

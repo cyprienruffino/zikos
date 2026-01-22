@@ -13,7 +13,7 @@ import soundfile as sf
 
 from zikos.config import settings
 from zikos.mcp.tools.analysis import AudioAnalysisTools
-from zikos.mcp.tools.analysis.audio.time_stretch import pitch_shift, time_stretch
+from zikos.mcp.tools.audio.time_stretch import pitch_shift, time_stretch
 
 
 @pytest.mark.asyncio
@@ -172,7 +172,7 @@ async def test_pitch_shift_via_tools_class(temp_dir, sample_audio_path):
 @pytest.mark.asyncio
 async def test_time_stretch_missing_pyrubberband(temp_dir, sample_audio_path):
     """Test time-stretch when pyrubberband is not installed"""
-    with patch("zikos.mcp.tools.analysis.audio.time_stretch.pyrb", None):
+    with patch("zikos.mcp.tools.audio.time_stretch.pyrb", None):
         audio_file_id = sample_audio_path.stem
         result = await time_stretch(audio_file_id, rate=1.5)
 
@@ -183,7 +183,7 @@ async def test_time_stretch_missing_pyrubberband(temp_dir, sample_audio_path):
 @pytest.mark.asyncio
 async def test_pitch_shift_missing_pyrubberband(temp_dir, sample_audio_path):
     """Test pitch-shift when pyrubberband is not installed"""
-    with patch("zikos.mcp.tools.analysis.audio.time_stretch.pyrb", None):
+    with patch("zikos.mcp.tools.audio.time_stretch.pyrb", None):
         audio_file_id = sample_audio_path.stem
         result = await pitch_shift(audio_file_id, semitones=2.0)
 

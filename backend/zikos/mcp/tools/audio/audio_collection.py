@@ -3,7 +3,7 @@
 from typing import Any
 
 from zikos.mcp.tool import Tool, ToolCategory
-from zikos.mcp.tools.analysis.audio import (
+from zikos.mcp.tools.audio import (
     articulation,
     chords,
     comparison,
@@ -19,10 +19,10 @@ from zikos.mcp.tools.analysis.audio import (
     tempo,
     timbre,
 )
-from zikos.mcp.tools.analysis.audio import (
+from zikos.mcp.tools.audio import (
     time_stretch as time_stretch_module,
 )
-from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
+from zikos.mcp.tools.audio.utils import resolve_audio_path
 from zikos.mcp.tools.base import ToolCollection
 
 

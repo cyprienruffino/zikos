@@ -83,18 +83,24 @@ class LLMOrchestrator:
         return history, original_message, tool_registry, tools, tool_schemas, iteration_state
 
     def prepare_iteration_messages(
-        self, history: list[dict[str, Any]]
+        self, history: list[dict[str, Any]], context_window: int | None = None
     ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         """Prepare messages for current iteration and validate token limit
+
+        Args:
+            history: Conversation history
+            context_window: Actual context window size. If None, uses hardcoded constants.
 
         Returns:
             Tuple of (messages, token_error) where token_error is None if valid
         """
         current_messages = self.message_preparer.prepare(
-            history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
+            history, max_tokens=None, for_user=False, context_window=context_window
         )
 
-        token_error = self.response_validator.validate_token_limit(current_messages)
+        token_error = self.response_validator.validate_token_limit(
+            current_messages, context_window=context_window
+        )
 
         return current_messages, token_error
 

@@ -47,4 +47,4 @@ class ToolInstructionsSection(PromptSection):
         tool_schemas_text = self.tool_provider.format_tool_schemas(self.tools)
         tool_examples = self.tool_provider.get_tool_call_examples()
 
-        return f"{tool_instructions}\n\n## Available Tools\n\n{tool_summary}\n\n{tool_schemas_text}\n\n{tool_examples}"
+        return f"{tool_instructions}\n{tool_summary}\n{tool_schemas_text}\n{tool_examples}"

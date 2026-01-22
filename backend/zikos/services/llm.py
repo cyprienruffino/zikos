@@ -28,6 +28,7 @@ from zikos.services.prompt.sections import (
     ToolInstructionsSection,
 )
 from zikos.services.tool_providers import get_tool_provider
+from zikos.utils.context_length import detect_context_length
 from zikos.utils.gpu import get_optimal_gpu_layers
 
 # Setup logger for thinking/reasoning logs
@@ -58,6 +59,7 @@ class LLMService:
     def __init__(self):
         self.backend = None
         self.initialization_error: str | None = None
+        self.context_window: int | None = None
         self.audio_service = AudioService()
         self.tool_provider = None
         self.thinking_extractor = ThinkingExtractor()
@@ -126,26 +128,42 @@ class LLMService:
                 self.initialization_error = error_msg
                 return
 
+            # Auto-detect context length if not provided
+            n_ctx = settings.llm_n_ctx
+            if n_ctx is None:
+                try:
+                    n_ctx = detect_context_length(model_path_str, backend_type)
+                    _logger.info(f"Auto-detected context length: {n_ctx} tokens")
+                except Exception as e:
+                    error_msg = (
+                        f"Could not auto-detect context length for model {model_path_str}: {e}. "
+                        "Please set LLM_N_CTX environment variable manually."
+                    )
+                    _logger.error(error_msg)
+                    self.initialization_error = error_msg
+                    return
+
             n_gpu_layers = settings.llm_n_gpu_layers
             if n_gpu_layers == -1:
                 n_gpu_layers = get_optimal_gpu_layers(model_path_str, backend_type or "auto")
 
             _logger.info(f"Initializing LLM backend: {type(self.backend).__name__}")
             _logger.info(f"Model path: {model_path_str}")
-            _logger.info(f"Context window: {settings.llm_n_ctx} tokens")
+            _logger.info(f"Context window: {n_ctx} tokens")
             _logger.info(f"GPU layers: {n_gpu_layers}")
 
             self.backend.initialize(
                 model_path=model_path_str,
-                n_ctx=settings.llm_n_ctx,
+                n_ctx=n_ctx,
                 n_gpu_layers=n_gpu_layers,
                 temperature=settings.llm_temperature,
                 top_p=settings.llm_top_p,
             )
 
             self.tool_provider = get_tool_provider(model_path_str)
+            self.context_window = self.backend.get_context_window()
             _logger.info(
-                f"LLM initialized successfully with context window: {settings.llm_n_ctx} tokens"
+                f"LLM initialized successfully with context window: {self.context_window} tokens"
             )
             _logger.info(f"Using tool provider: {type(self.tool_provider).__name__}")
         except Exception as e:
@@ -181,7 +199,11 @@ class LLMService:
         return result
 
     def _prepare_messages(
-        self, history: list[dict[str, Any]], max_tokens: int | None = None, for_user: bool = False
+        self,
+        history: list[dict[str, Any]],
+        max_tokens: int | None = None,
+        for_user: bool = False,
+        context_window: int | None = None,
     ) -> list[dict[str, Any]]:
         """Prepare messages for LLM, ensuring system prompt is included
 
@@ -195,8 +217,13 @@ class LLMService:
             history: Conversation history
             max_tokens: Maximum tokens to include
             for_user: If True, filters out thinking messages for user display
+            context_window: Actual context window size. If None, uses self.context_window.
         """
-        result: list[dict[str, Any]] = self.message_preparer.prepare(history, max_tokens, for_user)
+        if context_window is None:
+            context_window = self.context_window
+        result: list[dict[str, Any]] = self.message_preparer.prepare(
+            history, max_tokens, for_user, context_window
+        )
         return result
 
     async def generate_response(
@@ -324,10 +351,15 @@ class LLMService:
         while iteration < max_iterations:
             iteration += 1
             current_messages = self._prepare_messages(
-                history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
+                history,
+                max_tokens=None,
+                for_user=False,
+                context_window=self.context_window,
             )
 
-            token_error = self.response_validator.validate_token_limit(current_messages)
+            token_error = self.response_validator.validate_token_limit(
+                current_messages, context_window=self.context_window
+            )
             if token_error:
                 self._inject_error_system_message(
                     history, token_error["error_type"], token_error["error_details"]
@@ -540,7 +572,7 @@ class LLMService:
         )
 
         current_messages = self._prepare_messages(
-            history, max_tokens=LLM.MAX_TOKENS_PREPARE_MESSAGES, for_user=False
+            history, max_tokens=None, for_user=False, context_window=self.context_window
         )
 
         tools_param = None

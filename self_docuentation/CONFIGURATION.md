@@ -5,7 +5,7 @@
 ### LLM Configuration
 - `LLM_MODEL_PATH`: Path to model file/directory (required)
 - `LLM_BACKEND`: `auto` | `llama_cpp` | `transformers` (default: `auto`)
-- `LLM_N_CTX`: Context window size (default: 131072 / 128K)
+- `LLM_N_CTX`: Context window size (optional, auto-detected from model if not set)
 - `LLM_N_GPU_LAYERS`: GPU layers (-1=auto/full, 0=CPU only, N=partial) (default: -1)
 - `LLM_TEMPERATURE`: Sampling temperature 0.0-1.0 (default: 0.7)
 - `LLM_TOP_P`: Top-p sampling 0.0-1.0 (default: 0.9)

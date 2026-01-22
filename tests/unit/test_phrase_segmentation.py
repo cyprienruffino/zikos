@@ -9,7 +9,7 @@ import soundfile as sf
 
 from zikos.config import settings
 from zikos.mcp.tools.analysis import AudioAnalysisTools
-from zikos.mcp.tools.analysis.audio.phrase_segmentation import segment_phrases
+from zikos.mcp.tools.audio.phrase_segmentation import segment_phrases
 
 
 @pytest.mark.asyncio

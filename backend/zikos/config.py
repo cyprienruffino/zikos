@@ -22,7 +22,7 @@ class Settings(BaseModel):
     # LLM
     llm_model_path: str = ""
     llm_backend: str = "auto"
-    llm_n_ctx: int = LLMConstants.DEFAULT_N_CTX
+    llm_n_ctx: int | None = None
     llm_n_gpu_layers: int = LLMConstants.DEFAULT_N_GPU_LAYERS
     llm_temperature: float = LLMConstants.DEFAULT_TEMPERATURE
     llm_top_p: float = LLMConstants.DEFAULT_TOP_P
@@ -52,7 +52,9 @@ class Settings(BaseModel):
             api_reload=os.getenv("API_RELOAD", str(defaults.api_reload).lower()).lower() == "true",
             llm_model_path=os.getenv("LLM_MODEL_PATH", defaults.llm_model_path),
             llm_backend=os.getenv("LLM_BACKEND", defaults.llm_backend),
-            llm_n_ctx=int(os.getenv("LLM_N_CTX", str(defaults.llm_n_ctx))),
+            llm_n_ctx=(
+                int(os.getenv("LLM_N_CTX", "")) if os.getenv("LLM_N_CTX") is not None else None
+            ),
             llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", str(defaults.llm_n_gpu_layers))),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", str(defaults.llm_temperature))),
             llm_top_p=float(os.getenv("LLM_TOP_P", str(defaults.llm_top_p))),

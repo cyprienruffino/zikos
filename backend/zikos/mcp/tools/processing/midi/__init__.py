@@ -1,5 +1,5 @@
 """MIDI processing tools"""
 
-from zikos.mcp.tools.processing.midi.midi import MidiTools
+from zikos.mcp.tools.processing.midi.midi_collection import MidiTools
 
 __all__ = ["MidiTools"]

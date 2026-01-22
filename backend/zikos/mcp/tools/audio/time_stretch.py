@@ -14,7 +14,7 @@ except ImportError:
     pyrb = None
 
 from zikos.config import settings
-from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
+from zikos.mcp.tools.audio.utils import resolve_audio_path
 
 
 async def time_stretch(audio_file_id: str, rate: float) -> dict[str, Any]:

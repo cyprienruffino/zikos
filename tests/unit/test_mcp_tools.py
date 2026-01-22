@@ -45,7 +45,7 @@ async def test_analyze_tempo_with_real_audio(temp_dir):
 
     from tests.helpers.audio_synthesis import create_test_audio_file
     from zikos.config import settings
-    from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
+    from zikos.mcp.tools.audio.utils import resolve_audio_path
 
     # Create synthesized rhythmic audio
     audio_file = temp_dir / "test_rhythm.wav"

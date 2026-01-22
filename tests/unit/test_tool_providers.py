@@ -3,17 +3,17 @@
 import pytest
 
 from zikos.mcp.tool import Tool, ToolCategory
-from zikos.services.tool_providers.openai import OpenAIToolProvider
-from zikos.services.tool_providers.qwen import QwenToolProvider
+from zikos.services.tool_providers.structured_tool_provider import StructuredToolProvider
+from zikos.services.tool_providers.xml_tool_provider import XMLToolProvider
 
 
-class TestOpenAIToolProvider:
-    """Tests for OpenAIToolProvider"""
+class TestStructuredToolProvider:
+    """Tests for StructuredToolProvider"""
 
     @pytest.fixture
     def provider(self):
-        """Create OpenAIToolProvider instance"""
-        return OpenAIToolProvider()
+        """Create StructuredToolProvider instance"""
+        return StructuredToolProvider()
 
     def test_format_tool_instructions(self, provider):
         """Test formatting tool instructions"""
@@ -71,13 +71,13 @@ class TestOpenAIToolProvider:
         assert provider.should_pass_tools_as_parameter() is True
 
 
-class TestQwenToolProvider:
-    """Tests for QwenToolProvider"""
+class TestXMLToolProvider:
+    """Tests for XMLToolProvider"""
 
     @pytest.fixture
     def provider(self):
-        """Create QwenToolProvider instance"""
-        return QwenToolProvider()
+        """Create XMLToolProvider instance"""
+        return XMLToolProvider()
 
     def test_format_tool_instructions(self, provider):
         """Test formatting tool instructions"""

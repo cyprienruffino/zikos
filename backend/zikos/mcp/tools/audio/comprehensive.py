@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from zikos.mcp.tools.analysis.audio import (
+from zikos.mcp.tools.audio import (
     articulation,
     chords,
     dynamics,
@@ -13,7 +13,7 @@ from zikos.mcp.tools.analysis.audio import (
     tempo,
     timbre,
 )
-from zikos.mcp.tools.analysis.audio.utils import resolve_audio_path
+from zikos.mcp.tools.audio.utils import resolve_audio_path
 
 
 async def comprehensive_analysis(audio_path: str) -> dict[str, Any]:

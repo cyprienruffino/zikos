@@ -6,17 +6,19 @@ import librosa
 import numpy as np
 import soundfile as sf
 
+from zikos.constants import AUDIO
+
 
 async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
     """Analyze amplitude and dynamic range"""
     try:
         y, sr = librosa.load(audio_path, sr=None)
 
-        if len(y) / sr < 0.5:
+        if len(y) / sr < AUDIO.MIN_AUDIO_DURATION:
             return {
                 "error": True,
                 "error_type": "TOO_SHORT",
-                "message": "Audio is too short (minimum 0.5 seconds required)",
+                "message": f"Audio is too short (minimum {AUDIO.MIN_AUDIO_DURATION} seconds required)",
             }
 
         rms = librosa.feature.rms(y=y)[0]
@@ -30,7 +32,7 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
         dynamic_range_db = float(peak_db - np.min(rms_db))
 
         rms_std = float(np.std(rms_db))
-        dynamic_consistency = float(1.0 / (1.0 + rms_std / 10.0))
+        dynamic_consistency = float(1.0 / (1.0 + rms_std / AUDIO.DYNAMIC_CONSISTENCY_DIVISOR))
         dynamic_consistency = max(0.0, min(1.0, dynamic_consistency))
 
         frame_times = librosa.frames_to_time(np.arange(len(rms)), sr=sr)
@@ -39,17 +41,21 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
                 "time": float(time),
                 "rms": float(rms_db_val),
             }
-            for time, rms_db_val in zip(frame_times[::10], rms_db[::10], strict=False)
+            for time, rms_db_val in zip(
+                frame_times[:: AUDIO.AMPLITUDE_ENVELOPE_DOWNSAMPLE],
+                rms_db[:: AUDIO.AMPLITUDE_ENVELOPE_DOWNSAMPLE],
+                strict=False,
+            )
         ]
 
         peaks = []
         if len(amplitude_envelope) > 0:
             max_rms = max(env["rms"] for env in amplitude_envelope)
             for env in amplitude_envelope:
-                if env["rms"] >= max_rms * 0.9:
+                if env["rms"] >= max_rms * AUDIO.PEAK_THRESHOLD_RATIO:
                     peaks.append({"time": env["time"], "amplitude": env["rms"]})
 
-        is_consistent = dynamic_consistency > 0.75
+        is_consistent = dynamic_consistency > AUDIO.DYNAMIC_CONSISTENCY_THRESHOLD
 
         return {
             "average_rms": average_rms,
