@@ -77,10 +77,23 @@ Track 1:
         try:
             midi_text_to_file(midi_text, midi_path)
 
-            with pytest.raises((RuntimeError, FileNotFoundError, ImportError)):
-                await midi_tools.call_tool("midi_to_audio", midi_file_id="test_midi")
+            result = await midi_tools.call_tool("midi_to_audio", midi_file_id="test_midi")
+
+            # Verify successful synthesis
+            assert "audio_file_id" in result
+            assert "midi_file_id" in result
+            assert result["midi_file_id"] == "test_midi"
+            assert "instrument" in result
+            assert result["instrument"] == "piano"  # default instrument
+            assert "duration" in result
+            assert result["duration"] > 0
+            assert "synthesis_method" in result
         except ImportError:
             pytest.skip("music21 not available")
+        except RuntimeError as e:
+            if "SoundFont" in str(e) or "FluidSynth" in str(e):
+                pytest.skip(f"FluidSynth/SoundFont not available: {e}")
+            raise
 
     @pytest.mark.asyncio
     async def test_midi_to_notation_file_not_found(self, midi_tools):

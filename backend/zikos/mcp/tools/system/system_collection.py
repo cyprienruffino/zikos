@@ -56,9 +56,9 @@ Interpretation Guidelines:
             ),
         ]
 
-    async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
+    async def call_tool(self, name: str, **kwargs) -> dict[str, Any]:
         """Call a tool by name"""
-        if tool_name == "get_tool_definition":
+        if name == "get_tool_definition":
             tool_name_param = kwargs.get("tool_name")
             if not tool_name_param:
                 return {
@@ -97,5 +97,5 @@ Interpretation Guidelines:
         return {
             "error": True,
             "error_type": "UNKNOWN_TOOL",
-            "message": f"Unknown tool: {tool_name}",
+            "message": f"Unknown tool: {name}",
         }

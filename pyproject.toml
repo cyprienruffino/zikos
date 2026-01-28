@@ -153,6 +153,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--cov=backend/zikos",
+    "--cov-config=pyproject.toml",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
@@ -193,6 +194,8 @@ omit = [
     "backend/zikos/services/llm_backends/__init__.py",
     # GPU utils are environment-specific and hard to test in CI
     "backend/zikos/utils/gpu.py",
+    # Context length utils require model loading, excluded from CI
+    "backend/zikos/utils/context_length.py",
 ]
 
 [tool.coverage.report]
