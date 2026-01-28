@@ -13,10 +13,11 @@ def client():
 
 
 def test_root_endpoint(client):
-    """Test root endpoint"""
+    """Test root endpoint returns frontend HTML"""
     response = client.get("/")
     assert response.status_code == 200
-    assert "message" in response.json()
+    assert response.headers["content-type"].startswith("text/html")
+    assert b"<!doctype html>" in response.content.lower() or b"<!DOCTYPE html>" in response.content
 
 
 def test_health_endpoint(client):
