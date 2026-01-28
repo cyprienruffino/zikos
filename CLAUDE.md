@@ -5,17 +5,17 @@
 ```bash
 # Setup
 python -m venv .venv && source .venv/bin/activate
-make install-dev && pre-commit install
+pip install -e ".[dev]" && pre-commit install
 
 # Testing
-make test-cov          # All tests with coverage
-make test-fast         # Without coverage
-pytest -k "pattern"    # Specific tests
-pytest -m comprehensive # LLM/heavy tests (excluded from pre-commit)
+pytest                  # Unit tests with coverage (default)
+pytest --no-cov         # Without coverage
+pytest -k "pattern"     # Specific tests
+pytest -m integration   # Integration tests
+pytest -m comprehensive # LLM/heavy tests (excluded from CI)
 
 # Code Quality
-make check             # All checks
-make lint && make format && make type-check
+ruff check . && ruff format --check . && mypy backend/
 ```
 
 ---
