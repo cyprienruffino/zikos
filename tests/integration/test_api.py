@@ -2,7 +2,8 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from src.zikos.main import app
+
+from zikos.main import app
 
 
 @pytest.fixture
