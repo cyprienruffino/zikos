@@ -102,7 +102,7 @@ def _detect_gguf_context_length(model_path: str) -> int:
                     _logger.info(
                         f"Detected GGUF context length from model attribute: {context_length} tokens"
                     )
-                    return context_length
+                    return int(context_length)
 
             # Last resort: Check model's n_ctx_train or similar
             # Note: n_ctx() returns what we passed in, not the model's limit

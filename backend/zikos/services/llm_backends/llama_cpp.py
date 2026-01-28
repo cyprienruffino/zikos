@@ -6,7 +6,7 @@ from typing import Any
 try:
     from llama_cpp import Llama, llama_state_load_file
 except ImportError:
-    Llama = None
+    Llama = None  # type: ignore[assignment,misc]
     llama_state_load_file = None
 
 from zikos.services.llm_backends.base import LLMBackend
@@ -71,7 +71,7 @@ class LlamaCppBackend(LLMBackend):
         self.n_ctx = n_ctx
         self.model_path = model_path
 
-        init_kwargs = {
+        init_kwargs: dict[str, Any] = {
             "model_path": model_path,
             "n_ctx": n_ctx,
             "n_gpu_layers": n_gpu_layers,
@@ -164,7 +164,7 @@ class LlamaCppBackend(LLMBackend):
                 logger.info("✓ System prompt contains exact practice example")
 
         result = self.llm.create_chat_completion(**completion_kwargs)
-        return dict(result)
+        return dict(result)  # type: ignore[arg-type]
 
     async def stream_chat_completion(
         self,
@@ -213,7 +213,7 @@ class LlamaCppBackend(LLMBackend):
         stream = self.llm.create_chat_completion(**completion_kwargs)
 
         for chunk in stream:
-            chunk_dict = dict(chunk)
+            chunk_dict = dict(chunk)  # type: ignore[arg-type]
             logger.debug(f"Received chunk: {chunk_dict}")
 
             yield chunk_dict

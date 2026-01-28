@@ -15,10 +15,10 @@ try:
     HAS_TRANSFORMERS = True
 except ImportError:
     HAS_TRANSFORMERS = False
-    AutoModelForCausalLM = None
-    AutoTokenizer = None
-    TextIteratorStreamer = None
-    torch = None
+    torch = None  # type: ignore[assignment]
+    AutoModelForCausalLM = None  # type: ignore[assignment,misc]
+    AutoTokenizer = None  # type: ignore[assignment,misc]
+    TextIteratorStreamer = None  # type: ignore[assignment,misc]
 
 from zikos.services.llm_backends.base import LLMBackend
 
