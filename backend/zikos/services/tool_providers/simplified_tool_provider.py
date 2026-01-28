@@ -1,11 +1,11 @@
-"""XML-based tool provider implementation"""
+"""Simplified tool provider for models that struggle with JSON"""
 
 from collections import defaultdict
 
 from zikos.mcp.tool import Tool, ToolCategory
 from zikos.services.tool_provider import ToolProvider
 
-# Tools that should have full inline documentation (most commonly used)
+# Tools that should have full inline documentation
 INLINE_TOOLS = {
     "request_audio_recording",
     "create_metronome",
@@ -15,27 +15,36 @@ INLINE_TOOLS = {
 }
 
 
-class XMLToolProvider(ToolProvider):
-    """Tool provider for models using simplified XML tool calling"""
+class SimplifiedToolProvider(ToolProvider):
+    """Tool provider using simplified key:value format for smaller models
+
+    Uses <tool name="...">key: value</tool> format which is easier for
+    models that struggle with JSON escaping and bracket matching.
+    """
 
     def format_tool_instructions(self) -> str:
-        """Simplified XML tool calling instructions"""
+        """Simplified tool calling instructions"""
         return """TOOL FORMAT:
 <tool name="tool_name">
 param: value
 </tool>
 
-For multi-line values:
+For multi-line values (like MIDI):
 <tool name="validate_midi">
 midi_text: |
-  MThd...
-</tool>"""
+  MFile 1 1 480
+  MTrk...
+</tool>
+
+RULES:
+- CALL tools directly - NEVER describe them
+- Practice requests → call request_audio_recording IMMEDIATELY
+- Think in <thinking> tags, tools go OUTSIDE thinking"""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:
-        """Format tools - inline common tools, list others by category"""
+        """Format tools with inline docs for common tools"""
         lines = ["# TOOLS\n"]
 
-        # Inline documentation for critical tools
         inline_docs = []
         other_tools: dict[ToolCategory, list[str]] = defaultdict(list)
 
@@ -49,7 +58,6 @@ midi_text: |
             lines.append("## Primary Tools\n")
             lines.extend(inline_docs)
 
-        # List remaining tools by category
         if other_tools:
             lines.append("\n## Other Tools")
             cat_labels = {
@@ -111,29 +119,20 @@ bpm: 90
 time_signature: 4/4
 </tool>
 
-User: "Can you show me what that melody sounds like?"
-<thinking>I'll write MIDI for the melody and synthesize it.</thinking>
-<tool name="validate_midi">
-midi_text: |
-  MFile 1 1 480
-  MTrk
-  0 Tempo 500000
-  0 KeySig 0 major
-  0 PrCh ch=1 p=0
-  0 On ch=1 n=60 v=80
-  480 Off ch=1 n=60 v=0
-  TrkEnd
-</tool>
-Then after validation succeeds, call midi_to_audio with the midi_file_id."""
+User: "Help me with my intonation"
+<thinking>Intonation practice - need to hear them first</thinking>
+<tool name="request_audio_recording">
+prompt: Play a slow melody so I can check your pitch
+</tool>"""
 
     def should_inject_tools_as_text(self) -> bool:
-        """XML-based providers need tools injected as text"""
+        """Simplified format requires text injection"""
         return True
 
     def should_pass_tools_as_parameter(self) -> bool:
-        """Don't pass tools as parameter - we inject them as text"""
+        """Don't pass as parameter - we handle everything via text"""
         return False
 
     def generate_tool_summary(self, tools: list[Tool]) -> str:
-        """Generate a compact summary - delegates to format_tool_schemas"""
+        """Generate tool summary"""
         return self.format_tool_schemas(tools)

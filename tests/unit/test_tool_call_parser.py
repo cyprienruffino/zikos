@@ -1,21 +1,25 @@
-"""Tests for ToolCallParser"""
+"""Tests for ToolCallParser implementations"""
 
 import json
 from unittest.mock import patch
 
 import pytest
 
-from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
+from zikos.services.llm_orchestration.tool_call_parser import (
+    HybridToolCallParser,
+    NativeToolCallParser,
+    QwenToolCallParser,
+    SimplifiedToolCallParser,
+    get_tool_call_parser,
+)
 
 
-class TestToolCallParser:
-    """Tests for ToolCallParser"""
-
-    # === Native format tests ===
+class TestQwenToolCallParser:
+    """Tests for QwenToolCallParser"""
 
     def test_parse_tool_calls_native_format(self):
         """Test parsing native tool calls format"""
-        parser = ToolCallParser()
+        parser = QwenToolCallParser()
         message_obj = {
             "content": "Test response",
             "tool_calls": [
@@ -38,7 +42,7 @@ class TestToolCallParser:
 
     def test_parse_tool_calls_no_tool_calls(self):
         """Test parsing when no tool calls present"""
-        parser = ToolCallParser()
+        parser = QwenToolCallParser()
         message_obj = {"content": "Test response"}
         raw_content = "Test response"
 
@@ -46,11 +50,89 @@ class TestToolCallParser:
 
         assert result == []
 
-    # === Simplified XML format tests ===
+    def test_parse_qwen_format(self):
+        """Test parsing Qwen XML tool call format"""
+        parser = QwenToolCallParser()
+        message_obj = {"content": "Test response"}
+        raw_content = 'Here is my response <tool_call>{"name": "analyze_tempo", "arguments": {"audio_file_id": "test.wav"}}</tool_call>'
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "analyze_tempo"
+        assert "call_qwen_" in result[0]["id"]
+
+    def test_parse_qwen_multiple(self):
+        """Test parsing multiple Qwen tool calls"""
+        parser = QwenToolCallParser()
+        message_obj = {"content": "Test response"}
+        raw_content = '<tool_call>{"name": "analyze_tempo", "arguments": {}}</tool_call><tool_call>{"name": "detect_pitch", "arguments": {}}</tool_call>'
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert len(result) == 2
+        assert result[0]["function"]["name"] == "analyze_tempo"
+        assert result[1]["function"]["name"] == "detect_pitch"
+
+    def test_parse_qwen_invalid_json(self):
+        """Test parsing Qwen tool call with invalid JSON"""
+        parser = QwenToolCallParser()
+        message_obj = {"content": "Test response"}
+        raw_content = '<tool_call>{"name": "analyze_tempo", "arguments": {invalid json}</tool_call>'
+
+        with patch("zikos.services.llm_orchestration.tool_call_parser.settings") as mock_settings:
+            mock_settings.debug_tool_calls = False
+            result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert result == []
+
+    def test_parse_qwen_fix_json_newlines(self):
+        """Test parsing Qwen tool call with unescaped newlines"""
+        parser = QwenToolCallParser()
+        message_obj = {"content": "Test response"}
+        raw_content = '<tool_call>{"name": "validate_midi", "arguments": {"midi_text": "Note C4\nNote D4"}}</tool_call>'
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "validate_midi"
+
+    def test_strip_tool_call_tags(self):
+        """Test stripping tool call tags from content"""
+        parser = QwenToolCallParser()
+        content = 'Here is my response <tool_call>{"name": "analyze_tempo", "arguments": {}}</tool_call> and more text'
+
+        result = parser.strip_tool_call_tags(content)
+
+        assert "<tool_call>" not in result
+        assert "Here is my response" in result
+        assert "and more text" in result
+
+    def test_fix_json_string_escapes_newlines(self):
+        """Test _fix_json_string escapes newlines properly"""
+        parser = QwenToolCallParser()
+        json_str = '{"text": "line1\nline2"}'
+
+        result = parser._fix_json_string(json_str)
+
+        assert "\\n" in result
+
+    def test_fix_json_string_escapes_tabs(self):
+        """Test _fix_json_string escapes tabs properly"""
+        parser = QwenToolCallParser()
+        json_str = '{"text": "col1\tcol2"}'
+
+        result = parser._fix_json_string(json_str)
+
+        assert "\\t" in result
+
+
+class TestSimplifiedToolCallParser:
+    """Tests for SimplifiedToolCallParser"""
 
     def test_parse_simplified_basic(self):
         """Test parsing basic simplified tool call"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """Here is my response
 <tool name="request_audio_recording">
@@ -66,7 +148,7 @@ prompt: Play a C major scale
 
     def test_parse_simplified_multiple_params(self):
         """Test parsing simplified format with multiple parameters"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="create_metronome">
 bpm: 120
@@ -82,7 +164,7 @@ time_signature: 4/4
 
     def test_parse_simplified_numeric_conversion(self):
         """Test that numeric values are converted properly"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="create_metronome">
 bpm: 90
@@ -99,7 +181,7 @@ max_duration: 30.5
 
     def test_parse_simplified_boolean_conversion(self):
         """Test that boolean-like values are converted properly"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="some_tool">
 enabled: true
@@ -114,7 +196,7 @@ disabled: false
 
     def test_parse_simplified_multiline_value(self):
         """Test parsing simplified format with multiline value"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="validate_midi">
 midi_text: |
@@ -134,7 +216,7 @@ midi_text: |
 
     def test_parse_simplified_multiline_preserves_structure(self):
         """Test that multiline values preserve newlines"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="validate_midi">
 midi_text: |
@@ -151,7 +233,7 @@ midi_text: |
 
     def test_parse_simplified_multiple_tools(self):
         """Test parsing multiple simplified tool calls"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="request_audio_recording">
 prompt: Play something
@@ -169,7 +251,7 @@ bpm: 100
 
     def test_parse_simplified_no_params(self):
         """Test parsing simplified format with no parameters"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="some_tool">
 </tool>"""
@@ -182,7 +264,7 @@ bpm: 100
 
     def test_parse_simplified_with_thinking(self):
         """Test that tool calls work alongside thinking tags"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<thinking>User wants to practice, I should request a recording</thinking>
 <tool name="request_audio_recording">
@@ -196,7 +278,7 @@ prompt: Play a scale
 
     def test_parse_simplified_value_with_colon(self):
         """Test parsing value that contains colons"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         message_obj = {"content": ""}
         raw_content = """<tool name="request_audio_recording">
 prompt: Play at 12:30 tempo marking
@@ -207,60 +289,9 @@ prompt: Play at 12:30 tempo marking
         args = json.loads(result[0]["function"]["arguments"])
         assert args["prompt"] == "Play at 12:30 tempo marking"
 
-    # === Legacy Qwen format tests (backwards compatibility) ===
-
-    def test_parse_tool_calls_legacy_format(self):
-        """Test parsing legacy Qwen XML tool call format"""
-        parser = ToolCallParser()
-        message_obj = {"content": "Test response"}
-        raw_content = 'Here is my response <tool_call>{"name": "analyze_tempo", "arguments": {"audio_file_id": "test.wav"}}</tool_call>'
-
-        result = parser.parse_tool_calls(message_obj, raw_content)
-
-        assert len(result) == 1
-        assert result[0]["function"]["name"] == "analyze_tempo"
-        assert "call_legacy_" in result[0]["id"]
-
-    def test_parse_tool_calls_legacy_multiple(self):
-        """Test parsing multiple legacy tool calls"""
-        parser = ToolCallParser()
-        message_obj = {"content": "Test response"}
-        raw_content = '<tool_call>{"name": "analyze_tempo", "arguments": {}}</tool_call><tool_call>{"name": "detect_pitch", "arguments": {}}</tool_call>'
-
-        result = parser.parse_tool_calls(message_obj, raw_content)
-
-        assert len(result) == 2
-        assert result[0]["function"]["name"] == "analyze_tempo"
-        assert result[1]["function"]["name"] == "detect_pitch"
-
-    def test_parse_tool_calls_legacy_invalid_json(self):
-        """Test parsing legacy tool call with invalid JSON"""
-        parser = ToolCallParser()
-        message_obj = {"content": "Test response"}
-        raw_content = '<tool_call>{"name": "analyze_tempo", "arguments": {invalid json}</tool_call>'
-
-        with patch("zikos.services.llm_orchestration.tool_call_parser.settings") as mock_settings:
-            mock_settings.debug_tool_calls = False
-            result = parser.parse_tool_calls(message_obj, raw_content)
-
-        assert result == []
-
-    def test_parse_tool_calls_legacy_fix_json_newlines(self):
-        """Test parsing legacy tool call with unescaped newlines"""
-        parser = ToolCallParser()
-        message_obj = {"content": "Test response"}
-        raw_content = '<tool_call>{"name": "validate_midi", "arguments": {"midi_text": "Note C4\nNote D4"}}</tool_call>'
-
-        result = parser.parse_tool_calls(message_obj, raw_content)
-
-        assert len(result) == 1
-        assert result[0]["function"]["name"] == "validate_midi"
-
-    # === Strip tool call tags tests ===
-
     def test_strip_tool_call_tags_simplified(self):
         """Test stripping simplified tool call tags from content"""
-        parser = ToolCallParser()
+        parser = SimplifiedToolCallParser()
         content = """Here is my response
 <tool name="request_audio_recording">
 prompt: Play a scale
@@ -273,20 +304,95 @@ and more text"""
         assert "Here is my response" in result
         assert "and more text" in result
 
-    def test_strip_tool_call_tags_legacy(self):
-        """Test stripping legacy tool call tags from content"""
-        parser = ToolCallParser()
-        content = 'Here is my response <tool_call>{"name": "analyze_tempo", "arguments": {}}</tool_call> and more text'
+    def test_parse_key_value_empty_value(self):
+        """Test parsing key with empty value"""
+        parser = SimplifiedToolCallParser()
+        result = parser._parse_key_value_params("key:")
+
+        assert result.get("key") == ""
+
+    def test_parse_key_value_whitespace(self):
+        """Test parsing handles whitespace in values correctly"""
+        parser = SimplifiedToolCallParser()
+        result = parser._parse_key_value_params("key:  value with spaces  ")
+
+        assert result.get("key") == "value with spaces"
+
+
+class TestNativeToolCallParser:
+    """Tests for NativeToolCallParser"""
+
+    def test_parse_native_format_only(self):
+        """Test that native parser only uses message.tool_calls"""
+        parser = NativeToolCallParser()
+        message_obj = {
+            "content": "Test response",
+            "tool_calls": [
+                {
+                    "id": "call_123",
+                    "function": {
+                        "name": "analyze_tempo",
+                        "arguments": '{"audio_file_id": "test.wav"}',
+                    },
+                }
+            ],
+        }
+
+        result = parser.parse_tool_calls(message_obj, "Test response")
+
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "analyze_tempo"
+
+    def test_parse_ignores_content(self):
+        """Test that native parser ignores tool calls in content"""
+        parser = NativeToolCallParser()
+        message_obj = {"content": ""}
+        raw_content = '<tool_call>{"name": "analyze_tempo", "arguments": {}}</tool_call>'
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert result == []
+
+    def test_strip_tool_call_tags(self):
+        """Test that strip returns content unchanged"""
+        parser = NativeToolCallParser()
+        content = "Some content with no changes needed"
 
         result = parser.strip_tool_call_tags(content)
 
-        assert "<tool_call>" not in result
-        assert "Here is my response" in result
-        assert "and more text" in result
+        assert result == content
 
-    def test_strip_tool_call_tags_mixed(self):
-        """Test stripping both simplified and legacy tags"""
-        parser = ToolCallParser()
+
+class TestHybridToolCallParser:
+    """Tests for HybridToolCallParser"""
+
+    def test_parse_simplified_first(self):
+        """Test that hybrid parser tries simplified format first"""
+        parser = HybridToolCallParser()
+        message_obj = {"content": ""}
+        raw_content = """<tool name="request_audio_recording">
+prompt: Play a scale
+</tool>"""
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert len(result) == 1
+        assert "call_" in result[0]["id"]  # Simplified format ID
+
+    def test_parse_falls_back_to_qwen(self):
+        """Test that hybrid parser falls back to Qwen format"""
+        parser = HybridToolCallParser()
+        message_obj = {"content": ""}
+        raw_content = '<tool_call>{"name": "analyze_tempo", "arguments": {}}</tool_call>'
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        assert len(result) == 1
+        assert "call_qwen_" in result[0]["id"]
+
+    def test_strip_both_formats(self):
+        """Test stripping both simplified and Qwen tags"""
+        parser = HybridToolCallParser()
         content = """Text
 <tool name="tool1">
 param: value
@@ -303,57 +409,31 @@ end"""
         assert "middle" in result
         assert "end" in result
 
-    def test_strip_tool_call_tags_none(self):
-        """Test stripping when no tags present"""
-        parser = ToolCallParser()
-        content = "Just regular text with no tool calls"
 
-        result = parser.strip_tool_call_tags(content)
+class TestGetToolCallParser:
+    """Tests for get_tool_call_parser factory"""
 
-        assert result == content
+    def test_get_qwen_parser(self):
+        """Test getting Qwen parser"""
+        parser = get_tool_call_parser("qwen")
+        assert isinstance(parser, QwenToolCallParser)
 
-    # === Key-value parsing edge cases ===
+    def test_get_simplified_parser(self):
+        """Test getting simplified parser"""
+        parser = get_tool_call_parser("simplified")
+        assert isinstance(parser, SimplifiedToolCallParser)
 
-    def test_parse_key_value_empty_value(self):
-        """Test parsing key with empty value"""
-        parser = ToolCallParser()
-        result = parser._parse_key_value_params("key:")
+    def test_get_native_parser(self):
+        """Test getting native parser"""
+        parser = get_tool_call_parser("native")
+        assert isinstance(parser, NativeToolCallParser)
 
-        assert result.get("key") == ""
+    def test_get_auto_parser(self):
+        """Test getting auto (hybrid) parser"""
+        parser = get_tool_call_parser("auto")
+        assert isinstance(parser, HybridToolCallParser)
 
-    def test_parse_key_value_whitespace(self):
-        """Test parsing handles whitespace in values correctly"""
-        parser = ToolCallParser()
-        result = parser._parse_key_value_params("key:  value with spaces  ")
-
-        assert result.get("key") == "value with spaces"
-
-    # === JSON fix helper tests ===
-
-    def test_fix_json_string_escapes_newlines(self):
-        """Test _fix_json_string escapes newlines properly"""
-        parser = ToolCallParser()
-        json_str = '{"text": "line1\nline2"}'
-
-        result = parser._fix_json_string(json_str)
-
-        assert "\\n" in result
-
-    def test_fix_json_string_escapes_tabs(self):
-        """Test _fix_json_string escapes tabs properly"""
-        parser = ToolCallParser()
-        json_str = '{"text": "col1\tcol2"}'
-
-        result = parser._fix_json_string(json_str)
-
-        assert "\\t" in result
-
-    def test_fix_json_string_handles_escaped_chars(self):
-        """Test _fix_json_string doesn't double-escape"""
-        parser = ToolCallParser()
-        json_str = '{"text": "already\\nescaped"}'
-
-        result = parser._fix_json_string(json_str)
-
-        # Should not double-escape
-        assert "\\\\n" not in result or json_str == result
+    def test_default_to_hybrid(self):
+        """Test that unknown format defaults to hybrid"""
+        parser = get_tool_call_parser("unknown")
+        assert isinstance(parser, HybridToolCallParser)

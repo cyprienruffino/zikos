@@ -18,7 +18,7 @@ from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.orchestrator import LLMOrchestrator
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
 from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
-from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
+from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser, get_tool_call_parser
 from zikos.services.llm_orchestration.tool_executor import ToolExecutor
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
 from zikos.services.prompt import SystemPromptBuilder
@@ -67,7 +67,7 @@ class LLMService:
         self.message_preparer = MessagePreparer()
         self.audio_context_enricher = AudioContextEnricher()
         self.tool_injector = ToolInjector()
-        self.tool_call_parser = ToolCallParser()
+        self.tool_call_parser = get_tool_call_parser()
         self.tool_executor = ToolExecutor()
         self.response_validator = ResponseValidator()
         self.orchestrator = LLMOrchestrator(

@@ -22,6 +22,7 @@ class Settings(BaseModel):
     # LLM
     llm_model_path: str = ""
     llm_backend: str = "auto"
+    llm_tool_format: str = "auto"  # auto, qwen, simplified, native
     llm_n_ctx: int | None = None
     llm_n_gpu_layers: int = LLMConstants.DEFAULT_N_GPU_LAYERS
     llm_temperature: float = LLMConstants.DEFAULT_TEMPERATURE
@@ -52,6 +53,7 @@ class Settings(BaseModel):
             api_reload=os.getenv("API_RELOAD", str(defaults.api_reload).lower()).lower() == "true",
             llm_model_path=os.getenv("LLM_MODEL_PATH", defaults.llm_model_path),
             llm_backend=os.getenv("LLM_BACKEND", defaults.llm_backend),
+            llm_tool_format=os.getenv("LLM_TOOL_FORMAT", defaults.llm_tool_format),
             llm_n_ctx=(
                 int(os.getenv("LLM_N_CTX", "")) if os.getenv("LLM_N_CTX") is not None else None
             ),
