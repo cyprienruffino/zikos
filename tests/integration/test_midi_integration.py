@@ -18,6 +18,8 @@ class TestMidiSynthesisIntegration:
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
+            from unittest.mock import patch
+
             midi_tools = MidiTools()
             midi_tools.storage_path = temp_dir
 
@@ -37,19 +39,18 @@ Track 1:
             midi_text_to_file(midi_text, midi_path)
 
             try:
-                result = await midi_tools.midi_to_audio(midi_file_id, "piano")
+                # Patch audio storage path BEFORE calling midi_to_audio
+                with patch.object(settings, "audio_storage_path", str(temp_dir)):
+                    result = await midi_tools.midi_to_audio(midi_file_id, "piano")
 
-                assert "audio_file_id" in result
-                assert result["audio_file_id"] != ""
-                assert "midi_file_id" in result
-                assert result["instrument"] == "piano"
-                assert "duration" in result
-                assert result["duration"] > 0
-                assert result["synthesis_method"] == "fluidsynth"
+                    assert "audio_file_id" in result
+                    assert result["audio_file_id"] != ""
+                    assert "midi_file_id" in result
+                    assert result["instrument"] == "piano"
+                    assert "duration" in result
+                    assert result["duration"] > 0
+                    assert result["synthesis_method"] == "fluidsynth"
 
-                from unittest.mock import patch
-
-                with patch.object(settings, "audio_storage_path", temp_dir):
                     audio_path = temp_dir / f"{result['audio_file_id']}.wav"
                     assert audio_path.exists()
                     assert audio_path.stat().st_size > 0
