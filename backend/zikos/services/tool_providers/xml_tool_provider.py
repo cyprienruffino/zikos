@@ -1,76 +1,139 @@
 """XML-based tool provider implementation"""
 
-import json
 from collections import defaultdict
-from typing import Any
 
 from zikos.mcp.tool import Tool, ToolCategory
 from zikos.services.tool_provider import ToolProvider
 
+# Tools that should have full inline documentation (most commonly used)
+INLINE_TOOLS = {
+    "request_audio_recording",
+    "create_metronome",
+    "create_tuner",
+    "validate_midi",
+    "midi_to_audio",
+}
+
 
 class XMLToolProvider(ToolProvider):
-    """Tool provider for models using XML-based tool calling (e.g., Phi-3, Mistral, Qwen)"""
+    """Tool provider for models using simplified XML tool calling"""
 
     def format_tool_instructions(self) -> str:
-        """XML-based tool calling instructions"""
-        return """
-**TOOL CALL FORMAT**: <tool_call>{"name": "tool_name", "arguments": {"param": "value"}}</tool_call>
-**TOOL DETAILS**: Tool list shows names/categories only. Call `get_tool_definition` for full details."""
+        """Simplified XML tool calling instructions"""
+        return """TOOL FORMAT:
+<tool name="tool_name">
+param: value
+</tool>
+
+For multi-line values:
+<tool name="validate_midi">
+midi_text: |
+  MThd...
+</tool>"""
 
     def format_tool_schemas(self, tools: list[Tool]) -> str:
-        """Format tools in XML format with only names and categories (no descriptions/parameters)"""
-        tool_list = [{"n": tool.name, "c": tool.category.value} for tool in tools]
-        tools_json = json.dumps(tool_list, separators=(",", ":"))
-        return f"""<tools>{tools_json}</tools>
-Abbr: n=name,c=category
+        """Format tools - inline common tools, list others by category"""
+        lines = ["# TOOLS\n"]
 
-Note: Only tool names and categories are shown. Use `get_tool_definition` to retrieve full details (description, parameters, usage guidelines) for any tool."""
+        # Inline documentation for critical tools
+        inline_docs = []
+        other_tools: dict[ToolCategory, list[str]] = defaultdict(list)
+
+        for tool in tools:
+            if tool.name in INLINE_TOOLS:
+                inline_docs.append(self._format_inline_tool(tool))
+            else:
+                other_tools[tool.category].append(tool.name)
+
+        if inline_docs:
+            lines.append("## Primary Tools\n")
+            lines.extend(inline_docs)
+
+        # List remaining tools by category
+        if other_tools:
+            lines.append("\n## Other Tools")
+            cat_labels = {
+                ToolCategory.AUDIO_ANALYSIS: "Analysis",
+                ToolCategory.WIDGET: "Widgets",
+                ToolCategory.MIDI: "MIDI",
+                ToolCategory.OTHER: "Other",
+            }
+            for category in [
+                ToolCategory.AUDIO_ANALYSIS,
+                ToolCategory.WIDGET,
+                ToolCategory.MIDI,
+                ToolCategory.OTHER,
+            ]:
+                if category in other_tools:
+                    names = sorted(other_tools[category])
+                    lines.append(f"**{cat_labels[category]}**: {', '.join(names)}")
+
+        return "\n".join(lines)
+
+    def _format_inline_tool(self, tool: Tool) -> str:
+        """Format a tool with full inline documentation"""
+        params = []
+        schema = tool.schema.get("function", {}).get("parameters", {})
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+
+        for name, prop in properties.items():
+            default = prop.get("default")
+            is_required = name in required
+
+            param_str = f"  {name}"
+            if not is_required and default is not None:
+                param_str += f" (default: {default})"
+            elif is_required:
+                param_str += " (required)"
+            params.append(param_str)
+
+        param_block = "\n".join(params) if params else "  (no parameters)"
+
+        return f"""**{tool.name}**: {tool.description}
+Parameters:
+{param_block}
+"""
 
     def get_tool_call_examples(self) -> str:
-        """Examples showing XML tool call format"""
-        return """**Examples**:
-User: "I want to practice rhythm" → <tool_call>{"name": "request_audio_recording", "arguments": {"prompt": "Play something to practice rhythm"}}</tool_call>
-User: "metronome 120 BPM" → <tool_call>{"name": "create_metronome", "arguments": {"bpm": 120, "time_signature": "4/4"}}</tool_call>
+        """Examples showing simplified tool call format"""
+        return """## Examples
 
-**Remember**: For practice requests, call `request_audio_recording` first - don't explain."""
+User: "I want to practice scales"
+<thinking>User wants to practice. I need to request a recording first.</thinking>
+<tool name="request_audio_recording">
+prompt: Play a scale of your choice, any tempo
+</tool>
+
+User: "Give me a metronome at 90 BPM"
+<tool name="create_metronome">
+bpm: 90
+time_signature: 4/4
+</tool>
+
+User: "Can you show me what that melody sounds like?"
+<thinking>I'll write MIDI for the melody and synthesize it.</thinking>
+<tool name="validate_midi">
+midi_text: |
+  MFile 1 1 480
+  MTrk
+  0 Tempo 500000
+  0 KeySig 0 major
+  0 PrCh ch=1 p=0
+  0 On ch=1 n=60 v=80
+  480 Off ch=1 n=60 v=0
+  TrkEnd
+</tool>
+Then after validation succeeds, call midi_to_audio with the midi_file_id."""
 
     def should_inject_tools_as_text(self) -> bool:
         """XML-based providers need tools injected as text"""
         return True
 
     def should_pass_tools_as_parameter(self) -> bool:
-        """Some models support structured format via chat template, others use XML in text"""
-        return True
+        """Don't pass tools as parameter - we inject them as text"""
+        return False
 
     def generate_tool_summary(self, tools: list[Tool]) -> str:
-        """Generate a compact summary of available tools"""
-        by_category: dict[ToolCategory, list[str]] = defaultdict(list)
-        for tool in tools:
-            by_category[tool.category].append(tool.name)
-
-        cat_labels = {
-            ToolCategory.AUDIO_ANALYSIS: "Audio Analysis",
-            ToolCategory.WIDGET: "Widgets",
-            ToolCategory.RECORDING: "Recording",
-            ToolCategory.MIDI: "MIDI",
-            ToolCategory.OTHER: "Other",
-        }
-
-        lines = ["# Available Tools"]
-        lines.append("")
-        lines.append(
-            "Use `get_tool_definition` to retrieve full details (description, parameters, usage guidelines) for any tool."
-        )
-        lines.append("")
-        for category in [
-            ToolCategory.AUDIO_ANALYSIS,
-            ToolCategory.WIDGET,
-            ToolCategory.RECORDING,
-            ToolCategory.MIDI,
-            ToolCategory.OTHER,
-        ]:
-            if category in by_category:
-                names = sorted(by_category[category])
-                lines.append(f"**{cat_labels[category]}**: {', '.join(names)}")
-
-        return "\n".join(lines)
+        """Generate a compact summary - delegates to format_tool_schemas"""
+        return self.format_tool_schemas(tools)
