@@ -558,6 +558,13 @@ class LLMService:
                 history.extend(tool_results)
                 continue
 
+            # No tool calls parsed - check for malformed attempts
+            parse_error = self.tool_call_parser.detect_failed_tool_calls(content)
+            if parse_error:
+                history.append({"role": "assistant", "content": cleaned_content})
+                self._inject_error_system_message(history, "malformed_tool_call", parse_error)
+                continue
+
             consecutive_tool_calls = 0
             recent_tool_calls.clear()
             response_content = cleaned_content
@@ -660,10 +667,23 @@ class LLMService:
     def _get_system_prompt(self, prompt_file_path: Path | None = None) -> str:
         """Get system prompt using modular builder
 
+        If a KV cache with sidecar text was loaded, returns that cached prompt
+        instead of building from scratch. This ensures the history matches
+        what was cached (including any tool instructions).
+
         Args:
             prompt_file_path: Optional path to SYSTEM_PROMPT.md. If None, uses default location.
                 Mainly for testing.
         """
+        # If backend has a cached system prompt (from KV cache sidecar), use it
+        if self.backend and prompt_file_path is None:
+            cached_prompt: str | None = self.backend.get_cached_system_prompt()
+            if cached_prompt:
+                _logger.debug(
+                    f"Using cached system prompt from KV cache sidecar ({len(cached_prompt)} chars)"
+                )
+                return cached_prompt
+
         if prompt_file_path is None:
             from pathlib import Path
 

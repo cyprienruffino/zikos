@@ -39,7 +39,16 @@ class ToolInjector:
         system_has_tools = False
         if history and history[0].get("role") == "system":
             system_content = history[0].get("content", "")
-            if "<tools>" in system_content or "# Available Tools" in system_content:
+            # Check for markers from all tool formats
+            tool_markers = [
+                "<tools>",  # Legacy/structured format
+                "# Available Tools",  # Structured format
+                "# Tool Summary",  # Qwen format
+                "TOOL RULES:",  # Qwen format
+                "# TOOLS",  # Simplified format
+                "TOOL FORMAT:",  # Simplified format
+            ]
+            if any(marker in system_content for marker in tool_markers):
                 system_has_tools = True
 
         if system_has_tools:

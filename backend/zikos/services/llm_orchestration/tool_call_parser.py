@@ -44,6 +44,14 @@ class ToolCallParser(ABC):
         """Remove tool call tags from content for display"""
         pass
 
+    def detect_failed_tool_calls(self, content: str) -> str | None:
+        """Detect tool call attempts that failed to parse.
+
+        Returns an error message if a partial/malformed tool call is detected,
+        None otherwise. Called when no tool calls were successfully parsed.
+        """
+        return None
+
 
 class QwenToolCallParser(ToolCallParser):
     """Parser for Qwen's native <tool_call> JSON format"""
@@ -158,6 +166,21 @@ class QwenToolCallParser(ToolCallParser):
             i += 1
 
         return "".join(result)
+
+    def detect_failed_tool_calls(self, content: str) -> str | None:
+        if not content:
+            return None
+        if "<tool_call>" in content and "</tool_call>" not in content:
+            return 'Malformed tool call: missing </tool_call> closing tag. Expected: <tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>'
+        if "<tool_call>" in content:
+            # Tags present but parsing returned nothing - likely bad JSON
+            pattern = r"<tool_call>\s*(.*?)\s*</tool_call>"
+            for match in re.finditer(pattern, content, re.DOTALL):
+                try:
+                    json.loads(match.group(1).strip())
+                except (json.JSONDecodeError, Exception):
+                    return 'Malformed tool call: invalid JSON inside <tool_call> tags. Expected: <tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>'
+        return None
 
     def strip_tool_call_tags(self, content: str) -> str:
         """Remove <tool_call> tags from content"""
@@ -301,6 +324,17 @@ class SimplifiedToolCallParser(ToolCallParser):
 
         return value
 
+    def detect_failed_tool_calls(self, content: str) -> str | None:
+        if not content:
+            return None
+        if "<tool " in content and "</tool>" not in content:
+            return 'Malformed tool call: missing </tool> closing tag. Expected: <tool name="tool_name">\\nparam: value\\n</tool>'
+        if "<tool " in content:
+            # Tags present but no name matched
+            if not re.search(r'<tool\s+name="([^"]+)">', content):
+                return 'Malformed tool call: bad syntax. Expected: <tool name="tool_name">\\nparam: value\\n</tool>'
+        return None
+
     def strip_tool_call_tags(self, content: str) -> str:
         """Remove simplified tool tags from content"""
         return re.sub(r'<tool\s+name="[^"]*">.*?</tool>', "", content, flags=re.DOTALL).strip()
@@ -341,6 +375,11 @@ class HybridToolCallParser(ToolCallParser):
             return self._qwen_parser._parse_format_specific(content)
 
         return []
+
+    def detect_failed_tool_calls(self, content: str) -> str | None:
+        return self._simplified_parser.detect_failed_tool_calls(
+            content
+        ) or self._qwen_parser.detect_failed_tool_calls(content)
 
     def strip_tool_call_tags(self, content: str) -> str:
         """Remove both simplified and Qwen tags"""

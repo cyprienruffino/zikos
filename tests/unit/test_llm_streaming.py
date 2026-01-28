@@ -29,6 +29,7 @@ def mock_backend_with_streaming():
     backend.create_chat_completion.return_value = {
         "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
     }
+    backend.get_cached_system_prompt.return_value = None
     return backend
 
 

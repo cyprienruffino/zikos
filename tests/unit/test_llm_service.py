@@ -31,6 +31,7 @@ def mock_backend():
         yield {"choices": [{"delta": {}, "finish_reason": "stop"}]}
 
     backend.stream_chat_completion = stream_chat_completion
+    backend.get_cached_system_prompt.return_value = None
     return backend
 
 
