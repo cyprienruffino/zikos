@@ -58,7 +58,7 @@ Track 1:
         from pathlib import Path
 
         from zikos.config import settings
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_synth"
@@ -98,7 +98,7 @@ Track 1:
         from pathlib import Path
 
         from zikos.config import settings
-        from zikos.mcp.tools.midi_parser import midi_text_to_file
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
             midi_file_id = "test_api_notation"
