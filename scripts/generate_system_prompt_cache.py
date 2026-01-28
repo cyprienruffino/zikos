@@ -6,6 +6,7 @@ loaded on server startup to avoid reprocessing it for every conversation.
 
 Usage:
     python scripts/generate_system_prompt_cache.py [--model-path PATH] [--output PATH]
+    python scripts/generate_system_prompt_cache.py --tool-format qwen  # Include tool docs
 
 The cache file can be generated in CI and included in deployments.
 """
@@ -17,7 +18,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zikos.config import settings  # noqa: E402
-from zikos.services.llm import LLMService  # noqa: E402
 
 try:
     from llama_cpp import Llama, llama_state_save_file  # noqa: E402
@@ -29,6 +29,7 @@ except ImportError:
 def generate_cache(
     model_path: str | None = None,
     output_path: str | None = None,
+    tool_format: str | None = None,
     n_ctx: int = 32768,
     n_gpu_layers: int = 0,
 ) -> Path:
@@ -37,6 +38,8 @@ def generate_cache(
     Args:
         model_path: Path to model file. If None, uses LLM_MODEL_PATH from settings.
         output_path: Path to save cache file. If None, saves to models/ directory.
+        tool_format: Tool format to include in cache (qwen, simplified, native).
+                    If None, caches only the base prompt without tools.
         n_ctx: Context window size
         n_gpu_layers: Number of GPU layers
 
@@ -61,9 +64,44 @@ def generate_cache(
     )
 
     print("Getting system prompt...")
+    from zikos.services.llm import LLMService
+
     service = LLMService()
     system_prompt = service._get_system_prompt()
-    print(f"System prompt length: {len(system_prompt)} characters")
+    print(f"Base system prompt: {len(system_prompt)} characters")
+
+    # Optionally inject tools
+    if tool_format:
+        print(f"Injecting tools with format: {tool_format}")
+        from zikos.mcp.tool_registry import ToolRegistry
+        from zikos.services.tool_providers import get_tool_provider
+
+        # Get tool provider for the specified format
+        provider = get_tool_provider(tool_format=tool_format, model_path=model_path)
+
+        # Get all tools
+        registry = ToolRegistry()
+        registry.register_all()
+        tools = registry.get_all_tools()
+
+        # Build tool injection content
+        tool_content_parts = []
+
+        instructions = provider.format_tool_instructions()
+        if instructions:
+            tool_content_parts.append(instructions)
+
+        schemas = provider.format_tool_schemas(tools)
+        if schemas:
+            tool_content_parts.append(schemas)
+
+        examples = provider.get_tool_call_examples()
+        if examples:
+            tool_content_parts.append(examples)
+
+        tool_content = "\n\n".join(tool_content_parts)
+        system_prompt = f"{system_prompt}\n\n{tool_content}"
+        print(f"With tools: {len(system_prompt)} characters")
 
     print("Formatting system message for chat...")
     system_message = [{"role": "system", "content": system_prompt}]
@@ -77,7 +115,7 @@ def generate_cache(
         llm.eval(tokens)
     else:
         print("Warning: No chat handler, using create_chat_completion fallback...")
-        result = llm.create_chat_completion(
+        llm.create_chat_completion(
             messages=system_message,
             max_tokens=1,
             temperature=0.0,
@@ -87,15 +125,15 @@ def generate_cache(
     state = llm.save_state()
     print(f"Cached {state.n_tokens} tokens")
 
+    # Generate output filename
     if output_path is None:
-        cache_file = model_path_obj.parent / f"{model_path_obj.stem}_system_cache.bin"
+        suffix = f"_{tool_format}" if tool_format else ""
+        cache_file = model_path_obj.parent / f"{model_path_obj.stem}_system_cache{suffix}.bin"
     else:
         cache_file = Path(output_path)
 
     cache_file.parent.mkdir(parents=True, exist_ok=True)
-    from ctypes import POINTER, c_int, cast
-
-    import numpy as np
+    from ctypes import c_int
 
     tokens_list = (
         state.input_ids.tolist() if hasattr(state.input_ids, "tolist") else list(state.input_ids)
@@ -114,6 +152,8 @@ def generate_cache(
     print(f"✓ Saved KV cache to {cache_file}")
     print(f"  Cache file size: {file_size_kb:.2f} KB")
     print(f"  Cached tokens: {state.n_tokens}")
+    if tool_format:
+        print(f"  Tool format: {tool_format}")
 
     return cache_file
 
@@ -131,6 +171,12 @@ def main():
         "--output",
         type=str,
         help="Output cache file path (default: models/{model_name}_system_cache.bin)",
+    )
+    parser.add_argument(
+        "--tool-format",
+        type=str,
+        choices=["qwen", "simplified", "native"],
+        help="Include tool docs in cache with specified format. If not set, caches only base prompt.",
     )
     parser.add_argument(
         "--n-ctx",
@@ -151,12 +197,16 @@ def main():
         cache_file = generate_cache(
             model_path=args.model_path,
             output_path=args.output,
+            tool_format=args.tool_format,
             n_ctx=args.n_ctx,
             n_gpu_layers=args.n_gpu_layers,
         )
         print(f"\n✓ Success! Cache file ready: {cache_file}")
         print("\nTo use this cache, set SYSTEM_PROMPT_CACHE_PATH environment variable")
         print(f"  export SYSTEM_PROMPT_CACHE_PATH={cache_file}")
+        if args.tool_format:
+            print(f"\nNote: This cache includes {args.tool_format} tool format.")
+            print(f"  Make sure LLM_TOOL_FORMAT={args.tool_format} when using this cache.")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
