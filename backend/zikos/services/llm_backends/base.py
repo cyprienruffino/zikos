@@ -136,3 +136,12 @@ class LLMBackend(ABC):
     def is_initialized(self) -> bool:
         """Check if backend is initialized"""
         return False
+
+    def get_cached_system_prompt(self) -> str | None:
+        """Get the cached system prompt text if a KV cache was loaded
+
+        Returns:
+            The full system prompt text if a cache with sidecar text was loaded,
+            None otherwise.
+        """
+        return None

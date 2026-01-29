@@ -31,23 +31,22 @@ from zikos.services.tool_providers import get_tool_provider
 from zikos.utils.context_length import detect_context_length
 from zikos.utils.gpu import get_optimal_gpu_layers
 
-# Setup logger for thinking/reasoning logs
-_thinking_logger = logging.getLogger("zikos.thinking")
-_thinking_logger.setLevel(logging.DEBUG)
+# Setup conversation logger (enabled via DEBUG_TOOL_CALLS)
+_conversation_logger = logging.getLogger("zikos.conversation")
+_conversation_logger.setLevel(logging.DEBUG)
+_conversation_logger.propagate = False
 
-# Create logs directory if it doesn't exist
-_logs_dir = Path("logs")
-_logs_dir.mkdir(exist_ok=True)
-
-# File handler for thinking logs
-_thinking_handler = logging.FileHandler(_logs_dir / "thinking.log", encoding="utf-8")
-_thinking_handler.setLevel(logging.DEBUG)  # Log DEBUG level to see when thinking is missing
-_thinking_formatter = logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-)
-_thinking_handler.setFormatter(_thinking_formatter)
-_thinking_logger.addHandler(_thinking_handler)
-_thinking_logger.propagate = False
+if settings.debug_tool_calls:
+    _logs_dir = Path("logs")
+    _logs_dir.mkdir(exist_ok=True)
+    _conversation_handler = logging.FileHandler(_logs_dir / "conversation.log", encoding="utf-8")
+    _conversation_handler.setLevel(logging.DEBUG)
+    _conversation_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    )
+    _conversation_logger.addHandler(_conversation_handler)
+else:
+    _conversation_logger.addHandler(logging.NullHandler())
 
 # Setup logger for LLM service
 _logger = logging.getLogger("zikos.services.llm")
@@ -327,7 +326,7 @@ class LLMService:
         message, _ = self.audio_context_enricher.enrich_message(message, history)
 
         history.append({"role": "user", "content": message})
-        _thinking_logger.info(
+        _conversation_logger.info(
             f"Session: {session_id}\n" f"User Prompt:\n{original_message}\n" f"{'='*80}"
         )
 
@@ -377,12 +376,20 @@ class LLMService:
                     tools=tools_param,
                     temperature=settings.llm_temperature,
                     top_p=settings.llm_top_p,
+                    top_k=settings.llm_top_k,
                 )
 
                 accumulated_content = ""
                 final_delta = {}
                 final_finish_reason = None
                 accumulated_tool_calls = []
+                # Qwen3-Thinking templates inject <think> in the generation prompt,
+                # so it doesn't appear as a content token. Start suppressed if budget is set.
+                max_thinking = settings.llm_max_thinking_tokens
+                in_thinking = max_thinking > 0
+                thinking_token_count = 0
+                thinking_budget_exceeded = False
+                _logger.info(f"Thinking budget: {max_thinking} tokens (0=unlimited)")
 
                 async for chunk in stream:
                     choice = chunk.get("choices", [{}])[0]
@@ -403,6 +410,27 @@ class LLMService:
                         logger.debug(f"Token received: {repr(token)}")
 
                         accumulated_content += token
+
+                        if in_thinking:
+                            thinking_token_count += 1
+                            if (
+                                "</think>" in accumulated_content
+                                or "</thinking>" in accumulated_content
+                            ):
+                                in_thinking = False
+                            elif max_thinking > 0 and thinking_token_count >= max_thinking:
+                                logger.info(
+                                    f"Thinking budget exceeded ({thinking_token_count} tokens), "
+                                    "truncating and re-generating"
+                                )
+                                thinking_budget_exceeded = True
+                                break
+                            continue
+                        elif "<think" in token:
+                            # Handle models that emit <think> as a content token
+                            in_thinking = True
+                            continue
+
                         yield {"type": "token", "content": token}
 
                     # Handle tool calls in delta (for llama-cpp-python format)
@@ -416,6 +444,21 @@ class LLMService:
                         if choice.get("tool_calls"):
                             accumulated_tool_calls.extend(choice.get("tool_calls", []))
                         break
+
+                if thinking_budget_exceeded:
+                    # Close the thinking tag and add as assistant message
+                    # so the model continues with the actual response
+                    truncated = accumulated_content.rstrip()
+                    if not truncated.endswith("</think>"):
+                        truncated += "\n</think>\n"
+                    history.append({"role": "assistant", "content": truncated})
+                    _conversation_logger.info(
+                        f"Session: {session_id}\n"
+                        f"Thinking budget exceeded ({thinking_token_count}/{max_thinking} tokens), "
+                        f"truncating and re-generating\n"
+                        f"{'='*80}"
+                    )
+                    continue
 
                 message_obj = {
                     "role": "assistant",
@@ -569,13 +612,13 @@ class LLMService:
             recent_tool_calls.clear()
             response_content = cleaned_content
 
-            if thinking_content:
-                _thinking_logger.info(
-                    f"Session: {session_id}\n"
-                    f"Final Response Thinking:\n{thinking_content}\n"
-                    f"Response:\n{response_content}\n"
-                    f"{'='*80}"
-                )
+            thinking_part = f"Thinking:\n{thinking_content}\n" if thinking_content else ""
+            _conversation_logger.info(
+                f"Session: {session_id}\n"
+                f"Assistant Response:\n{thinking_part}"
+                f"{response_content}\n"
+                f"{'='*80}"
+            )
 
             if not response_content:
                 self._inject_error_system_message(
@@ -693,6 +736,12 @@ class LLMService:
         builder.add_section(CorePromptSection(prompt_file_path))
 
         result: str = builder.build()
+
+        if self.tool_provider:
+            suffix = self.tool_provider.get_system_prompt_suffix()
+            if suffix:
+                result = f"{result}\n\n{suffix}"
+
         return result
 
     def _find_recent_audio_analysis(self, history: list[dict[str, Any]]) -> str | None:

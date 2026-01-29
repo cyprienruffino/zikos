@@ -4,7 +4,7 @@ import re
 
 
 class ThinkingExtractor:
-    """Extracts thinking content from <thinking> tags in LLM responses"""
+    """Extracts thinking content from <thinking> or <think> tags in LLM responses"""
 
     @staticmethod
     def extract(content: str | None) -> tuple[str, str]:
@@ -20,7 +20,7 @@ class ThinkingExtractor:
             return "", ""
 
         thinking_parts = []
-        pattern = r"<thinking>(.*?)</thinking>"
+        pattern = r"<think(?:ing)?>(.*?)</think(?:ing)?>"
         matches = re.finditer(pattern, content, re.DOTALL)
 
         for match in matches:

@@ -27,6 +27,8 @@ class Settings(BaseModel):
     llm_n_gpu_layers: int = LLMConstants.DEFAULT_N_GPU_LAYERS
     llm_temperature: float = LLMConstants.DEFAULT_TEMPERATURE
     llm_top_p: float = LLMConstants.DEFAULT_TOP_P
+    llm_top_k: int = LLMConstants.DEFAULT_TOP_K
+    llm_max_thinking_tokens: int = LLMConstants.DEFAULT_MAX_THINKING_TOKENS
 
     # Storage
     audio_storage_path: Path = Path("audio_storage")
@@ -60,6 +62,10 @@ class Settings(BaseModel):
             llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", str(defaults.llm_n_gpu_layers))),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", str(defaults.llm_temperature))),
             llm_top_p=float(os.getenv("LLM_TOP_P", str(defaults.llm_top_p))),
+            llm_top_k=int(os.getenv("LLM_TOP_K", str(defaults.llm_top_k))),
+            llm_max_thinking_tokens=int(
+                os.getenv("LLM_MAX_THINKING_TOKENS", str(defaults.llm_max_thinking_tokens))
+            ),
             audio_storage_path=Path(
                 os.getenv("AUDIO_STORAGE_PATH", str(defaults.audio_storage_path))
             ),

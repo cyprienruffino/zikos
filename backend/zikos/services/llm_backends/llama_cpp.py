@@ -20,6 +20,7 @@ class LlamaCppBackend(LLMBackend):
         self.n_ctx: int = 32768
         self.model_path: str | None = None
         self.system_prompt_cache_path: str | None = None
+        self._cached_system_prompt_text: str | None = None
 
     def initialize(
         self,
@@ -304,9 +305,25 @@ class LlamaCppBackend(LLMBackend):
                 f"({n_token_count.value} tokens cached)"
             )
             self.system_prompt_cache_path = cache_path
+
+            # Load sidecar text file if it exists
+            sidecar_path = cache_path_obj.with_suffix(".txt")
+            if sidecar_path.exists():
+                try:
+                    self._cached_system_prompt_text = sidecar_path.read_text(encoding="utf-8")
+                    logger.info(
+                        f"Loaded cached system prompt text from {sidecar_path} "
+                        f"({len(self._cached_system_prompt_text)} chars)"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to load sidecar text file: {e}")
         except Exception as e:
             logger.warning(f"Failed to load system prompt cache: {e}")
 
     def is_initialized(self) -> bool:
         """Check if backend is initialized"""
         return self.llm is not None
+
+    def get_cached_system_prompt(self) -> str | None:
+        """Get the cached system prompt text if available"""
+        return self._cached_system_prompt_text

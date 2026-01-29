@@ -10,7 +10,7 @@ from zikos.mcp.tool import ToolCategory
 from zikos.mcp.tool_registry import ToolRegistry
 
 _logger = logging.getLogger("zikos.services.llm_orchestration.tool_executor")
-_thinking_logger = logging.getLogger("thinking")
+_conversation_logger = logging.getLogger("zikos.conversation")
 
 
 class ToolExecutor:
@@ -70,7 +70,7 @@ class ToolExecutor:
                 tool_call_parser.strip_tool_call_tags(cleaned_content) if cleaned_content else ""
             )
 
-            _thinking_logger.info(
+            _conversation_logger.info(
                 f"Session: {session_id}\n"
                 f"Tool Call (Widget): {tool_name}\n"
                 f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
@@ -121,7 +121,7 @@ class ToolExecutor:
                 "tool_call_id": tool_call_id,
             }
 
-        _thinking_logger.info(
+        _conversation_logger.info(
             f"Session: {session_id}\n"
             f"Tool Call: {tool_name}\n"
             f"Arguments: {json.dumps(self._parse_tool_args(tool_call), indent=2, default=str)}\n"
@@ -136,7 +136,7 @@ class ToolExecutor:
                 _logger.debug(f"Tool result: {tool_name}")
                 _logger.debug(f"  Result: {json.dumps(result, indent=2, default=str)}")
 
-            _thinking_logger.info(
+            _conversation_logger.info(
                 f"Session: {session_id}\n"
                 f"Tool Result: {tool_name}\n"
                 f"Result: {json.dumps(result, indent=2, default=str)}\n"

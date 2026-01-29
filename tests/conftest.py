@@ -8,6 +8,15 @@ from unittest.mock import patch
 import pytest
 
 
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_logs():
+    """Clean up logs directory after test session"""
+    yield
+    logs_dir = Path("logs")
+    if logs_dir.exists():
+        shutil.rmtree(logs_dir)
+
+
 @pytest.fixture
 def temp_dir():
     """Create temporary directory for tests"""

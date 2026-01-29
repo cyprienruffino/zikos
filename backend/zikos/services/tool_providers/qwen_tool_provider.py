@@ -61,8 +61,11 @@ User: "I want to practice scales"
 User: "Give me a metronome at 90 BPM"
 <tool_call>{"name": "create_metronome", "arguments": {"bpm": 90, "time_signature": "4/4"}}</tool_call>"""
 
+    def get_system_prompt_suffix(self) -> str:
+        return "/think"
+
     def should_inject_tools_as_text(self) -> bool:
-        return True
+        return False
 
     def should_pass_tools_as_parameter(self) -> bool:
         return True

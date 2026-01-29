@@ -154,6 +154,12 @@ def generate_cache(
     if tool_format:
         print(f"  Tool format: {tool_format}")
 
+    # Save sidecar text file with the full system prompt
+    sidecar_file = cache_file.with_suffix(".txt")
+    sidecar_file.write_text(system_prompt, encoding="utf-8")
+    print(f"✓ Saved system prompt text to {sidecar_file}")
+    print(f"  Text file size: {sidecar_file.stat().st_size / 1024:.2f} KB")
+
     return cache_file
 
 

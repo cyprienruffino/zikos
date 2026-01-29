@@ -1,5 +1,7 @@
 """FastAPI application entry point"""
 
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -9,10 +11,30 @@ from fastapi.staticfiles import StaticFiles
 
 from zikos.api import router
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize services at startup"""
+    from zikos.api.chat import get_chat_service
+
+    logger.info("Initializing LLM service...")
+    chat_service = get_chat_service()
+    if chat_service.llm_service.initialization_error:
+        logger.warning(
+            f"LLM initialization warning: {chat_service.llm_service.initialization_error}"
+        )
+    else:
+        logger.info("LLM service initialized successfully")
+    yield
+
+
 app = FastAPI(
     title="Zikos - AI Music Teacher",
     description="POC for AI-powered music teaching",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

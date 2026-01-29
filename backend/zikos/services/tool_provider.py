@@ -34,6 +34,10 @@ class ToolProvider(ABC):
         """Whether tools should be passed as structured parameter to LLM"""
         pass
 
+    def get_system_prompt_suffix(self) -> str:
+        """Return model-specific text to append to the system prompt"""
+        return ""
+
     def generate_tool_summary(self, tools: list[Tool]) -> str:
         """Generate a human-readable summary of available tools, categorized by their category"""
         by_category: dict[ToolCategory, list[tuple[str, str]]] = {}

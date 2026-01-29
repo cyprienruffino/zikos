@@ -35,6 +35,8 @@ class LLMConstants:
     DEFAULT_N_GPU_LAYERS: int = -1
     DEFAULT_TEMPERATURE: float = 0.7
     DEFAULT_TOP_P: float = 0.9
+    DEFAULT_TOP_K: int = 40
+    DEFAULT_MAX_THINKING_TOKENS: int = 0  # 0 = unlimited
 
     # Default model keys (for download_model.py MODEL_CONFIGS)
     DEFAULT_GPU_MODEL: str = "mistral-7b-instruct-v0.3-q4"
