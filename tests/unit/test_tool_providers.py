@@ -141,8 +141,8 @@ class TestQwenToolProvider:
         assert "request_audio_recording" in examples
 
     def test_should_inject_tools_as_text(self, provider):
-        """Test should_inject_tools_as_text returns True"""
-        assert provider.should_inject_tools_as_text() is True
+        """Test should_inject_tools_as_text returns False (tools passed as parameter)"""
+        assert provider.should_inject_tools_as_text() is False
 
     def test_should_pass_tools_as_parameter(self, provider):
         """Test should_pass_tools_as_parameter returns True"""

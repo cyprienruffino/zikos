@@ -36,12 +36,19 @@ def mock_backend_with_streaming():
 @pytest.fixture
 def llm_service_streaming(mock_backend_with_streaming):
     """Create LLMService instance with mocked streaming backend"""
+    mock_backend_with_streaming.get_context_window.return_value = 4096
     with patch("zikos.services.llm.create_backend", return_value=mock_backend_with_streaming):
         with patch("zikos.services.llm.settings") as mock_settings:
             mock_settings.llm_model_path = "/path/to/model.gguf"
+            mock_settings.llm_backend = "auto"
+            mock_settings.llm_n_ctx = 4096
+            mock_settings.llm_n_gpu_layers = 0
+            mock_settings.llm_temperature = 0.7
+            mock_settings.llm_top_p = 0.9
+            mock_settings.llm_top_k = None
+            mock_settings.llm_max_thinking_tokens = 0
             service = LLMService()
-            service.backend = mock_backend_with_streaming
-            return service
+            yield service
 
 
 @pytest.fixture
