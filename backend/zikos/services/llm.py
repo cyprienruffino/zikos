@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -347,6 +348,7 @@ class LLMService:
         max_consecutive_tool_calls = 5
         recent_tool_calls: list[str] = []
         accumulated_content = ""
+        nothink_retry = False
 
         while iteration < max_iterations:
             iteration += 1
@@ -379,17 +381,23 @@ class LLMService:
                     top_k=settings.llm_top_k,
                 )
 
-                accumulated_content = ""
                 final_delta = {}
                 final_finish_reason = None
                 accumulated_tool_calls = []
-                # Qwen3-Thinking templates inject <think> in the generation prompt,
-                # so it doesn't appear as a content token. Start suppressed if budget is set.
-                max_thinking = settings.llm_max_thinking_tokens
-                in_thinking = max_thinking > 0
+                # Thinking budget: suppress thinking tokens up to the budget limit.
+                # On nothink retry, skip all thinking handling entirely.
+                if nothink_retry:
+                    max_thinking = 0
+                    in_thinking = False
+                else:
+                    max_thinking = settings.llm_max_thinking_tokens
+                    in_thinking = max_thinking > 0
                 thinking_token_count = 0
                 thinking_budget_exceeded = False
-                _logger.info(f"Thinking budget: {max_thinking} tokens (0=unlimited)")
+                accumulated_content = ""
+                _logger.info(
+                    f"Thinking budget: {max_thinking} tokens (0=unlimited, nothink={nothink_retry})"
+                )
 
                 async for chunk in stream:
                     choice = chunk.get("choices", [{}])[0]
@@ -411,6 +419,13 @@ class LLMService:
 
                         accumulated_content += token
 
+                        if nothink_retry:
+                            # Strip think tags from tokens, pass content through
+                            stripped = re.sub(r"</?think(?:ing)?>", "", token)
+                            if stripped:
+                                yield {"type": "token", "content": stripped}
+                            continue
+
                         if in_thinking:
                             thinking_token_count += 1
                             if (
@@ -419,15 +434,21 @@ class LLMService:
                             ):
                                 in_thinking = False
                             elif max_thinking > 0 and thinking_token_count >= max_thinking:
-                                logger.info(
+                                _logger.info(
                                     f"Thinking budget exceeded ({thinking_token_count} tokens), "
-                                    "truncating and re-generating"
+                                    "truncating and re-generating with /nothink"
+                                )
+                                _conversation_logger.info(
+                                    f"Session: {session_id}\n"
+                                    f"Thinking budget exceeded "
+                                    f"({thinking_token_count}/{max_thinking} tokens), "
+                                    f"re-generating with /nothink\n"
+                                    f"{'='*80}"
                                 )
                                 thinking_budget_exceeded = True
                                 break
                             continue
                         elif "<think" in token:
-                            # Handle models that emit <think> as a content token
                             in_thinking = True
                             continue
 
@@ -446,18 +467,23 @@ class LLMService:
                         break
 
                 if thinking_budget_exceeded:
-                    # Close the thinking tag and add as assistant message
-                    # so the model continues with the actual response
+                    # Add truncated thinking as assistant turn, close the tag
                     truncated = accumulated_content.rstrip()
                     if not truncated.endswith("</think>"):
                         truncated += "\n</think>\n"
                     history.append({"role": "assistant", "content": truncated})
                     _conversation_logger.info(
                         f"Session: {session_id}\n"
-                        f"Thinking budget exceeded ({thinking_token_count}/{max_thinking} tokens), "
-                        f"truncating and re-generating\n"
+                        f"Truncated thinking ({thinking_token_count} tokens):\n"
+                        f"{accumulated_content}\n"
                         f"{'='*80}"
                     )
+                    # Swap /think -> /nothink in system message for the retry
+                    for msg in history:
+                        if msg["role"] == "system" and msg["content"].endswith("/think"):
+                            msg["content"] = msg["content"][:-6] + "/nothink"
+                            break
+                    nothink_retry = True
                     continue
 
                 message_obj = {
@@ -483,10 +509,12 @@ class LLMService:
             content = message_obj.get("content", "")
             if not isinstance(content, str):
                 content = str(content) if content else ""
-            cleaned_content, thinking_content = self._extract_thinking(content)
-
-            if thinking_content:
-                history.append({"role": "thinking", "content": thinking_content})
+            if nothink_retry:
+                # On nothink retry, strip think tags as plain text, don't extract
+                cleaned_content = re.sub(r"</?think(?:ing)?>", "", content).strip()
+                thinking_content = ""
+            else:
+                cleaned_content, thinking_content = self._extract_thinking(content)
 
             tool_calls = message_obj.get("tool_calls")
             if not tool_calls or not isinstance(tool_calls, list):
@@ -626,8 +654,21 @@ class LLMService:
                 )
                 continue
 
-            history.append({"role": "assistant", "content": response_content})
+            # Store full content with thinking tags so the model sees its own reasoning
+            if thinking_content:
+                full_content = f"<think>\n{thinking_content}\n</think>\n\n{response_content}"
+            else:
+                full_content = response_content
+            history.append({"role": "assistant", "content": full_content})
 
+            # Restore /think if it was swapped to /nothink during budget exceeded
+            for msg in history:
+                if msg["role"] == "system" and msg["content"].endswith("/nothink"):
+                    msg["content"] = msg["content"][:-8] + "/think"
+                    break
+
+            if thinking_content:
+                yield {"type": "thinking", "content": thinking_content}
             yield {"type": "response", "message": response_content}
             return
 

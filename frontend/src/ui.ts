@@ -99,6 +99,21 @@ export function appendStreamingToken(token: string): void {
     }
 }
 
+export function addThinkingToStreamingMessage(thinking: string): void {
+    if (streamingMessageEl) {
+        const details = document.createElement("details");
+        details.className = "thinking-section";
+        const summary = document.createElement("summary");
+        summary.textContent = "Thinking";
+        details.appendChild(summary);
+        const content = document.createElement("div");
+        content.className = "thinking-content";
+        content.innerHTML = thinking.replace(/\n/g, "<br>");
+        details.appendChild(content);
+        streamingMessageEl.insertBefore(details, streamingTextEl);
+    }
+}
+
 export function finishStreamingMessage(data: Partial<WebSocketMessage> | null = null): void {
     if (streamingMessageEl && streamingTextEl) {
         if (data?.audio_file_id) {

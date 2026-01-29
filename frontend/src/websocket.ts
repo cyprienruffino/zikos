@@ -7,6 +7,7 @@ import {
     updateStatus,
     startStreamingMessage,
     appendStreamingToken,
+    addThinkingToStreamingMessage,
     finishStreamingMessage,
 } from "./ui.js";
 import {
@@ -68,6 +69,11 @@ export function connect(): void {
                     isProcessing = true;
                 }
                 appendStreamingToken(data.content || "");
+                return;
+            }
+
+            if (data.type === "thinking") {
+                addThinkingToStreamingMessage(data.content || "");
                 return;
             }
 
