@@ -196,11 +196,9 @@ zikos/
 ├── frontend/           # TypeScript/HTML frontend
 │   ├── src/            # TypeScript source files
 │   │   └── widgets/    # Interactive widgets (metronome, tuner, ear trainer, etc.)
-│   ├── dist/           # Compiled JavaScript (generated)
 │   └── index.html      # Main HTML file
 ├── tests/              # Test code
 ├── scripts/            # Utility scripts (model download)
-├── CLAUDE.md           # Agent reference and architecture guide
 └── SYSTEM_PROMPT.md    # LLM system prompt
 ```
 
