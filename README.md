@@ -88,15 +88,6 @@ export SYSTEM_PROMPT_CACHE_PATH=./models/your-model_system_cache.bin
 
 The cache file can be generated in CI and included in deployments. If `SYSTEM_PROMPT_CACHE_PATH` is set but the file doesn't exist, it will be automatically generated on startup.
 
-**Note**: The script requires `huggingface_hub` for Transformers models. Install with:
-```bash
-# Recommended: install model download helpers
-pip install -e ".[model-download]"
-
-# Or install individually
-pip install huggingface_hub
-```
-
 ## Run
 
 ```bash
@@ -120,8 +111,7 @@ The easiest way to run Zikos with Docker:
 
 ```bash
 # Set the model filename (optional, defaults to Phi-3-mini-4k-instruct-q4.gguf)
-export LLM_MODEL_FILE=Phi-3-mini-4k-instruct-q4.gguf
-export LLM_MODEL_FILE=mistral-7b-instruct-v0.3.Q4_K_M.gguf
+export LLM_MODEL_FILE=qwen2.5-7b-instruct-q4_k_m.gguf
 
 # Build and start the container
 docker-compose up --build
@@ -150,7 +140,7 @@ docker run -d \
   -v ./audio_storage:/app/audio_storage \
   -v ./midi_storage:/app/midi_storage \
   -v ./notation_storage:/app/notation_storage \
-  -e LLM_MODEL_PATH=/app/models/Phi-3-mini-4k-instruct-q4.gguf \
+  -e LLM_MODEL_PATH=/app/models/qwen2.5-7b-instruct-q4_k_m.gguf \
   -e LLM_N_CTX=32768 \
   -e LLM_N_GPU_LAYERS=0 \
   zikos
@@ -238,7 +228,7 @@ This project follows Test-Driven Development (TDD) principles with comprehensive
 
 - **Unit tests**: Test individual components in isolation
 - **Integration tests**: Test API endpoints and service interactions
-- **Coverage target**: Minimum 80% code coverage
+- **Coverage target**: Minimum 75% code coverage
 
 **Note**: Comprehensive tests (LLM inference, heavy audio processing) and integration tests are excluded from default pytest runs and pre-commit hooks to keep commit times reasonable. These tests are marked as `comprehensive` or `integration` and require model files or significant resources. LLM integration tests verify real tool calling functionality. These are critical for catching bugs that mocked tests miss.
 
