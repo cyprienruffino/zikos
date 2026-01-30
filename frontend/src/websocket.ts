@@ -16,7 +16,11 @@ import {
     setWebSocket,
     setSessionId,
 } from "./widgets/recording.js";
-import { addMetronomeWidget } from "./widgets/metronome.js";
+import {
+    addMetronomeWidget,
+    setMetronomeWebSocket,
+    setMetronomeSessionId,
+} from "./widgets/metronome.js";
 import { addTunerWidget } from "./widgets/tuner.js";
 import { addChordProgressionWidget } from "./widgets/chordProgression.js";
 import { addTempoTrainerWidget } from "./widgets/tempoTrainer.js";
@@ -38,6 +42,7 @@ export function connect(): void {
     updateStatus("Connecting...", "disconnected");
     ws = new WebSocket(WS_URL);
     setWebSocket(ws);
+    setMetronomeWebSocket(ws);
 
     ws.onopen = () => {
         reconnectAttempts = 0;
@@ -55,6 +60,7 @@ export function connect(): void {
             if (data.session_id) {
                 sessionId = data.session_id;
                 setSessionId(sessionId);
+                setMetronomeSessionId(sessionId);
             }
 
             if (data.type === "session_id") {

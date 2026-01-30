@@ -1,4 +1,5 @@
 import { MetronomeState } from "../types.js";
+import { addMessage, addTypingIndicator } from "../ui.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -9,6 +10,19 @@ function getMessagesEl(): HTMLElement {
 }
 
 const metronomes = new Map<string, MetronomeState>();
+
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
+let ws: WebSocket | null = null;
+let sessionId: string | null = null;
+
+export function setMetronomeWebSocket(websocket: WebSocket | null): void {
+    ws = websocket;
+}
+
+export function setMetronomeSessionId(id: string | null): void {
+    sessionId = id;
+}
 
 export function addMetronomeWidget(
     metronomeId: string,
@@ -40,16 +54,45 @@ export function addMetronomeWidget(
             <button class="stop-btn" data-metronome-id="${metronomeId}">Stop</button>
             <span class="metronome-status" id="status-${metronomeId}">Stopped</span>
         </div>
+        <div class="recording-section">
+            <label class="keep-metronome-label">
+                <input type="checkbox" class="keep-metronome-cb" checked />
+                Keep metronome playing during recording
+            </label>
+            <div class="recording-controls">
+                <button class="record-btn" data-metronome-id="${metronomeId}">Record</button>
+                <button class="stop-rec-btn" data-metronome-id="${metronomeId}" style="display:none;">Stop</button>
+                <button class="send-btn" data-metronome-id="${metronomeId}" disabled>Send</button>
+                <button class="cancel-btn" data-metronome-id="${metronomeId}">Cancel</button>
+                <span class="recording-status" id="rec-status-${metronomeId}"></span>
+            </div>
+            <div class="audio-player" id="rec-player-${metronomeId}"></div>
+        </div>
     `;
     const messagesEl = getMessagesEl();
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+
     const playBtn = widgetEl.querySelector(".play-btn");
     const pauseBtn = widgetEl.querySelector(".pause-btn");
     const stopBtn = widgetEl.querySelector(".stop-btn");
     playBtn?.addEventListener("click", () => startMetronome(metronomeId, bpm, beats));
     pauseBtn?.addEventListener("click", () => pauseMetronome(metronomeId));
     stopBtn?.addEventListener("click", () => stopMetronome(metronomeId));
+
+    widgetEl
+        .querySelector(".record-btn")
+        ?.addEventListener("click", () => startRecording(metronomeId));
+    widgetEl
+        .querySelector(".stop-rec-btn")
+        ?.addEventListener("click", () => stopRecording(metronomeId));
+    widgetEl
+        .querySelector(".send-btn")
+        ?.addEventListener("click", () => sendRecording(metronomeId));
+    widgetEl
+        .querySelector(".cancel-btn")
+        ?.addEventListener("click", () => cancelRecording(metronomeId));
+
     metronomes.set(metronomeId, {
         bpm,
         beats,
@@ -175,4 +218,195 @@ export function getMetronome(metronomeId: string): MetronomeState | undefined {
 
 export function setMetronome(metronomeId: string, state: MetronomeState): void {
     metronomes.set(metronomeId, state);
+}
+
+async function startRecording(metronomeId: string): Promise<void> {
+    const metronome = metronomes.get(metronomeId);
+    const widgetEl = metronome?.widgetEl;
+    if (!widgetEl) return;
+
+    const keepPlaying = (widgetEl.querySelector(".keep-metronome-cb") as HTMLInputElement)?.checked;
+    if (!keepPlaying && metronome?.isPlaying) {
+        pauseMetronome(metronomeId);
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        const statusEl = document.getElementById(`rec-status-${metronomeId}`) as HTMLElement;
+        const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
+        const stopRecBtn = widgetEl.querySelector(".stop-rec-btn") as HTMLButtonElement;
+
+        if (!statusEl || !recordBtn || !stopRecBtn) return;
+
+        mediaRecorder.ondataavailable = (event: BlobEvent) => {
+            if (event.data) {
+                audioChunks.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const playerEl = document.getElementById(`rec-player-${metronomeId}`);
+            if (playerEl) {
+                playerEl.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+            }
+
+            const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
+            if (sendBtn) {
+                sendBtn.disabled = false;
+            }
+            if (statusEl) {
+                statusEl.textContent = "Recording complete";
+                statusEl.className = "recording-status";
+            }
+        };
+
+        mediaRecorder.start();
+        statusEl.textContent = "Recording...";
+        statusEl.className = "recording-status recording";
+        recordBtn.style.display = "none";
+        stopRecBtn.style.display = "inline-block";
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        addMessage(`Error accessing microphone: ${errorMessage}`, "error");
+    }
+}
+
+function stopRecording(metronomeId: string): void {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+
+        const metronome = metronomes.get(metronomeId);
+        const widgetEl = metronome?.widgetEl;
+        if (!widgetEl) return;
+
+        const stopRecBtn = widgetEl.querySelector(".stop-rec-btn") as HTMLButtonElement;
+        const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
+
+        if (recordBtn && stopRecBtn) {
+            recordBtn.style.display = "inline-block";
+            stopRecBtn.style.display = "none";
+        }
+    }
+}
+
+async function sendRecording(metronomeId: string): Promise<void> {
+    if (audioChunks.length === 0) {
+        addMessage("No audio recorded", "error");
+        return;
+    }
+
+    const metronome = metronomes.get(metronomeId);
+    const widgetEl = metronome?.widgetEl;
+    if (!widgetEl) return;
+
+    const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
+    const statusEl = document.getElementById(`rec-status-${metronomeId}`) as HTMLElement;
+
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Uploading...";
+    }
+    if (statusEl) {
+        statusEl.textContent = "Uploading audio...";
+        statusEl.className = "recording-status";
+    }
+
+    const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.wav");
+    formData.append("recording_id", metronomeId);
+
+    try {
+        const response = await fetch(`${window.location.origin}/api/audio/upload`, {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => response.statusText);
+            throw new Error(`Upload failed: ${errorText}`);
+        }
+
+        const data = (await response.json()) as { audio_file_id: string };
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            addTypingIndicator();
+            ws.send(
+                JSON.stringify({
+                    type: "audio_ready",
+                    audio_file_id: data.audio_file_id,
+                    recording_id: metronomeId,
+                    session_id: sessionId,
+                })
+            );
+        } else {
+            addMessage("Connection lost. Please reconnect and try again.", "error");
+        }
+
+        audioChunks = [];
+        mediaRecorder = null;
+
+        // Reset recording UI but keep the metronome widget
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.textContent = "Send";
+        }
+        if (statusEl) {
+            statusEl.textContent = "Sent";
+            statusEl.className = "recording-status";
+        }
+        const playerEl = document.getElementById(`rec-player-${metronomeId}`);
+        if (playerEl) {
+            playerEl.innerHTML = "";
+        }
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        addMessage(`Error uploading audio: ${errorMessage}`, "error");
+
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Send";
+        }
+        if (statusEl) {
+            statusEl.textContent = "Upload failed. Please try again.";
+            statusEl.className = "recording-status";
+        }
+    }
+}
+
+function cancelRecording(metronomeId: string): void {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+    }
+    audioChunks = [];
+    mediaRecorder = null;
+
+    const metronome = metronomes.get(metronomeId);
+    const widgetEl = metronome?.widgetEl;
+    if (!widgetEl) return;
+
+    const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
+    const stopRecBtn = widgetEl.querySelector(".stop-rec-btn") as HTMLButtonElement;
+    const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
+    const statusEl = document.getElementById(`rec-status-${metronomeId}`) as HTMLElement;
+    const playerEl = document.getElementById(`rec-player-${metronomeId}`);
+
+    if (recordBtn) recordBtn.style.display = "inline-block";
+    if (stopRecBtn) stopRecBtn.style.display = "none";
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Send";
+    }
+    if (statusEl) {
+        statusEl.textContent = "";
+        statusEl.className = "recording-status";
+    }
+    if (playerEl) playerEl.innerHTML = "";
 }

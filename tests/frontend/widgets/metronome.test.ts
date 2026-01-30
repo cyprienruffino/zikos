@@ -5,6 +5,8 @@ import {
     startMetronome,
     getMetronome,
     setMetronome,
+    setMetronomeWebSocket,
+    setMetronomeSessionId,
 } from "../../../frontend/src/widgets/metronome.js";
 
 // Mock AudioContext
@@ -192,6 +194,46 @@ describe("Metronome Widget", () => {
                 setMetronome("met_123", metronome);
                 expect(getMetronome("met_123")?.isPlaying).toBe(true);
             }
+        });
+    });
+
+    describe("Recording controls", () => {
+        it("should create recording controls in widget", () => {
+            addMetronomeWidget("met_123", 120, "4/4");
+            const widget = document.getElementById("metronome-met_123");
+            expect(widget?.querySelector(".record-btn")).toBeTruthy();
+            expect(widget?.querySelector(".stop-rec-btn")).toBeTruthy();
+            expect(widget?.querySelector(".send-btn")).toBeTruthy();
+            expect(widget?.querySelector(".cancel-btn")).toBeTruthy();
+        });
+
+        it("should have send button disabled by default", () => {
+            addMetronomeWidget("met_123", 120, "4/4");
+            const widget = document.getElementById("metronome-met_123");
+            const sendBtn = widget?.querySelector(".send-btn") as HTMLButtonElement;
+            expect(sendBtn.disabled).toBe(true);
+        });
+
+        it("should have keep-metronome checkbox checked by default", () => {
+            addMetronomeWidget("met_123", 120, "4/4");
+            const widget = document.getElementById("metronome-met_123");
+            const cb = widget?.querySelector(".keep-metronome-cb") as HTMLInputElement;
+            expect(cb).toBeTruthy();
+            expect(cb.checked).toBe(true);
+        });
+
+        it("should have recording status and audio player elements", () => {
+            addMetronomeWidget("met_123", 120, "4/4");
+            expect(document.getElementById("rec-status-met_123")).toBeTruthy();
+            expect(document.getElementById("rec-player-met_123")).toBeTruthy();
+        });
+    });
+
+    describe("setMetronomeWebSocket / setMetronomeSessionId", () => {
+        it("should accept websocket and session id without errors", () => {
+            expect(() => setMetronomeWebSocket(null)).not.toThrow();
+            expect(() => setMetronomeSessionId("test-session")).not.toThrow();
+            expect(() => setMetronomeSessionId(null)).not.toThrow();
         });
     });
 
