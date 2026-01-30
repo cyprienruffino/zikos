@@ -10,19 +10,18 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 ## Quick Overview
 
 - **Audio Input**: User recordings analyzed via signal processing tools
-- **LLM**: Phi-3 Mini (recommended for CPU) or Mistral 7B (recommended for GPU) with good function calling support
-- **Output**: Text feedback + MIDI-generated musical examples with notation
-- **Architecture**: FastAPI backend + TypeScript frontend
-- **Backends**: Supports both llama-cpp-python (GGUF) and HuggingFace Transformers (safetensors)
+- **LLM**: Qwen2.5-7B/14B (recommended), with Phi-3 Mini as CPU fallback, via llama-cpp-python or HuggingFace Transformers
+- **Output**: Text feedback + MIDI-generated musical examples with notation + interactive widgets (metronome, tuner, ear trainer, etc.)
+- **Architecture**: FastAPI backend + TypeScript frontend + WebSocket
 
 ## Hardware Support
 
 Zikos tries to support a wide range of hardware configurations:
 
-- **CPU-only**: Works without GPU (slow, but functional) - Phi-3 Mini recommended (or Llama 3.2 8B if you have enough RAM)
-- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Mistral 7B recommended
-- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Mistral 7B or larger models
-- **Large GPU (80GB+ VRAM)**: H100, A100, etc. - Larger models with extended context
+- **CPU-only**: Works without GPU (slow, but functional) - Phi-3 Mini recommended
+- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Qwen2.5-7B Q4_K_M recommended
+- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Qwen2.5-14B Q4_K_M recommended
+- **Large GPU (80GB+ VRAM)**: H100, A100, etc. - Qwen3-32B via Transformers backend
 
 ## Setup
 ### Prerequisites
@@ -56,13 +55,13 @@ Zikos can be configured via environment variables. Copy `.env.example` to `.env`
 
 ### Downloading Models
 
-You can download models using the provided helper script. See [MODEL_RECOMMENDATIONS.md](./MODEL_RECOMMENDATIONS.md) for detailed recommendations.
+You can download models using the provided helper script:
 
 ```bash
 # List available models
 python scripts/download_model.py --list
-python scripts/download_model.py phi-3-mini-q4 -o ./models
-python scripts/download_model.py mistral-7b-instruct-v0.3-q4 -o ./models
+python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models
+python scripts/download_model.py qwen2.5-14b-instruct-q4 -o ./models
 
 # With Hugging Face token (for private models)
 python scripts/download_model.py qwen3-32b-instruct -t YOUR_TOKEN
@@ -71,9 +70,8 @@ python scripts/download_model.py qwen3-32b-instruct -t YOUR_TOKEN
 The script supports both GGUF (llama-cpp-python) and Transformers (HuggingFace) formats. After downloading, the `.env` file created by the setup script will be configured automatically, or you can set `LLM_MODEL_PATH` manually:
 
 ```bash
-# For GGUF models (examples)
-export LLM_MODEL_PATH=./models/Phi-3-mini-4k-instruct-q4.gguf
-export LLM_MODEL_PATH=./models/mistral-7b-instruct-v0.3.Q4_K_M.gguf
+# For GGUF models (example)
+export LLM_MODEL_PATH=./models/qwen2.5-7b-instruct-q4_k_m.gguf
 ```
 
 ### System Prompt KV Cache (llama-cpp-python only)
@@ -173,8 +171,8 @@ Environment variables can be customized in `docker-compose.yml` or passed via `-
 ## Development
 ### Dependencies
 
-- **LLM**: Phi-3 Mini (recommended for CPU), Mistral 7B (recommended for GPU), or similar models, via dual backend support
-  - **llama-cpp-python**: For GGUF models (Phi-3, Mistral, Llama, Qwen)
+- **LLM**: Qwen2.5-7B/14B (recommended), Phi-3 Mini (CPU fallback), via dual backend support
+  - **llama-cpp-python**: For GGUF models (Qwen2.5, Phi-3, Mistral, Llama)
   - **HuggingFace Transformers**: For safetensors models (Qwen3)
 - **Audio Processing**: librosa, torchaudio, soundfile
 - **MIDI**: Music21 for processing, FluidSynth for synthesis
@@ -198,18 +196,21 @@ zikos/
 │       ├── api/        # FastAPI routes
 │       ├── mcp/        # MCP tools and server
 │       ├── services/   # Business logic
+│       │   ├── llm.py              # LLM service
+│       │   ├── llm_orchestration/  # Conversation flow, tool parsing, validation
+│       │   ├── llm_backends/       # llama-cpp-python and Transformers backends
+│       │   ├── prompt/             # Composable prompt sections
+│       │   └── tool_providers/     # Tool format adapters (Qwen, simplified, native)
 │       ├── config.py   # Configuration
 │       └── main.py     # FastAPI app
 ├── frontend/           # TypeScript/HTML frontend
 │   ├── src/            # TypeScript source files
+│   │   └── widgets/    # Interactive widgets (metronome, tuner, ear trainer, etc.)
 │   ├── dist/           # Compiled JavaScript (generated)
 │   └── index.html      # Main HTML file
 ├── tests/              # Test code
-├── scripts/            # Utility scripts (model download, env setup)
-├── CONFIGURATION.md    # Hardware-specific configuration guide (includes H100 optimization)
-├── MODEL_RECOMMENDATIONS.md # Model recommendations
-├── DESIGN.md           # Architecture design and future roadmap
-├── TOOLS.md            # MCP tools specification
+├── scripts/            # Utility scripts (model download)
+├── CLAUDE.md           # Agent reference and architecture guide
 └── SYSTEM_PROMPT.md    # LLM system prompt
 ```
 
