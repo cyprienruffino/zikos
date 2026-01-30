@@ -74,10 +74,11 @@ def generate_cache(
     if tool_format:
         print(f"Injecting tools with format: {tool_format}")
         from zikos.mcp.server import MCPServer
-        from zikos.services.tool_providers import get_tool_provider
+        from zikos.services.model_strategy import get_model_strategy
 
         # Get tool provider for the specified format
-        provider = get_tool_provider(tool_format=tool_format, model_path=model_path)
+        strategy = get_model_strategy(model_path=model_path, tool_format=tool_format)
+        provider = strategy.tool_provider
 
         # Get all tools from MCP server
         mcp_server = MCPServer()

@@ -13,7 +13,7 @@ from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtracto
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
 from zikos.services.llm_orchestration.tool_executor import ToolExecutor
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
-from zikos.services.tool_providers import get_tool_provider
+from zikos.services.model_strategy import ModelStrategy, get_model_strategy
 
 
 class IterationState:
@@ -50,7 +50,7 @@ class LLMOrchestrator:
         self.response_validator = response_validator
         self.thinking_extractor = thinking_extractor
         self._get_system_prompt = system_prompt_getter
-        self.tool_provider = None
+        self.strategy: ModelStrategy | None = None
 
     def prepare_conversation(
         self, message: str, session_id: str, mcp_server: MCPServer
@@ -71,11 +71,11 @@ class LLMOrchestrator:
         tools = tool_registry.get_all_tools()
         tool_schemas = tool_registry.get_all_schemas()
 
-        if not self.tool_provider:
-            self.tool_provider = get_tool_provider()
+        if not self.strategy:
+            self.strategy = get_model_strategy()
 
         self.tool_injector.inject_if_needed(
-            history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
+            history, self.strategy.tool_provider, tools, tool_schemas, self._get_system_prompt
         )
 
         iteration_state = IterationState()

@@ -3,7 +3,6 @@
 import pytest
 
 from zikos.mcp.tool import Tool, ToolCategory
-from zikos.services.tool_providers import get_tool_provider
 from zikos.services.tool_providers.qwen_tool_provider import QwenToolProvider
 from zikos.services.tool_providers.simplified_tool_provider import SimplifiedToolProvider
 from zikos.services.tool_providers.structured_tool_provider import StructuredToolProvider
@@ -147,32 +146,3 @@ class TestQwenToolProvider:
     def test_should_pass_tools_as_parameter(self, provider):
         """Test should_pass_tools_as_parameter returns True"""
         assert provider.should_pass_tools_as_parameter() is True
-
-
-class TestGetToolProvider:
-    """Tests for get_tool_provider factory"""
-
-    def test_get_qwen_provider(self):
-        """Test getting Qwen provider"""
-        provider = get_tool_provider(tool_format="qwen")
-        assert isinstance(provider, QwenToolProvider)
-
-    def test_get_simplified_provider(self):
-        """Test getting simplified provider"""
-        provider = get_tool_provider(tool_format="simplified")
-        assert isinstance(provider, SimplifiedToolProvider)
-
-    def test_get_native_provider(self):
-        """Test getting native provider"""
-        provider = get_tool_provider(tool_format="native")
-        assert isinstance(provider, StructuredToolProvider)
-
-    def test_auto_detect_qwen(self):
-        """Test auto-detection for Qwen models"""
-        provider = get_tool_provider(tool_format="auto", model_path="/models/qwen2.5-7b.gguf")
-        assert isinstance(provider, QwenToolProvider)
-
-    def test_auto_detect_default(self):
-        """Test auto-detection defaults to simplified"""
-        provider = get_tool_provider(tool_format="auto", model_path="/models/unknown-model.gguf")
-        assert isinstance(provider, SimplifiedToolProvider)

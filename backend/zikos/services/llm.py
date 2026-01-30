@@ -22,13 +22,13 @@ from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtracto
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser, get_tool_call_parser
 from zikos.services.llm_orchestration.tool_executor import ToolExecutor
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
+from zikos.services.model_strategy import ModelStrategy, get_model_strategy
 from zikos.services.prompt import SystemPromptBuilder
 from zikos.services.prompt.sections import (
     AudioAnalysisContextFormatter,
     CorePromptSection,
     ToolInstructionsSection,
 )
-from zikos.services.tool_providers import get_tool_provider
 from zikos.utils.context_length import detect_context_length
 from zikos.utils.gpu import get_optimal_gpu_layers
 
@@ -61,7 +61,7 @@ class LLMService:
         self.initialization_error: str | None = None
         self.context_window: int | None = None
         self.audio_service = AudioService()
-        self.tool_provider = None
+        self.strategy: ModelStrategy | None = None
         self.thinking_extractor = ThinkingExtractor()
         self.conversation_manager = ConversationManager(self._get_system_prompt)
         self.message_preparer = MessagePreparer()
@@ -160,19 +160,20 @@ class LLMService:
                 top_p=settings.llm_top_p,
             )
 
-            self.tool_provider = get_tool_provider(model_path_str)
+            self.strategy = get_model_strategy(model_path_str)
+            self.tool_call_parser = self.strategy.tool_call_parser
             self.context_window = self.backend.get_context_window()
             _logger.info(
                 f"LLM initialized successfully with context window: {self.context_window} tokens"
             )
-            _logger.info(f"Using tool provider: {type(self.tool_provider).__name__}")
+            _logger.info(f"Using model strategy: {type(self.strategy.tool_provider).__name__}")
         except Exception as e:
             error_msg = str(e)
             _logger.error(f"Error initializing LLM: {e}", exc_info=True)
             _logger.warning("The application will start but LLM features will be unavailable.")
             self.backend = None
             self.initialization_error = error_msg
-            self.tool_provider = get_tool_provider()
+            self.strategy = get_model_strategy()
 
     def _get_conversation_history(self, session_id: str) -> list[dict[str, Any]]:
         """Get conversation history for session"""
@@ -335,11 +336,11 @@ class LLMService:
         tools = tool_registry.get_all_tools()
         tool_schemas = tool_registry.get_all_schemas()
 
-        if not self.tool_provider:
-            self.tool_provider = get_tool_provider()
+        if not self.strategy:
+            self.strategy = get_model_strategy()
 
         self.tool_injector.inject_if_needed(
-            history, self.tool_provider, tools, tool_schemas, self._get_system_prompt
+            history, self.strategy.tool_provider, tools, tool_schemas, self._get_system_prompt
         )
 
         max_iterations = LLM.MAX_ITERATIONS
@@ -369,16 +370,21 @@ class LLMService:
                 continue
 
             tools_param = None
-            if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
+            if (
+                tools
+                and self.strategy
+                and self.strategy.tool_provider.should_pass_tools_as_parameter()
+            ):
                 tools_param = tool_schemas
 
             try:
+                sampling = self.strategy.sampling if self.strategy else None
                 stream = self.backend.stream_chat_completion(
                     messages=current_messages,
                     tools=tools_param,
-                    temperature=settings.llm_temperature,
-                    top_p=settings.llm_top_p,
-                    top_k=settings.llm_top_k,
+                    temperature=sampling.temperature if sampling else settings.llm_temperature,
+                    top_p=sampling.top_p if sampling else settings.llm_top_p,
+                    top_k=sampling.top_k if sampling else settings.llm_top_k,
                 )
 
                 final_delta = {}
@@ -390,7 +396,11 @@ class LLMService:
                     max_thinking = 0
                     in_thinking = False
                 else:
-                    max_thinking = settings.llm_max_thinking_tokens
+                    max_thinking = (
+                        self.strategy.thinking.max_tokens
+                        if self.strategy
+                        else settings.llm_max_thinking_tokens
+                    )
                     in_thinking = max_thinking > 0
                 thinking_token_count = 0
                 thinking_budget_exceeded = False
@@ -683,15 +693,16 @@ class LLMService:
         )
 
         tools_param = None
-        if tools and self.tool_provider and self.tool_provider.should_pass_tools_as_parameter():
+        if tools and self.strategy and self.strategy.tool_provider.should_pass_tools_as_parameter():
             tools_param = tool_schemas
 
         try:
+            sampling = self.strategy.sampling if self.strategy else None
             stream = self.backend.stream_chat_completion(
                 messages=current_messages,
                 tools=tools_param,
-                temperature=settings.llm_temperature,
-                top_p=settings.llm_top_p,
+                temperature=sampling.temperature if sampling else settings.llm_temperature,
+                top_p=sampling.top_p if sampling else settings.llm_top_p,
             )
 
             accumulated_content = ""
@@ -778,10 +789,8 @@ class LLMService:
 
         result: str = builder.build()
 
-        if self.tool_provider:
-            suffix = self.tool_provider.get_system_prompt_suffix()
-            if suffix:
-                result = f"{result}\n\n{suffix}"
+        if self.strategy and self.strategy.thinking.prompt_suffix:
+            result = f"{result}\n\n{self.strategy.thinking.prompt_suffix}"
 
         return result
 

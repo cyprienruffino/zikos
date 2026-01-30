@@ -10,9 +10,9 @@ import tiktoken
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zikos.mcp.server import MCPServer  # noqa: E402
+from zikos.services.model_strategy import get_model_strategy  # noqa: E402
 from zikos.services.prompt import SystemPromptBuilder  # noqa: E402
 from zikos.services.prompt.sections import CorePromptSection, ToolInstructionsSection  # noqa: E402
-from zikos.services.tool_providers import get_tool_provider  # noqa: E402
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     tool_registry = mcp_server.get_tool_registry()
     tools = tool_registry.get_all_tools()
 
-    tool_provider = get_tool_provider()
+    tool_provider = get_model_strategy().tool_provider
 
     tool_instructions = tool_provider.format_tool_instructions()
     tool_summary = tool_provider.generate_tool_summary(tools)
