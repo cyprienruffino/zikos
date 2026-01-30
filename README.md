@@ -4,7 +4,7 @@ A proof-of-concept AI music teacher that combines LLM chat interaction with audi
 
 ## Status
 
-🚧 Early development - POC implementation - Vibe-coding involved - Not to be used as-is
+Early development - POC implementation - Vibe-coding involved - Not to be used as-is
 
 
 ## Quick Overview
