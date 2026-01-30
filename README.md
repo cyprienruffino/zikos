@@ -10,7 +10,7 @@ Early development - POC implementation - Vibe-coding involved - Not to be used a
 ## Quick Overview
 
 - **Audio Input**: User recordings analyzed via signal processing tools
-- **LLM**: Qwen2.5-7B/14B (recommended), with Phi-3 Mini as CPU fallback, via llama-cpp-python or HuggingFace Transformers
+- **LLM**: Qwen3-8B/14B (recommended), with Phi-3 Mini as CPU fallback, via llama-cpp-python or HuggingFace Transformers
 - **Output**: Text feedback + MIDI-generated musical examples with notation + interactive widgets (metronome, tuner, ear trainer, etc.)
 - **Architecture**: FastAPI backend + TypeScript frontend + WebSocket
 
@@ -19,9 +19,8 @@ Early development - POC implementation - Vibe-coding involved - Not to be used a
 Zikos tries to support a wide range of hardware configurations:
 
 - **CPU-only**: Works without GPU (slow, but functional) - Phi-3 Mini recommended
-- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Qwen2.5-7B Q4_K_M recommended
-- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Qwen2.5-14B Q4_K_M recommended
-- **Large GPU (80GB+ VRAM)**: H100, A100, etc. - Qwen3-32B via Transformers backend
+- **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Qwen3-8B Q4_K_M recommended
+- **Medium GPU (16-24GB VRAM)**: RTX 3090, RTX 4090, etc. - Qwen3-14B Q4_K_M recommended
 
 ## Setup
 ### Prerequisites
@@ -60,18 +59,15 @@ You can download models using the provided helper script:
 ```bash
 # List available models
 python scripts/download_model.py --list
-python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models
-python scripts/download_model.py qwen2.5-14b-instruct-q4 -o ./models
-
-# With Hugging Face token (for private models)
-python scripts/download_model.py qwen3-32b-instruct -t YOUR_TOKEN
+python scripts/download_model.py qwen3-8b-instruct-q4 -o ./models
+python scripts/download_model.py qwen3-14b-instruct-q4 -o ./models
 ```
 
 The script supports both GGUF (llama-cpp-python) and Transformers (HuggingFace) formats. After downloading, the `.env` file created by the setup script will be configured automatically, or you can set `LLM_MODEL_PATH` manually:
 
 ```bash
 # For GGUF models (example)
-export LLM_MODEL_PATH=./models/qwen2.5-7b-instruct-q4_k_m.gguf
+export LLM_MODEL_PATH=./models/qwen3-8b-instruct-q4_k_m.gguf
 ```
 
 ### System Prompt KV Cache (llama-cpp-python only)
@@ -111,7 +107,7 @@ The easiest way to run Zikos with Docker:
 
 ```bash
 # Set the model filename (optional, defaults to Phi-3-mini-4k-instruct-q4.gguf)
-export LLM_MODEL_FILE=qwen2.5-7b-instruct-q4_k_m.gguf
+export LLM_MODEL_FILE=qwen3-8b-instruct-q4_k_m.gguf
 
 # Build and start the container
 docker-compose up --build
@@ -140,7 +136,7 @@ docker run -d \
   -v ./audio_storage:/app/audio_storage \
   -v ./midi_storage:/app/midi_storage \
   -v ./notation_storage:/app/notation_storage \
-  -e LLM_MODEL_PATH=/app/models/qwen2.5-7b-instruct-q4_k_m.gguf \
+  -e LLM_MODEL_PATH=/app/models/qwen3-8b-instruct-q4_k_m.gguf \
   -e LLM_N_CTX=32768 \
   -e LLM_N_GPU_LAYERS=0 \
   zikos
@@ -161,8 +157,8 @@ Environment variables can be customized in `docker-compose.yml` or passed via `-
 ## Development
 ### Dependencies
 
-- **LLM**: Qwen2.5-7B/14B (recommended), Phi-3 Mini (CPU fallback), via dual backend support
-  - **llama-cpp-python**: For GGUF models (Qwen2.5, Phi-3, Mistral, Llama)
+- **LLM**: Qwen3-8B/14B (recommended), Phi-3 Mini (CPU fallback), via dual backend support
+  - **llama-cpp-python**: For GGUF models (Qwen3, Phi-3, Mistral, Llama)
   - **HuggingFace Transformers**: For safetensors models (Qwen3)
 - **Audio Processing**: librosa, torchaudio, soundfile
 - **MIDI**: Music21 for processing, FluidSynth for synthesis
