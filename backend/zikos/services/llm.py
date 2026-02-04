@@ -29,8 +29,11 @@ from zikos.services.prompt.sections import (
     CorePromptSection,
     ToolInstructionsSection,
 )
-from zikos.utils.context_length import detect_context_length
-from zikos.utils.gpu import get_optimal_gpu_layers
+from zikos.utils.context_length import (
+    detect_context_length,
+    get_recommended_context_length,
+)
+from zikos.utils.gpu import detect_hardware, get_optimal_gpu_layers
 
 # Setup conversation logger (enabled via DEBUG_TOOL_CALLS)
 _conversation_logger = logging.getLogger("zikos.conversation")
@@ -93,7 +96,7 @@ class LLMService:
                 pass
 
     def _initialize_llm(self):
-        """Initialize LLM backend"""
+        """Initialize LLM backend with automatic context length sizing and OOM retry"""
         if not settings.llm_model_path:
             self.initialization_error = "LLM_MODEL_PATH is not set in environment variables"
             return
@@ -130,18 +133,19 @@ class LLMService:
 
             # Auto-detect context length if not provided
             n_ctx = settings.llm_n_ctx
+            native_ctx = None
             if n_ctx is None:
                 try:
-                    n_ctx = detect_context_length(model_path_str, backend_type)
-                    _logger.info(f"Auto-detected context length: {n_ctx} tokens")
+                    native_ctx = detect_context_length(model_path_str, backend_type)
+                    _logger.info(f"Auto-detected native context length: {native_ctx} tokens")
                 except Exception as e:
-                    error_msg = (
-                        f"Could not auto-detect context length for model {model_path_str}: {e}. "
-                        "Please set LLM_N_CTX environment variable manually."
-                    )
-                    _logger.error(error_msg)
-                    self.initialization_error = error_msg
-                    return
+                    _logger.warning(f"Could not detect native context length: {e}")
+                    native_ctx = 32768  # Fallback default
+
+                # Estimate max context based on available memory
+                hardware = detect_hardware()
+                n_ctx = get_recommended_context_length(model_path_str, hardware, native_ctx)
+                _logger.info(f"Recommended context length for available memory: {n_ctx} tokens")
 
             n_gpu_layers = settings.llm_n_gpu_layers
             if n_gpu_layers == -1:
@@ -149,16 +153,57 @@ class LLMService:
 
             _logger.info(f"Initializing LLM backend: {type(self.backend).__name__}")
             _logger.info(f"Model path: {model_path_str}")
-            _logger.info(f"Context window: {n_ctx} tokens")
             _logger.info(f"GPU layers: {n_gpu_layers}")
 
-            self.backend.initialize(
-                model_path=model_path_str,
-                n_ctx=n_ctx,
-                n_gpu_layers=n_gpu_layers,
-                temperature=settings.llm_temperature,
-                top_p=settings.llm_top_p,
-            )
+            # Retry loop for OOM - try progressively smaller context lengths
+            max_retries = 3
+            min_ctx = 2048
+            last_error = None
+
+            for attempt in range(max_retries + 1):
+                try:
+                    _logger.info(
+                        f"Attempting initialization with n_ctx={n_ctx} (attempt {attempt + 1})"
+                    )
+                    self.backend.initialize(
+                        model_path=model_path_str,
+                        n_ctx=n_ctx,
+                        n_gpu_layers=n_gpu_layers,
+                        temperature=settings.llm_temperature,
+                        top_p=settings.llm_top_p,
+                    )
+                    # Success!
+                    break
+                except (MemoryError, RuntimeError, OSError) as e:
+                    error_str = str(e).lower()
+                    is_oom = (
+                        isinstance(e, MemoryError)
+                        or "out of memory" in error_str
+                        or "cuda" in error_str
+                        and "memory" in error_str
+                        or "failed to allocate" in error_str
+                        or "oom" in error_str
+                    )
+
+                    if is_oom and attempt < max_retries and n_ctx > min_ctx:
+                        last_error = e
+                        new_ctx = max(n_ctx // 2, min_ctx)
+                        _logger.warning(
+                            f"OOM error with n_ctx={n_ctx}, retrying with n_ctx={new_ctx}"
+                        )
+                        n_ctx = new_ctx
+                        # Reset backend for retry
+                        try:
+                            self.backend.close()
+                        except Exception:
+                            pass
+                        self.backend = create_backend(model_path_str, backend_type)
+                        continue
+                    else:
+                        raise
+            else:
+                # All retries exhausted
+                raise last_error or RuntimeError("Failed to initialize after retries")
 
             self.strategy = get_model_strategy(model_path_str)
             self.tool_call_parser = self.strategy.tool_call_parser
@@ -329,7 +374,7 @@ class LLMService:
 
         history.append({"role": "user", "content": message})
         _conversation_logger.info(
-            f"Session: {session_id}\n" f"User Prompt:\n{original_message}\n" f"{'='*80}"
+            f"Session: {session_id}\nUser Prompt:\n{original_message}\n{'=' * 80}"
         )
 
         tool_registry = mcp_server.get_tool_registry()
@@ -453,7 +498,7 @@ class LLMService:
                                     f"Thinking budget exceeded "
                                     f"({thinking_token_count}/{max_thinking} tokens), "
                                     f"re-generating with /nothink\n"
-                                    f"{'='*80}"
+                                    f"{'=' * 80}"
                                 )
                                 thinking_budget_exceeded = True
                                 break
@@ -486,7 +531,7 @@ class LLMService:
                         f"Session: {session_id}\n"
                         f"Truncated thinking ({thinking_token_count} tokens):\n"
                         f"{accumulated_content}\n"
-                        f"{'='*80}"
+                        f"{'=' * 80}"
                     )
                     # Swap /think -> /nothink in system message for the retry
                     for msg in history:
@@ -655,7 +700,7 @@ class LLMService:
                 f"Session: {session_id}\n"
                 f"Assistant Response:\n{thinking_part}"
                 f"{response_content}\n"
-                f"{'='*80}"
+                f"{'=' * 80}"
             )
 
             if not response_content:
