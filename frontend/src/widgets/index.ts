@@ -5,3 +5,4 @@ export * from "./chordProgression";
 export * from "./tempoTrainer";
 export * from "./earTrainer";
 export * from "./practiceTimer";
+export * from "./setup";

@@ -1,8 +1,23 @@
 import { addMessage } from "./ui.js";
 import { connect, sendMessage, getIsProcessing } from "./websocket.js";
+import { checkSystemStatus, isSetupRequired, showSetupOverlay } from "./widgets/setup.js";
 
 const messageInput = document.getElementById("messageInput") as HTMLInputElement;
 const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
+const settingsBtn = document.getElementById("settingsBtn") as HTMLButtonElement;
+
+// Check system status on startup
+async function initializeApp(): Promise<void> {
+    const status = await checkSystemStatus();
+
+    if (status && isSetupRequired(status)) {
+        showSetupOverlay(status);
+    }
+
+    // Connect to WebSocket regardless of model status
+    // (allows viewing hardware info and recommendations)
+    connect();
+}
 
 if (sendButton) {
     sendButton.addEventListener("click", () => {
@@ -31,4 +46,15 @@ if (messageInput) {
     });
 }
 
-connect();
+// Settings button - show setup overlay on demand
+if (settingsBtn) {
+    settingsBtn.addEventListener("click", async () => {
+        const status = await checkSystemStatus();
+        if (status) {
+            showSetupOverlay(status);
+        }
+    });
+}
+
+// Initialize the app
+initializeApp();

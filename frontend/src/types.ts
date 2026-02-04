@@ -83,3 +83,55 @@ export interface PracticeTimerState {
     breakIntervalId: number | null;
     isRunning: boolean;
 }
+
+// System API types
+export interface GpuInfo {
+    available: boolean;
+    device: number | null;
+    name: string | null;
+    memory_total_gb: number | null;
+    memory_free_gb: number | null;
+}
+
+export interface RamInfo {
+    total_gb: number;
+    available_gb: number;
+}
+
+export interface GpuHint {
+    hint_type: string;
+    message: string;
+    docs_url: string;
+}
+
+export interface HardwareInfo {
+    gpu: GpuInfo;
+    ram: RamInfo;
+    gpu_hint: GpuHint | null;
+    tier: string;
+}
+
+export interface ModelRecommendation {
+    name: string;
+    filename: string;
+    size_gb: number;
+    vram_required_gb: number;
+    ram_required_gb: number;
+    context_window: number;
+    download_url: string;
+    description: string;
+    tier: string;
+}
+
+export interface ModelRecommendationsResponse {
+    default_model_path: string;
+    primary_recommendation: ModelRecommendation | null;
+    all_recommendations: ModelRecommendation[];
+}
+
+export interface SystemStatusResponse {
+    model_loaded: boolean;
+    model_path: string | null;
+    initialization_error: string | null;
+    hardware: HardwareInfo;
+}

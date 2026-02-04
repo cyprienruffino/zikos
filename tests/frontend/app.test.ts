@@ -5,6 +5,11 @@ import * as websocket from "../../frontend/src/websocket.js";
 // Mock dependencies before importing app
 vi.mock("../../frontend/src/ui.js");
 vi.mock("../../frontend/src/websocket.js");
+vi.mock("../../frontend/src/widgets/setup.js", () => ({
+    checkSystemStatus: vi.fn().mockResolvedValue(null),
+    isSetupRequired: vi.fn().mockReturnValue(false),
+    showSetupOverlay: vi.fn(),
+}));
 
 describe("App Module", () => {
     beforeEach(() => {
@@ -13,6 +18,7 @@ describe("App Module", () => {
             <div id="messages"></div>
             <input id="messageInput" />
             <button id="sendButton"></button>
+            <button id="settingsBtn"></button>
         `;
 
         // Reset mocks
@@ -128,7 +134,10 @@ describe("App Module", () => {
         it("should call connect on module load", async () => {
             vi.resetModules();
             await import("../../frontend/src/app.js");
-            expect(websocket.connect).toHaveBeenCalled();
+            // Wait for async initializeApp to complete
+            await vi.waitFor(() => {
+                expect(websocket.connect).toHaveBeenCalled();
+            });
         });
     });
 });
