@@ -3,12 +3,10 @@
 import json
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from zikos.config import settings
-from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
 from zikos.mcp.tool import ToolCategory
 from zikos.services.audio import AudioService
@@ -207,6 +205,8 @@ class LLMService:
 
             self.strategy = get_model_strategy(model_path_str)
             self.tool_call_parser = self.strategy.tool_call_parser
+            self.orchestrator.strategy = self.strategy
+            self.orchestrator.tool_call_parser = self.tool_call_parser
             self.context_window = self.backend.get_context_window()
             _logger.info(
                 f"LLM initialized successfully with context window: {self.context_window} tokens"
@@ -366,45 +366,16 @@ class LLMService:
             yield self._yield_error(error_msg)
             return
 
-        history = self._get_conversation_history(session_id)
-        original_message = message
-        message, _ = self.audio_context_enricher.enrich_message(message, history)
-
-        history.append({"role": "user", "content": message})
-        _conversation_logger.info(
-            f"Session: {session_id}\nUser Prompt:\n{original_message}\n{'=' * 80}"
+        history, original_message, tool_registry, tools, tool_schemas, state = (
+            self.orchestrator.prepare_conversation(message, session_id, mcp_server)
         )
-
-        tool_registry = mcp_server.get_tool_registry()
-        tools = tool_registry.get_all_tools()
-        tool_schemas = tool_registry.get_all_schemas()
-
-        if not self.strategy:
-            self.strategy = get_model_strategy()
-
-        self.tool_injector.inject_if_needed(
-            history, self.strategy.tool_provider, tools, tool_schemas, self._get_system_prompt
-        )
-
-        max_iterations = LLM.MAX_ITERATIONS
-        iteration = 0
-        consecutive_tool_calls = 0
-        max_consecutive_tool_calls = 5
-        recent_tool_calls: list[str] = []
-        accumulated_content = ""
         nothink_retry = False
 
-        while iteration < max_iterations:
-            iteration += 1
-            current_messages = self._prepare_messages(
-                history,
-                max_tokens=None,
-                for_user=False,
-                context_window=self.context_window,
-            )
+        while state.iteration < state.max_iterations:
+            state.iteration += 1
 
-            token_error = self.response_validator.validate_token_limit(
-                current_messages, context_window=self.context_window
+            current_messages, token_error = self.orchestrator.prepare_iteration_messages(
+                history, self.context_window
             )
             if token_error:
                 self._inject_error_system_message(
@@ -570,111 +541,31 @@ class LLMService:
 
             if tool_calls and isinstance(tool_calls, list):
                 cleaned_content = self.tool_call_parser.strip_tool_call_tags(cleaned_content)
-                # Yield tool call information (only for non-widget tools)
-                # Widget tools will be handled separately with their widget_response
-                for tool_call in tool_calls:
-                    if not isinstance(tool_call, dict):
-                        continue
-                    tool_name = (
-                        tool_call.get("function", {}).get("name", "")
-                        if isinstance(tool_call.get("function"), dict)
-                        else ""
+
+                should_continue, result, tool_call_infos = (
+                    await self.orchestrator.process_tool_calls(
+                        tool_calls,
+                        state,
+                        history,
+                        tool_registry,
+                        mcp_server,
+                        session_id,
+                        cleaned_content,
                     )
-                    if tool_name:
-                        tool = tool_registry.get_tool(tool_name)
-                        if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
-                            continue
-
-                    tool_args_str = (
-                        tool_call.get("function", {}).get("arguments", "{}")
-                        if isinstance(tool_call.get("function"), dict)
-                        else "{}"
-                    )
-                    try:
-                        tool_args = (
-                            json.loads(tool_args_str)
-                            if isinstance(tool_args_str, str)
-                            else tool_args_str
-                        )
-                    except json.JSONDecodeError:
-                        tool_args = {}
-
-                    yield {
-                        "type": "tool_call",
-                        "tool_name": tool_name,
-                        "arguments": tool_args,
-                        "tool_id": tool_call.get("id") if isinstance(tool_call, dict) else None,
-                    }
-
-                consecutive_tool_calls += 1
-                tool_call_names = [
-                    (
-                        tc.get("function", {}).get("name", "")
-                        if isinstance(tc.get("function"), dict)
-                        else ""
-                    )
-                    for tc in tool_calls
-                    if isinstance(tc, dict)
-                ]
-
-                loop_error = self.response_validator.validate_tool_call_loops(
-                    consecutive_tool_calls, recent_tool_calls, max_consecutive_tool_calls
                 )
-                if loop_error:
-                    self._inject_error_system_message(
-                        history, loop_error["error_type"], loop_error["error_details"]
-                    )
-                    max_iterations += 1
-                    continue
 
-                if len(set(tool_call_names)) == 1 and len(recent_tool_calls) >= 3:
-                    if all(name == tool_call_names[0] for name in recent_tool_calls[-3:]):
+                for info in tool_call_infos:
+                    yield info
+
+                if not should_continue:
+                    if result and "error_type" in result:
                         self._inject_error_system_message(
-                            history,
-                            "repetitive_tool_calls",
-                            f"Detected repetitive pattern calling tool '{tool_call_names[0]}' multiple times",
+                            history, result["error_type"], result["error_details"]
                         )
-                        max_iterations += 1
-                        continue
-
-                recent_tool_calls.extend(tool_call_names)
-                if len(recent_tool_calls) > 10:
-                    recent_tool_calls = recent_tool_calls[-10:]
-
-                tool_results = []
-                widget_response = None
-                for tool_call in tool_calls:
-                    if not isinstance(tool_call, dict):
-                        continue
-
-                    # Check if this is a widget/recording tool (should not be executed)
-                    tool_name = (
-                        tool_call.get("function", {}).get("name", "")
-                        if isinstance(tool_call.get("function"), dict)
-                        else ""
-                    )
-                    if tool_name:
-                        tool = tool_registry.get_tool(tool_name)
-                        if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
-                            widget_response = await self.tool_executor.execute_tool_call(
-                                tool_call,
-                                tool_registry,
-                                mcp_server,
-                                session_id,
-                                cleaned_content,
-                                self.tool_call_parser,
-                            )
-                            if widget_response:
-                                yield widget_response
-                                return
-                            continue
-
-                    tool_result = await self.tool_executor.execute_tool_and_get_result(
-                        tool_call, tool_registry, mcp_server, session_id
-                    )
-                    tool_results.append(tool_result)
-
-                history.extend(tool_results)
+                        state.max_iterations += 1
+                    elif result:
+                        yield result
+                        return
                 continue
 
             # No tool calls parsed - check for malformed attempts
@@ -684,8 +575,8 @@ class LLMService:
                 self._inject_error_system_message(history, "malformed_tool_call", parse_error)
                 continue
 
-            consecutive_tool_calls = 0
-            recent_tool_calls.clear()
+            state.consecutive_tool_calls = 0
+            state.recent_tool_calls.clear()
             response_content = cleaned_content
 
             thinking_part = f"Thinking:\n{thinking_content}\n" if thinking_content else ""
@@ -723,11 +614,11 @@ class LLMService:
         self._inject_error_system_message(
             history,
             "max_iterations",
-            f"Reached maximum iterations ({max_iterations}). The model may be having trouble processing the request.",
+            f"Reached maximum iterations ({state.max_iterations}). The model may be having trouble processing the request.",
         )
 
-        current_messages = self._prepare_messages(
-            history, max_tokens=None, for_user=False, context_window=self.context_window
+        current_messages, _ = self.orchestrator.prepare_iteration_messages(
+            history, self.context_window
         )
 
         tools_param = None

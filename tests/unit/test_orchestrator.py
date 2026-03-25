@@ -17,6 +17,7 @@ class TestIterationState:
         state = IterationState()
 
         assert state.iteration == 0
+        assert state.max_iterations == LLM.MAX_ITERATIONS
         assert state.consecutive_tool_calls == 0
         assert state.max_consecutive_tool_calls == LLM.MAX_CONSECUTIVE_TOOL_CALLS
         assert state.recent_tool_calls == []
@@ -173,14 +174,15 @@ class TestLLMOrchestrator:
             return_value={"role": "tool", "name": "analyze_tempo", "content": "120 BPM"}
         )
 
-        should_continue, widget_response = await orchestrator.process_tool_calls(
+        should_continue, result, tool_call_infos = await orchestrator.process_tool_calls(
             tool_calls, iteration_state, history, tool_registry, mock_mcp_server, "session_123", ""
         )
 
         assert should_continue is True
-        assert widget_response is None
+        assert result is None
         assert len(history) == 1
         assert iteration_state.consecutive_tool_calls == 1
+        assert isinstance(tool_call_infos, list)
 
     @pytest.mark.asyncio
     async def test_process_tool_calls_widget_tool(
@@ -201,12 +203,13 @@ class TestLLMOrchestrator:
         mock_components["response_validator"].validate_tool_call_loops.return_value = None
         mock_components["tool_executor"].execute_tool_call = AsyncMock(return_value=widget_response)
 
-        should_continue, result = await orchestrator.process_tool_calls(
+        should_continue, result, tool_call_infos = await orchestrator.process_tool_calls(
             tool_calls, iteration_state, history, tool_registry, mock_mcp_server, "session_123", ""
         )
 
         assert should_continue is False
         assert result == widget_response
+        assert isinstance(tool_call_infos, list)
 
     @pytest.mark.asyncio
     async def test_process_tool_calls_loop_detection(
@@ -224,15 +227,16 @@ class TestLLMOrchestrator:
         history: list[dict[str, Any]] = []
         tool_registry = mock_mcp_server.get_tool_registry()
 
-        loop_error = {"type": "error", "message": "Tool call loop detected"}
+        loop_error = {"error_type": "too_many_tool_calls", "error_details": "Tool call loop"}
         mock_components["response_validator"].validate_tool_call_loops.return_value = loop_error
 
-        should_continue, result = await orchestrator.process_tool_calls(
+        should_continue, result, tool_call_infos = await orchestrator.process_tool_calls(
             tool_calls, iteration_state, history, tool_registry, mock_mcp_server, "session_123", ""
         )
 
         assert should_continue is False
         assert result == loop_error
+        assert isinstance(tool_call_infos, list)
 
     @pytest.mark.asyncio
     async def test_process_tool_calls_multiple_tools(
@@ -262,13 +266,14 @@ class TestLLMOrchestrator:
             ]
         )
 
-        should_continue, widget_response = await orchestrator.process_tool_calls(
+        should_continue, result, tool_call_infos = await orchestrator.process_tool_calls(
             tool_calls, iteration_state, history, tool_registry, mock_mcp_server, "session_123", ""
         )
 
         assert should_continue is True
         assert len(history) == 2
         assert len(iteration_state.recent_tool_calls) == 2
+        assert len(tool_call_infos) == 2
 
     def test_finalize_response_with_content(self, orchestrator):
         """Test finalizing response with content"""
