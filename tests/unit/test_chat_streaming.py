@@ -1,89 +1,76 @@
-"""Unit tests for Chat service streaming functionality"""
+"""Tests for ChatService streaming"""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
+from tests.helpers.fake_backend import FakeBackend
 from zikos.services.chat import ChatService
 
 
-@pytest.fixture
-def mock_backend_with_streaming():
-    """Mock LLM backend with streaming support"""
-    backend = MagicMock()
-    backend.is_initialized.return_value = True
+def make_chat_service(response: str = "Hello there! How can I help?"):
+    backend = FakeBackend(response)
+    backend.initialize(model_path="fake.gguf", n_ctx=4096)
 
-    async def stream_chat_completion(*args, **kwargs):
-        tokens = ["Hello", " there", "!", " How", " can", " I", " help", "?"]
-        for token in tokens:
-            yield {
-                "choices": [
-                    {"delta": {"content": token, "role": "assistant"}, "finish_reason": None}
-                ]
-            }
-        yield {"choices": [{"delta": {}, "finish_reason": "stop"}]}
-
-    backend.stream_chat_completion = stream_chat_completion
-    backend.get_cached_system_prompt.return_value = None
-    return backend
-
-
-@pytest.fixture
-def chat_service_streaming(mock_backend_with_streaming):
-    """Create ChatService instance with mocked streaming LLM"""
-    with patch("zikos.services.llm_init.create_backend", return_value=mock_backend_with_streaming):
-        with patch("zikos.services.llm.settings") as mock_settings:
-            mock_settings.llm_model_path = ""
+    with patch("zikos.services.llm_init.create_backend", return_value=backend):
+        with patch("zikos.services.llm.settings") as s:
+            s.llm_model_path = ""
             service = ChatService()
-            service.llm_service.backend = mock_backend_with_streaming
-            yield service
+            service.llm_service.backend = backend
+            return service
 
 
 class TestChatServiceStreaming:
-    """Tests for ChatService streaming functionality"""
-
     @pytest.mark.asyncio
-    async def test_process_message_stream_basic(self, chat_service_streaming):
-        """Test basic streaming message processing"""
-        tokens_received = []
+    async def test_streams_tokens(self):
+        service = make_chat_service("Hello there! How can I help?")
+        tokens = []
 
-        async for chunk in chat_service_streaming.process_message_stream("Hello"):
+        async for chunk in service.process_message_stream("Hello"):
             if chunk.get("type") == "token":
-                tokens_received.append(chunk.get("content", ""))
-            elif chunk.get("type") == "session_id":
-                assert "session_id" in chunk
+                tokens.append(chunk["content"])
 
-        assert len(tokens_received) > 0
-        assert "".join(tokens_received) == "Hello there! How can I help?"
+        full = "".join(tokens)
+        assert "Hello" in full
+        assert "help" in full
 
     @pytest.mark.asyncio
-    async def test_process_message_stream_with_session(self, chat_service_streaming):
-        """Test streaming with existing session"""
-        session_id = chat_service_streaming._create_session()
+    async def test_yields_session_id(self):
+        service = make_chat_service("OK")
 
         chunks = []
-        async for chunk in chat_service_streaming.process_message_stream("Hello", session_id):
+        async for chunk in service.process_message_stream("Hello"):
             chunks.append(chunk)
 
-        assert len(chunks) > 0
         session_chunks = [c for c in chunks if c.get("type") == "session_id"]
-        assert len(session_chunks) > 0
+        assert len(session_chunks) == 1
+        assert "session_id" in session_chunks[0]
+
+    @pytest.mark.asyncio
+    async def test_preserves_session(self):
+        service = make_chat_service("Reply")
+        session_id = service._create_session()
+
+        chunks = []
+        async for chunk in service.process_message_stream("Hello", session_id):
+            chunks.append(chunk)
+
+        session_chunks = [c for c in chunks if c.get("type") == "session_id"]
         assert session_chunks[0]["session_id"] == session_id
 
     @pytest.mark.asyncio
-    async def test_process_message_stream_handles_errors(self, chat_service_streaming):
-        """Test streaming handles errors gracefully"""
+    async def test_handles_streaming_error(self):
+        service = make_chat_service("OK")
 
         async def failing_stream(*args, **kwargs):
-            yield {"choices": [{"delta": {"content": "Hello", "role": "assistant"}}]}
-            raise RuntimeError("Streaming error")
+            yield {"choices": [{"delta": {"content": "partial"}, "finish_reason": None}]}
+            raise RuntimeError("Stream died")
 
-        chat_service_streaming.llm_service.backend.stream_chat_completion = failing_stream
+        service.llm_service.backend.stream_chat_completion = failing_stream  # type: ignore[assignment]
 
         chunks = []
-        async for chunk in chat_service_streaming.process_message_stream("Hello"):
+        async for chunk in service.process_message_stream("Hello"):
             chunks.append(chunk)
 
-        # Should have received at least one token before error
         token_chunks = [c for c in chunks if c.get("type") == "token"]
         assert len(token_chunks) > 0

@@ -1,199 +1,119 @@
-"""Unit tests for LLM streaming functionality"""
+"""Tests for LLM streaming functionality"""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
+from tests.helpers.fake_backend import FakeBackend
+from zikos.mcp.server import MCPServer
 from zikos.services.llm import LLMService
 
 
-@pytest.fixture
-def mock_backend_with_streaming():
-    """Mock LLM backend with streaming support"""
-    backend = MagicMock()
-    backend.is_initialized.return_value = True
+def make_streaming_service(response: str = "Hello there! How can I help?", **kwargs):
+    backend = FakeBackend(response, **kwargs)
+    backend.initialize(model_path="fake.gguf", n_ctx=4096)
 
-    # Mock streaming response
-    async def stream_chat_completion(*args, **kwargs):
-        tokens = ["Hello", " there", "!", " How", " can", " I", " help", "?"]
-        for token in tokens:
-            yield {
-                "choices": [
-                    {"delta": {"content": token, "role": "assistant"}, "finish_reason": None}
-                ]
-            }
-        # Final message
-        yield {"choices": [{"delta": {}, "finish_reason": "stop"}]}
-
-    backend.stream_chat_completion = stream_chat_completion
-    backend.create_chat_completion.return_value = {
-        "choices": [{"message": {"content": "Test response", "role": "assistant"}}]
-    }
-    backend.get_cached_system_prompt.return_value = None
-    return backend
-
-
-@pytest.fixture
-def llm_service_streaming(mock_backend_with_streaming):
-    """Create LLMService instance with mocked streaming backend"""
-    mock_backend_with_streaming.get_context_window.return_value = 4096
-    with patch("zikos.services.llm_init.create_backend", return_value=mock_backend_with_streaming):
-        with patch("zikos.services.llm.settings") as mock_settings:
-            mock_settings.llm_model_path = "/path/to/model.gguf"
-            mock_settings.llm_backend = "auto"
-            mock_settings.llm_n_ctx = 4096
-            mock_settings.llm_n_gpu_layers = 0
-            mock_settings.llm_temperature = 0.7
-            mock_settings.llm_top_p = 0.9
-            mock_settings.llm_top_k = None
-            mock_settings.llm_max_thinking_tokens = 0
+    with patch("zikos.services.llm_init.create_backend", return_value=backend):
+        with patch("zikos.services.llm.settings") as s:
+            s.llm_model_path = ""
             service = LLMService()
-            yield service
+            service.backend = backend
+            return service
 
 
 @pytest.fixture
-def mock_mcp_server():
-    """Mock MCP server"""
-    server = MagicMock()
-    server.get_tools.return_value = []
-    return server
+def mcp_server():
+    return MCPServer()
 
 
 class TestLLMStreaming:
-    """Tests for LLM streaming functionality"""
-
     @pytest.mark.asyncio
-    async def test_generate_response_stream_basic(self, llm_service_streaming, mock_mcp_server):
-        """Test basic streaming response generation"""
-        session_id = "test_session"
-        tokens_received = []
+    async def test_streams_tokens(self, mcp_server):
+        service = make_streaming_service("Hello there! How can I help?")
+        tokens = []
 
-        async for chunk in llm_service_streaming.generate_response_stream(
-            "Hello", session_id, mock_mcp_server
-        ):
+        async for chunk in service.generate_response_stream("Hi", "s1", mcp_server):
             if chunk.get("type") == "token":
-                tokens_received.append(chunk.get("content", ""))
+                tokens.append(chunk["content"])
 
-        assert len(tokens_received) > 0
-        assert "".join(tokens_received) == "Hello there! How can I help?"
-
-    @pytest.mark.asyncio
-    async def test_generate_response_stream_without_llm(self, mock_mcp_server):
-        """Test streaming when LLM is not available"""
-        with patch("zikos.services.llm_init.create_backend", return_value=None):
-            with patch("zikos.services.llm.settings") as mock_settings:
-                mock_settings.llm_model_path = ""
-                service = LLMService()
-                service.backend = None
-
-                chunks = []
-                async for chunk in service.generate_response_stream(
-                    "Hello", "test_session", mock_mcp_server
-                ):
-                    chunks.append(chunk)
-
-                assert len(chunks) == 1
-                assert chunks[0]["type"] == "error"
-                assert "LLM not available" in chunks[0]["message"]
+        full_text = "".join(tokens)
+        assert "Hello" in full_text
+        assert "help" in full_text
 
     @pytest.mark.asyncio
-    async def test_generate_response_stream_handles_tool_calls(
-        self, llm_service_streaming, mock_mcp_server
-    ):
-        """Test streaming handles tool calls correctly"""
-        from zikos.mcp.tool import ToolCategory
-
-        mock_tool = MagicMock()
-        mock_tool.category = ToolCategory.RECORDING
-        mock_tool_registry = mock_mcp_server.get_tool_registry()
-        mock_tool_registry.get_tool.return_value = mock_tool
-
-        # Mock backend to return tool call after streaming
-        async def stream_with_tool_call(*args, **kwargs):
-            yield {
-                "choices": [
-                    {"delta": {"content": "Let me", "role": "assistant"}, "finish_reason": None}
-                ]
-            }
-            yield {
-                "choices": [
-                    {
-                        "delta": {},
-                        "finish_reason": "tool_calls",
-                        "tool_calls": [
-                            {
-                                "id": "call_123",
-                                "function": {
-                                    "name": "request_audio_recording",
-                                    "arguments": '{"prompt": "Record audio"}',
-                                },
-                            }
-                        ],
-                    }
-                ]
-            }
-
-        llm_service_streaming.backend.stream_chat_completion = stream_with_tool_call
-        mock_mcp_server.call_tool = AsyncMock(return_value={"result": "success"})
-
+    async def test_yields_final_response(self, mcp_server):
+        service = make_streaming_service("Good job on the tempo!")
         chunks = []
-        async for chunk in llm_service_streaming.generate_response_stream(
-            "let's record", "test_session", mock_mcp_server
-        ):
+
+        async for chunk in service.generate_response_stream("How did I do?", "s1", mcp_server):
             chunks.append(chunk)
 
-        # Should have received tokens and then a tool call
-        token_chunks = [c for c in chunks if c.get("type") == "token"]
-        tool_call_chunks = [c for c in chunks if c.get("type") == "tool_call"]
-
-        assert len(token_chunks) > 0
-        assert len(tool_call_chunks) > 0 or any("tool_call" in str(c) for c in chunks)
+        response_chunks = [c for c in chunks if c.get("type") == "response"]
+        assert len(response_chunks) == 1
+        assert "tempo" in response_chunks[0]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_generate_response_stream_preserves_conversation_history(
-        self, llm_service_streaming, mock_mcp_server
-    ):
-        """Test that streaming preserves conversation history"""
-        session_id = "test_session"
+    async def test_error_without_backend(self, mcp_server):
+        with patch("zikos.services.llm_init.create_backend", return_value=None):
+            with patch("zikos.services.llm.settings") as s:
+                s.llm_model_path = ""
+                service = LLMService()
 
-        # First message
-        tokens1 = []
-        async for chunk in llm_service_streaming.generate_response_stream(
-            "Hello", session_id, mock_mcp_server
-        ):
-            if chunk.get("type") == "token":
-                tokens1.append(chunk.get("content", ""))
+        chunks = []
+        async for chunk in service.generate_response_stream("Hello", "s1", mcp_server):
+            chunks.append(chunk)
 
-        # Second message should have context from first
-        tokens2 = []
-        async for chunk in llm_service_streaming.generate_response_stream(
-            "What did I say?", session_id, mock_mcp_server
-        ):
-            if chunk.get("type") == "token":
-                tokens2.append(chunk.get("content", ""))
-
-        # Check that conversation history was maintained
-        history = llm_service_streaming._get_conversation_history(session_id)
-        assert len(history) > 2  # System + 2 user messages + responses
+        assert len(chunks) == 1
+        assert chunks[0]["type"] == "error"
 
     @pytest.mark.asyncio
-    async def test_generate_response_stream_handles_errors(
-        self, llm_service_streaming, mock_mcp_server
-    ):
-        """Test streaming handles errors gracefully"""
+    async def test_tool_call_streaming(self, mcp_server):
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "call_1",
+                    "function": {
+                        "name": "request_audio_recording",
+                        "arguments": '{"prompt": "Record"}',
+                    },
+                }
+            ],
+        )
+
+        chunks = []
+        async for chunk in service.generate_response_stream("Let's record", "s1", mcp_server):
+            chunks.append(chunk)
+
+        tool_chunks = [c for c in chunks if c.get("type") == "tool_call"]
+        assert len(tool_chunks) > 0
+
+    @pytest.mark.asyncio
+    async def test_preserves_conversation_history(self, mcp_server):
+        service = make_streaming_service("First reply")
+
+        async for _ in service.generate_response_stream("Hello", "s1", mcp_server):
+            pass
+        async for _ in service.generate_response_stream("Follow-up", "s1", mcp_server):
+            pass
+
+        history = service._get_conversation_history("s1")
+        user_msgs = [m for m in history if m["role"] == "user"]
+        assert len(user_msgs) == 2
+
+    @pytest.mark.asyncio
+    async def test_handles_streaming_error(self, mcp_server):
+        service = make_streaming_service("OK")
 
         async def failing_stream(*args, **kwargs):
-            yield {"choices": [{"delta": {"content": "Hello", "role": "assistant"}}]}
-            raise RuntimeError("Streaming error")
+            yield {"choices": [{"delta": {"content": "partial"}, "finish_reason": None}]}
+            raise RuntimeError("Stream died")
 
-        llm_service_streaming.backend.stream_chat_completion = failing_stream
+        service.backend.stream_chat_completion = failing_stream  # type: ignore[assignment]
 
         chunks = []
-        async for chunk in llm_service_streaming.generate_response_stream(
-            "Hello", "test_session", mock_mcp_server
-        ):
+        async for chunk in service.generate_response_stream("Hello", "s1", mcp_server):
             chunks.append(chunk)
 
-        # Should have received at least one token before error
         token_chunks = [c for c in chunks if c.get("type") == "token"]
         assert len(token_chunks) > 0

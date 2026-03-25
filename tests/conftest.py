@@ -74,15 +74,3 @@ def storage_paths(temp_dir, monkeypatch):
 def sample_audio_path(temp_dir):
     """Create sample audio file path"""
     return temp_dir / "sample.wav"
-
-
-@pytest.fixture
-def mock_llm():
-    """Mock LLM for testing"""
-    from unittest.mock import MagicMock
-
-    llm = MagicMock()
-    llm.create_chat_completion.return_value = {
-        "choices": [{"message": {"content": "Test response"}}]
-    }
-    return llm
