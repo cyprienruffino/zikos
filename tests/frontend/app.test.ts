@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import * as ui from "../../frontend/src/ui.js";
 import * as websocket from "../../frontend/src/websocket.js";
 
-// Mock dependencies before importing app
-vi.mock("../../frontend/src/ui.js");
+// Mock websocket (needs real WebSocket) and setup (makes HTTP calls).
+// Let ui.js run real — assert on DOM state instead of mock calls.
 vi.mock("../../frontend/src/websocket.js");
 vi.mock("../../frontend/src/widgets/setup.js", () => ({
     checkSystemStatus: vi.fn().mockResolvedValue(null),
@@ -21,112 +20,112 @@ describe("App Module", () => {
             <button id="settingsBtn"></button>
         `;
 
-        // Reset mocks
         vi.clearAllMocks();
         vi.mocked(websocket.sendMessage).mockReturnValue(true);
         vi.mocked(websocket.getIsProcessing).mockReturnValue(false);
         vi.mocked(websocket.connect).mockImplementation(() => {});
-
-        // Re-import app to set up event listeners
         vi.resetModules();
     });
 
     describe("Send Button Click", () => {
-        it("should send message when button is clicked with valid input", async () => {
+        it("should add user message to DOM and send via websocket", async () => {
             await import("../../frontend/src/app.js");
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+            const messages = document.getElementById("messages")!;
 
-            messageInput.value = "Hello, world!";
-            sendButton.click();
+            input.value = "Hello, world!";
+            document.getElementById("sendButton")!.click();
 
+            // Real ui.addMessage should have created a DOM element
+            const userMessages = messages.querySelectorAll(".message.user");
+            expect(userMessages.length).toBe(1);
+            expect(userMessages[0].textContent).toContain("Hello, world!");
+
+            // Websocket should have received the message
             expect(websocket.sendMessage).toHaveBeenCalledWith("Hello, world!");
-            expect(ui.addMessage).toHaveBeenCalledWith("Hello, world!", "user");
-            expect(messageInput.value).toBe("");
+
+            // Input should be cleared
+            expect(input.value).toBe("");
         });
 
         it("should not send empty messages", async () => {
             await import("../../frontend/src/app.js");
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+            const messages = document.getElementById("messages")!;
 
-            messageInput.value = "   ";
-            sendButton.click();
+            input.value = "   ";
+            document.getElementById("sendButton")!.click();
 
+            expect(messages.querySelectorAll(".message").length).toBe(0);
             expect(websocket.sendMessage).not.toHaveBeenCalled();
         });
 
         it("should trim message before sending", async () => {
             await import("../../frontend/src/app.js");
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+            const messages = document.getElementById("messages")!;
 
-            messageInput.value = "  Hello  ";
-            sendButton.click();
+            input.value = "  Hello  ";
+            document.getElementById("sendButton")!.click();
 
             expect(websocket.sendMessage).toHaveBeenCalledWith("Hello");
+            expect(messages.querySelector(".message.user")!.textContent).toContain("Hello");
         });
 
-        it("should show error when processing", async () => {
+        it("should show error in DOM when processing", async () => {
             vi.mocked(websocket.getIsProcessing).mockReturnValue(true);
             vi.mocked(websocket.sendMessage).mockReturnValue(false);
 
             await import("../../frontend/src/app.js");
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+            const messages = document.getElementById("messages")!;
 
-            messageInput.value = "Test message";
-            sendButton.click();
+            input.value = "Test message";
+            document.getElementById("sendButton")!.click();
 
-            expect(ui.addMessage).toHaveBeenCalledWith(
-                "Please wait for the current response to complete",
-                "error"
-            );
+            const errorMessages = messages.querySelectorAll(".message.error");
+            expect(errorMessages.length).toBe(1);
+            expect(errorMessages[0].textContent).toContain("Please wait");
         });
 
-        it("should show error when not connected", async () => {
+        it("should show error in DOM when not connected", async () => {
             vi.mocked(websocket.getIsProcessing).mockReturnValue(false);
             vi.mocked(websocket.sendMessage).mockReturnValue(false);
 
             await import("../../frontend/src/app.js");
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+            const messages = document.getElementById("messages")!;
 
-            messageInput.value = "Test message";
-            sendButton.click();
+            input.value = "Test message";
+            document.getElementById("sendButton")!.click();
 
-            expect(ui.addMessage).toHaveBeenCalledWith(
-                "Not connected. Please wait for connection...",
-                "error"
-            );
+            const errorMessages = messages.querySelectorAll(".message.error");
+            expect(errorMessages.length).toBe(1);
+            expect(errorMessages[0].textContent).toContain("Not connected");
         });
     });
 
     describe("Enter Key Press", () => {
         it("should send message when Enter is pressed", async () => {
             await import("../../frontend/src/app.js");
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const clickSpy = vi.spyOn(sendButton, "click");
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+            const messages = document.getElementById("messages")!;
 
-            messageInput.value = "Test message";
-            const event = new KeyboardEvent("keypress", { key: "Enter" });
-            messageInput.dispatchEvent(event);
+            input.value = "Test message";
+            input.dispatchEvent(new KeyboardEvent("keypress", { key: "Enter" }));
 
-            expect(clickSpy).toHaveBeenCalled();
+            expect(messages.querySelectorAll(".message.user").length).toBe(1);
+            expect(websocket.sendMessage).toHaveBeenCalledWith("Test message");
         });
 
         it("should not send message for other keys", async () => {
             await import("../../frontend/src/app.js");
-            const messageInput = document.getElementById("messageInput") as HTMLInputElement;
-            const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
-            const clickSpy = vi.spyOn(sendButton, "click");
+            const input = document.getElementById("messageInput") as HTMLInputElement;
 
-            messageInput.value = "Test message";
-            const event = new KeyboardEvent("keypress", { key: "a" });
-            messageInput.dispatchEvent(event);
+            input.value = "Test message";
+            input.dispatchEvent(new KeyboardEvent("keypress", { key: "a" }));
 
-            expect(clickSpy).not.toHaveBeenCalled();
+            expect(websocket.sendMessage).not.toHaveBeenCalled();
         });
     });
 
@@ -134,7 +133,6 @@ describe("App Module", () => {
         it("should call connect on module load", async () => {
             vi.resetModules();
             await import("../../frontend/src/app.js");
-            // Wait for async initializeApp to complete
             await vi.waitFor(() => {
                 expect(websocket.connect).toHaveBeenCalled();
             });
