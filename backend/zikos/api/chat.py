@@ -1,8 +1,12 @@
 """Chat API endpoints"""
 
+import logging
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from zikos.services.chat import ChatService
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter()
 _chat_service: ChatService | None = None
@@ -22,7 +26,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         await websocket.accept()
     except Exception as e:
-        print(f"Error accepting WebSocket connection: {e}")
+        _logger.error(f"Error accepting WebSocket connection: {e}")
         return
 
     try:
@@ -46,7 +50,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         )
                         await websocket.send_json(response)
                 except Exception as e:
-                    print(f"Error processing message: {e}")
+                    _logger.error(f"Error processing message: {e}")
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -64,7 +68,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     await websocket.send_json(response)
                 except Exception as e:
-                    print(f"Error handling audio ready: {e}")
+                    _logger.error(f"Error handling audio ready: {e}")
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -78,7 +82,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     response = chat_service.get_thinking(data.get("session_id"))
                     await websocket.send_json(response)
                 except Exception as e:
-                    print(f"Error getting thinking: {e}")
+                    _logger.error(f"Error getting thinking: {e}")
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -98,7 +102,7 @@ async def websocket_endpoint(websocket: WebSocket):
         chat_service = get_chat_service()
         await chat_service.disconnect(websocket)
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        _logger.error(f"WebSocket error: {e}")
         try:
             await websocket.send_json(
                 {

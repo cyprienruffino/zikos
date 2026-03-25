@@ -1,8 +1,11 @@
 """Core system prompt section"""
 
+import logging
 from pathlib import Path
 
 from zikos.services.prompt.sections.base import PromptSection
+
+_logger = logging.getLogger(__name__)
 
 
 class CorePromptSection(PromptSection):
@@ -28,7 +31,7 @@ class CorePromptSection(PromptSection):
             return self._cached_content
 
         if not self.prompt_file_path.exists():
-            print("DEBUG: Using fallback system prompt")
+            _logger.warning("SYSTEM_PROMPT.md not found, using fallback system prompt")
             self._cached_content = "You are an expert music teacher AI assistant."
             return self._cached_content
 
@@ -38,7 +41,7 @@ class CorePromptSection(PromptSection):
             end = content.find("```", start + 3)
             if start != -1 and end != -1:
                 prompt = content[start + 3 : end].strip()
-                print(f"DEBUG: System prompt extracted, length: {len(prompt)} chars")
+                _logger.debug(f"System prompt extracted, length: {len(prompt)} chars")
                 self._cached_content = prompt
                 return prompt
             else:

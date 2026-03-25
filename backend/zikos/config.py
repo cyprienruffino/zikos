@@ -1,5 +1,6 @@
 """Configuration management"""
 
+import logging
 import os
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from zikos.constants import LLMConstants
+
+_logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -42,6 +45,17 @@ class Settings(BaseModel):
     # Debug
     debug_tool_calls: bool = False
 
+    @staticmethod
+    def _parse_optional_int(env_var: str) -> int | None:
+        raw = os.getenv(env_var)
+        if raw is None:
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            _logger.warning(f"Invalid value for {env_var}: {raw!r}, ignoring")
+            return None
+
     @classmethod
     def from_env(cls) -> "Settings":
         """Load settings from environment variables
@@ -56,9 +70,7 @@ class Settings(BaseModel):
             llm_model_path=os.getenv("LLM_MODEL_PATH", defaults.llm_model_path),
             llm_backend=os.getenv("LLM_BACKEND", defaults.llm_backend),
             llm_tool_format=os.getenv("LLM_TOOL_FORMAT", defaults.llm_tool_format),
-            llm_n_ctx=(
-                int(os.getenv("LLM_N_CTX", "")) if os.getenv("LLM_N_CTX") is not None else None
-            ),
+            llm_n_ctx=cls._parse_optional_int("LLM_N_CTX"),
             llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", str(defaults.llm_n_gpu_layers))),
             llm_temperature=float(os.getenv("LLM_TEMPERATURE", str(defaults.llm_temperature))),
             llm_top_p=float(os.getenv("LLM_TOP_P", str(defaults.llm_top_p))),

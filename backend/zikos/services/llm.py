@@ -93,7 +93,7 @@ class LLMService:
             try:
                 self.backend.close()
             except Exception:
-                pass
+                _logger.debug("Error closing LLM backend during cleanup", exc_info=True)
 
     def _initialize_llm(self):
         """Initialize LLM backend with automatic context length sizing and OOM retry"""
@@ -196,7 +196,7 @@ class LLMService:
                         try:
                             self.backend.close()
                         except Exception:
-                            pass
+                            _logger.debug("Error closing backend during OOM retry", exc_info=True)
                         self.backend = create_backend(model_path_str, backend_type)
                         continue
                     else:
@@ -358,8 +358,6 @@ class LLMService:
         mcp_server: MCPServer,
     ):
         """Generate LLM response with streaming, handling tool calls"""
-        from collections.abc import AsyncGenerator
-
         if not self.backend or not self.backend.is_initialized():
             if self.initialization_error:
                 error_msg = f"LLM not available: {self.initialization_error}"
@@ -462,15 +460,10 @@ class LLMService:
                     if delta.get("content"):
                         token = delta.get("content", "")
                         if not isinstance(token, str):
-                            import logging
-
-                            logging.warning(f"Non-string token received: {type(token)} = {token}")
+                            _logger.warning(f"Non-string token received: {type(token)} = {token}")
                             continue
 
-                        import logging
-
-                        logger = logging.getLogger(__name__)
-                        logger.debug(f"Token received: {repr(token)}")
+                        _logger.debug(f"Token received: {repr(token)}")
 
                         accumulated_content += token
 
@@ -793,9 +786,6 @@ class LLMService:
             )
             return await self.generate_response("", session_id, mcp_server)
 
-        # Format analysis clearly for the LLM
-        import json
-
         analysis_str = (
             json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
         )
@@ -825,8 +815,6 @@ class LLMService:
                 return cached_prompt
 
         if prompt_file_path is None:
-            from pathlib import Path
-
             prompt_file_path = Path(__file__).parent.parent.parent.parent / "SYSTEM_PROMPT.md"
 
         builder = SystemPromptBuilder()
