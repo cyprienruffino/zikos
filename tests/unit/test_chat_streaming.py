@@ -31,7 +31,7 @@ def mock_backend_with_streaming():
 @pytest.fixture
 def chat_service_streaming(mock_backend_with_streaming):
     """Create ChatService instance with mocked streaming LLM"""
-    with patch("zikos.services.llm.create_backend", return_value=mock_backend_with_streaming):
+    with patch("zikos.services.llm_init.create_backend", return_value=mock_backend_with_streaming):
         with patch("zikos.services.llm.settings") as mock_settings:
             mock_settings.llm_model_path = ""
             service = ChatService()

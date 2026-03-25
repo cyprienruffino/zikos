@@ -22,7 +22,7 @@ def mock_backend():
 @pytest.fixture
 def llm_service(mock_backend):
     """Create LLMService instance with mocked backend"""
-    with patch("zikos.services.llm.create_backend", return_value=mock_backend):
+    with patch("zikos.services.llm_init.create_backend", return_value=mock_backend):
         with patch("zikos.services.llm.settings") as mock_settings:
             mock_settings.llm_model_path = "/path/to/model.gguf"
             service = LLMService()

@@ -38,7 +38,7 @@ def mock_backend():
 @pytest.fixture
 def llm_service(mock_backend):
     """Create LLMService instance with mocked backend"""
-    with patch("zikos.services.llm.create_backend", return_value=mock_backend):
+    with patch("zikos.services.llm_init.create_backend", return_value=mock_backend):
         with patch("zikos.services.llm.settings") as mock_settings:
             mock_settings.llm_model_path = "/path/to/model.gguf"
             service = LLMService()
@@ -49,7 +49,7 @@ def llm_service(mock_backend):
 @pytest.fixture
 def llm_service_no_model():
     """Create LLMService instance without backend (no model configured)"""
-    with patch("zikos.services.llm.create_backend", return_value=None):
+    with patch("zikos.services.llm_init.create_backend", return_value=None):
         with patch("zikos.services.llm.settings") as mock_settings:
             mock_settings.llm_model_path = ""
             service = LLMService()
@@ -79,7 +79,7 @@ class TestLLMServiceInitialization:
 
     def test_initialization_with_model(self, mock_backend):
         """Test LLM service initialization with model"""
-        with patch("zikos.services.llm.create_backend", return_value=mock_backend):
+        with patch("zikos.services.llm_init.create_backend", return_value=mock_backend):
             with patch("zikos.services.llm.settings") as mock_settings:
                 with patch("pathlib.Path.exists", return_value=True):
                     mock_settings.llm_model_path = "/path/to/model.gguf"
@@ -97,7 +97,7 @@ class TestLLMServiceInitialization:
 
     def test_initialization_without_model(self):
         """Test LLM service initialization without model"""
-        with patch("zikos.services.llm.create_backend", return_value=None):
+        with patch("zikos.services.llm_init.create_backend", return_value=None):
             with patch("zikos.services.llm.settings") as mock_settings:
                 mock_settings.llm_model_path = ""
 

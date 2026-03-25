@@ -37,7 +37,7 @@ def mock_backend_with_streaming():
 def llm_service_streaming(mock_backend_with_streaming):
     """Create LLMService instance with mocked streaming backend"""
     mock_backend_with_streaming.get_context_window.return_value = 4096
-    with patch("zikos.services.llm.create_backend", return_value=mock_backend_with_streaming):
+    with patch("zikos.services.llm_init.create_backend", return_value=mock_backend_with_streaming):
         with patch("zikos.services.llm.settings") as mock_settings:
             mock_settings.llm_model_path = "/path/to/model.gguf"
             mock_settings.llm_backend = "auto"
@@ -80,7 +80,7 @@ class TestLLMStreaming:
     @pytest.mark.asyncio
     async def test_generate_response_stream_without_llm(self, mock_mcp_server):
         """Test streaming when LLM is not available"""
-        with patch("zikos.services.llm.create_backend", return_value=None):
+        with patch("zikos.services.llm_init.create_backend", return_value=None):
             with patch("zikos.services.llm.settings") as mock_settings:
                 mock_settings.llm_model_path = ""
                 service = LLMService()
