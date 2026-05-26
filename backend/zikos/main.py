@@ -13,6 +13,10 @@ from zikos.api import router
 
 logger = logging.getLogger(__name__)
 
+# Suppress litellm's verbose "Give Feedback / Get Help" console output
+for _name in ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

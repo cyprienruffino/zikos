@@ -243,7 +243,10 @@ Error Handling:
         soundfont_path = self._find_soundfont()
         if not soundfont_path:
             raise RuntimeError(
-                "No SoundFont found. Please install a SoundFont (e.g., FluidR3_GM.sf2)"
+                "No SoundFont (.sf2) file found. "
+                "Install one (e.g. 'soundfont-fluid' on Arch, 'fluid-soundfont-gm' on Debian/Ubuntu) "
+                "then either set SOUNDFONT_PATH=/path/to/file.sf2 in your .env, "
+                "or symlink it to ~/.fluidsynth/default_sound_font.sf2"
             )
 
         try:
@@ -442,25 +445,59 @@ Error Handling:
             raise RuntimeError(f"Failed to render notation: {str(e)}") from e
 
     def _find_soundfont(self) -> Path | None:
-        """Find system SoundFont"""
-        common_paths = [
-            Path("/usr/share/sounds/sf2/FluidR3_GM.sf2"),
-            Path("/usr/share/sounds/sf2/default.sf2"),
-            Path("/usr/local/share/sounds/sf2/FluidR3_GM.sf2"),
-            Path.home() / ".local/share/sounds/sf2/FluidR3_GM.sf2",
-        ]
+        """Find a SoundFont file for synthesis.
 
-        for path in common_paths:
-            if path.exists():
-                return path
-
+        Resolution order:
+        1. SOUNDFONT_PATH config/env var — explicit user override, always works
+        2. SOUNDFONT / SDL_SOUNDFONTS env vars — common conventions
+        3. ~/.fluidsynth/default_sound_font.sf2 — midi2audio convention, cross-platform
+        4. Ask FluidSynth itself for its compile-time synth.default-soundfont setting
+        """
+        import os
         import shutil
+        import subprocess
 
-        fluidsynth_path = shutil.which("fluidsynth")
-        if fluidsynth_path:
-            default_sf2 = Path("/usr/share/sounds/sf2/default.sf2")
-            if default_sf2.exists():
-                return default_sf2
+        from zikos.config import settings
+
+        # 1. Explicit config
+        if settings.soundfont_path:
+            p = Path(settings.soundfont_path)
+            if p.exists():
+                return p
+
+        # 2. Common env vars
+        for var in ("SOUNDFONT", "SDL_SOUNDFONTS"):
+            val = os.environ.get(var, "")
+            if val:
+                p = Path(val)
+                if p.exists():
+                    return p
+
+        # 3. Cross-platform user convention (midi2audio, macOS install scripts)
+        user_default = Path.home() / ".fluidsynth" / "default_sound_font.sf2"
+        if user_default.exists():
+            return user_default
+
+        # 4. Ask FluidSynth for its compile-time default (works on any OS where
+        #    fluidsynth is installed; subprocess stdin works on Windows too)
+        fluidsynth_cmd = shutil.which("fluidsynth")
+        if fluidsynth_cmd:
+            try:
+                proc = subprocess.run(
+                    [fluidsynth_cmd, "-q"],
+                    input="get synth.default-soundfont\nquit\n",
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                for line in proc.stdout.splitlines():
+                    line = line.strip()
+                    if line.lower().endswith(".sf2"):
+                        p = Path(line)
+                        if p.exists():
+                            return p
+            except Exception:
+                pass
 
         return None
 

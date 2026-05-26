@@ -59,40 +59,46 @@ Interpretation Guidelines:
     async def call_tool(self, name: str, **kwargs) -> dict[str, Any]:
         """Call a tool by name"""
         if name == "get_tool_definition":
-            tool_name_param = kwargs.get("tool_name")
-            if not tool_name_param:
+            try:
+                tool_name_param = kwargs.get("tool_name")
+                if not tool_name_param:
+                    return {
+                        "error": True,
+                        "error_type": "MISSING_PARAMETER",
+                        "message": "tool_name is required",
+                    }
+
+                if not self._tool_registry:
+                    return {
+                        "error": True,
+                        "error_type": "REGISTRY_NOT_AVAILABLE",
+                        "message": "Tool registry is not available",
+                    }
+
+                tool = self._tool_registry.get_tool(tool_name_param)
+                if not tool:
+                    return {
+                        "error": True,
+                        "error_type": "TOOL_NOT_FOUND",
+                        "message": f"Tool '{tool_name_param}' not found",
+                    }
+
+                result: dict[str, Any] = {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "category": str(tool.category.value),
+                    "schema": tool.schema,
+                }
+                if tool.detailed_description:
+                    result["detailed_description"] = tool.detailed_description
+
+                return result
+            except Exception as e:
                 return {
                     "error": True,
-                    "error_type": "MISSING_PARAMETER",
-                    "message": "tool_name is required",
+                    "error_type": "INTERNAL_ERROR",
+                    "message": str(e),
                 }
-
-            if not self._tool_registry:
-                return {
-                    "error": True,
-                    "error_type": "REGISTRY_NOT_AVAILABLE",
-                    "message": "Tool registry is not available",
-                }
-
-            tool = self._tool_registry.get_tool(tool_name_param)
-            if not tool:
-                return {
-                    "error": True,
-                    "error_type": "TOOL_NOT_FOUND",
-                    "message": f"Tool '{tool_name_param}' not found",
-                }
-
-            result = {
-                "name": tool.name,
-                "description": tool.description,
-                "category": tool.category.value,
-                "schema": tool.schema,
-            }
-
-            if tool.detailed_description:
-                result["detailed_description"] = tool.detailed_description
-
-            return result
 
         return {
             "error": True,

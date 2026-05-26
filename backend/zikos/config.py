@@ -42,6 +42,7 @@ class Settings(BaseModel):
     audio_storage_path: Path = Path("audio_storage")
     midi_storage_path: Path = Path("midi_storage")
     notation_storage_path: Path = Path("notation_storage")
+    soundfont_path: str = ""  # Path to .sf2 file for FluidSynth synthesis
 
     # MCP
     mcp_server_host: str = "localhost"
@@ -96,6 +97,7 @@ class Settings(BaseModel):
                 "DEBUG_TOOL_CALLS", str(defaults.debug_tool_calls).lower()
             ).lower()
             == "true",
+            soundfont_path=os.getenv("SOUNDFONT_PATH", defaults.soundfont_path),
             llm_provider=os.getenv("LLM_PROVIDER", defaults.llm_provider),
             llm_api_key=os.getenv("LLM_API_KEY", defaults.llm_api_key),
             llm_model_name=os.getenv("LLM_MODEL_NAME", defaults.llm_model_name),
