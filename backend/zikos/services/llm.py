@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -349,6 +350,12 @@ class LLMService:
             # Handle tool calls
             if tool_calls and isinstance(tool_calls, list):
                 cleaned_content = self.tool_call_parser.strip_tool_call_tags(cleaned_content)
+
+                # Reassign fresh UUIDs so tool_call_ids are always unique. Models sometimes
+                # reuse ids across calls or generate duplicate ids within a single response,
+                # which causes Anthropic to reject "multiple tool_result blocks with same id".
+                for tc in tool_calls:
+                    tc["id"] = str(uuid.uuid4())
 
                 # Native tool calling backends (Anthropic, OpenAI) require the assistant message
                 # with tool_calls to appear in history before the tool results, so the
