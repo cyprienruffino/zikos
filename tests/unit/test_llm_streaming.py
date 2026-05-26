@@ -56,8 +56,11 @@ class TestLLMStreaming:
     async def test_error_without_backend(self, mcp_server):
         with patch("zikos.services.llm_init.create_backend", return_value=None):
             with patch("zikos.services.llm.settings") as s:
-                s.llm_model_path = ""
-                service = LLMService()
+                with patch("zikos.services.llm_init.settings") as init_s:
+                    s.llm_model_path = ""
+                    init_s.llm_provider = ""
+                    init_s.llm_model_path = ""
+                    service = LLMService()
 
         chunks = []
         async for chunk in service.generate_response_stream("Hello", "s1", mcp_server):

@@ -154,6 +154,7 @@ Track 1:
 
             imported = midi.translate.midiFilePathToStream(str(midi_path))
             assert imported is not None
-            assert len(imported.flat.notes) > 0
+            flat = imported.flatten() if hasattr(imported, "flatten") else imported.flat
+            assert len(flat.notes) > 0
         except ImportError:
             pytest.skip("music21 not available")

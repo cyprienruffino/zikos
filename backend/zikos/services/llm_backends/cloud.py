@@ -67,7 +67,15 @@ class CloudBackend(LLMBackend):
         if self._api_key:
             completion_kwargs["api_key"] = self._api_key
 
-        response = litellm.completion(**completion_kwargs)
+        try:
+            response = litellm.completion(**completion_kwargs)
+        except litellm.BadRequestError as e:
+            if "temperature" in str(e).lower():
+                completion_kwargs.pop("temperature", None)
+                completion_kwargs.pop("top_p", None)
+                response = litellm.completion(**completion_kwargs)
+            else:
+                raise
         return response.model_dump()  # type: ignore[no-any-return]
 
     async def stream_chat_completion(
@@ -93,7 +101,15 @@ class CloudBackend(LLMBackend):
         if self._api_key:
             completion_kwargs["api_key"] = self._api_key
 
-        response = await litellm.acompletion(**completion_kwargs)
+        try:
+            response = await litellm.acompletion(**completion_kwargs)
+        except litellm.BadRequestError as e:
+            if "temperature" in str(e).lower():
+                completion_kwargs.pop("temperature", None)
+                completion_kwargs.pop("top_p", None)
+                response = await litellm.acompletion(**completion_kwargs)
+            else:
+                raise
 
         # Accumulate tool_call deltas so the final chunk carries complete tool calls,
         # matching what stream_processor and NativeToolCallParser expect.

@@ -44,8 +44,11 @@ class TestInitialization:
     def test_without_model(self):
         with patch("zikos.services.llm_init.create_backend", return_value=None):
             with patch("zikos.services.llm.settings") as s:
-                s.llm_model_path = ""
-                service = LLMService()
+                with patch("zikos.services.llm_init.settings") as init_s:
+                    s.llm_model_path = ""
+                    init_s.llm_provider = ""
+                    init_s.llm_model_path = ""
+                    service = LLMService()
 
         assert service.backend is None
         assert service.initialization_error is not None
@@ -161,8 +164,11 @@ class TestGenerateResponse:
     async def test_returns_error_without_backend(self, mcp_server):
         with patch("zikos.services.llm_init.create_backend", return_value=None):
             with patch("zikos.services.llm.settings") as s:
-                s.llm_model_path = ""
-                service = LLMService()
+                with patch("zikos.services.llm_init.settings") as init_s:
+                    s.llm_model_path = ""
+                    init_s.llm_provider = ""
+                    init_s.llm_model_path = ""
+                    service = LLMService()
 
         result = await service.generate_response("Hello", "s1", mcp_server)
         assert result["type"] == "error"

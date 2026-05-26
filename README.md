@@ -10,13 +10,15 @@ Early development - POC implementation - Vibe-coding involved - Not to be used a
 ## Quick Overview
 
 - **Audio Input**: User recordings analyzed via signal processing tools
-- **LLM**: Qwen3-8B/14B (recommended), with Phi-3 Mini as CPU fallback, via llama-cpp-python or HuggingFace Transformers
+- **LLM**: Cloud APIs (Gemini, Claude, ChatGPT, Mistral) via litellm — or local models (Qwen3, Phi-3 Mini) via llama-cpp-python / HuggingFace Transformers
 - **Output**: Text feedback + MIDI-generated musical examples with notation + interactive widgets (metronome, tuner, ear trainer, etc.)
 - **Architecture**: FastAPI backend + TypeScript frontend + WebSocket
 
 ## Hardware Support
 
-Zikos tries to support a wide range of hardware configurations:
+**Cloud backends (recommended):** No GPU required. Set `LLM_PROVIDER` + `LLM_API_KEY` + `LLM_MODEL_NAME` and the app uses the provider's API. See [Cloud LLM Setup](#cloud-llm-setup).
+
+**Local backends:** Zikos tries to support a wide range of hardware configurations:
 
 - **CPU-only**: Works without GPU (slow, but functional) - Phi-3 Mini recommended
 - **Small GPU (8GB VRAM)**: RTX 3060Ti, RTX 3070, etc. - Qwen3-8B Q4_K_M recommended
@@ -51,6 +53,34 @@ cp .env.example .env  # On Windows: copy .env.example .env
 ## Environment Variables
 
 Zikos can be configured via environment variables. Copy `.env.example` to `.env` and adjust values for your setup.
+
+## Cloud LLM Setup
+
+The easiest way to get a good experience without a beefy GPU. Set three env vars, no model download needed:
+
+```bash
+# OpenAI (ChatGPT)
+LLM_PROVIDER=openai
+LLM_MODEL_NAME=gpt-4o
+LLM_API_KEY=sk-...
+
+# Anthropic (Claude)
+LLM_PROVIDER=anthropic
+LLM_MODEL_NAME=claude-opus-4-7
+LLM_API_KEY=sk-ant-...
+
+# Google (Gemini)
+LLM_PROVIDER=gemini
+LLM_MODEL_NAME=gemini/gemini-2.0-flash
+LLM_API_KEY=...
+
+# Mistral (Le Chat API)
+LLM_PROVIDER=mistral
+LLM_MODEL_NAME=mistral/mistral-large-latest
+LLM_API_KEY=...
+```
+
+Alternatively, you can set the provider-specific env var directly (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) and omit `LLM_API_KEY`. Model names follow [litellm](https://docs.litellm.ai/docs/providers) conventions.
 
 ### Downloading Models
 
@@ -157,9 +187,10 @@ Environment variables can be customized in `docker-compose.yml` or passed via `-
 ## Development
 ### Dependencies
 
-- **LLM**: Qwen3-8B/14B (recommended), Phi-3 Mini (CPU fallback), via dual backend support
-  - **llama-cpp-python**: For GGUF models (Qwen3, Phi-3, Mistral, Llama)
-  - **HuggingFace Transformers**: For safetensors models (Qwen3)
+- **LLM**: Cloud APIs (OpenAI, Anthropic, Gemini, Mistral) via **litellm**, or local models via dual backend support
+  - **litellm**: Unified cloud LLM backend (OpenAI, Anthropic, Gemini, Mistral, and more)
+  - **llama-cpp-python**: For local GGUF models (Qwen3, Phi-3, Mistral, Llama)
+  - **HuggingFace Transformers**: For local safetensors models (Qwen3)
 - **Audio Processing**: librosa, torchaudio, soundfile
 - **MIDI**: Music21 for processing, FluidSynth for synthesis
 - **Backend**: FastAPI with WebSocket support
