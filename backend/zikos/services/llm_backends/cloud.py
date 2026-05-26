@@ -7,6 +7,7 @@ try:
     import litellm
 
     litellm.drop_params = True  # ignore unsupported params per-provider silently
+    litellm.suppress_debug_info = True  # suppress "Give Feedback / Get Help" console output
 except ImportError:
     litellm = None  # type: ignore[assignment]
 

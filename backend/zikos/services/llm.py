@@ -193,7 +193,13 @@ class LLMService:
     def _create_stream(self, messages, tools, tool_schemas):
         tools_param = None
         if tools and self.strategy and self.strategy.tool_provider.should_pass_tools_as_parameter():
-            tools_param = tool_schemas
+            # get_tool_definition is only useful for local models with limited context windows;
+            # cloud models already receive all schemas natively via the tools parameter
+            tools_param = [
+                s
+                for s in tool_schemas
+                if s.get("function", {}).get("name") != "get_tool_definition"
+            ]
 
         sampling = self.strategy.sampling if self.strategy else None
         return self.backend.stream_chat_completion(
