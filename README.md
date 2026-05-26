@@ -29,6 +29,7 @@ Early development - POC implementation - Vibe-coding involved - Not to be used a
 
 - Python 3.11+
 - FFmpeg (for audio preprocessing)
+- FluidSynth + a SoundFont (for MIDI-to-audio synthesis) — see [SoundFont Setup](#soundfont-setup)
 - LLM model file (GGUF or HuggingFace Transformers format) - see [Downloading Models](#downloading-models) below
 - GPU recommended (8GB+ VRAM) but CPU-only is supported
 
@@ -113,6 +114,31 @@ export SYSTEM_PROMPT_CACHE_PATH=./models/your-model_system_cache.bin
 ```
 
 The cache file can be generated in CI and included in deployments. If `SYSTEM_PROMPT_CACHE_PATH` is set but the file doesn't exist, it will be automatically generated on startup.
+
+## SoundFont Setup
+
+FluidSynth requires a SoundFont (.sf2) file to synthesize MIDI to audio. Install one using your package manager:
+
+```bash
+# Arch Linux
+sudo pacman -S soundfont-fluid
+
+# Debian / Ubuntu
+sudo apt-get install fluid-soundfont-gm
+
+# macOS (Homebrew) — Homebrew doesn't bundle a soundfont, use the midi2audio convention:
+brew install fluid-synth
+# Then download FluidR3_GM.sf2 and symlink it:
+mkdir -p ~/.fluidsynth
+ln -s /path/to/FluidR3_GM.sf2 ~/.fluidsynth/default_sound_font.sf2
+```
+
+After installing, Zikos auto-detects the SoundFont via FluidSynth's built-in default path. If auto-detection fails, set `SOUNDFONT_PATH` in your `.env`:
+
+```bash
+SOUNDFONT_PATH=/usr/share/soundfonts/FluidR3_GM.sf2   # Arch
+SOUNDFONT_PATH=/usr/share/sounds/sf2/FluidR3_GM.sf2   # Debian/Ubuntu
+```
 
 ## Run
 
