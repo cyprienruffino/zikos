@@ -189,3 +189,25 @@ class TestStreamProcessor:
 
         assert len(tokens) == 1
         assert result.thinking_budget_exceeded is False
+
+    @pytest.mark.asyncio
+    async def test_no_duplicate_tool_calls_when_delta_and_choice_both_set(self, processor):
+        """When the final chunk sets tool_calls in both delta and choice (CloudBackend pattern),
+        tool_calls must not be counted twice."""
+        tool_call = {"id": "call_1", "function": {"name": "validate_midi", "arguments": "{}"}}
+        final_chunk = {
+            "choices": [
+                {
+                    "delta": {"tool_calls": [tool_call]},
+                    "tool_calls": [tool_call],
+                    "finish_reason": "tool_calls",
+                }
+            ]
+        }
+        stream = make_stream([final_chunk])
+        result = StreamResult()
+        async for _ in processor.process(stream, result):
+            pass
+
+        assert result.tool_calls == [tool_call]
+        assert len(result.tool_calls) == 1

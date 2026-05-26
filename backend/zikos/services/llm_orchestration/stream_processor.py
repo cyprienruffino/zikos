@@ -114,7 +114,10 @@ class StreamProcessor:
             if finish_reason:
                 final_delta = delta
                 final_finish_reason = finish_reason
-                if choice.get("tool_calls"):
+                # Only add from choice.tool_calls when delta.tool_calls was not already present
+                # in this same chunk — some backends (e.g. CloudBackend) set both, which
+                # would double-count the same tool_calls.
+                if choice.get("tool_calls") and not delta.get("tool_calls"):
                     accumulated_tool_calls.extend(choice.get("tool_calls", []))
                 break
 
