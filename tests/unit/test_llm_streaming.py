@@ -105,6 +105,34 @@ class TestLLMStreaming:
         assert len(user_msgs) == 2
 
     @pytest.mark.asyncio
+    async def test_tool_call_assistant_message_precedes_tool_results(self, mcp_server):
+        """Anthropic requires tool_use assistant message before tool_result in history."""
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "call_abc",
+                    "function": {
+                        "name": "request_audio_recording",
+                        "arguments": '{"prompt": "Record"}',
+                    },
+                }
+            ],
+        )
+
+        async for _ in service.generate_response_stream("Let's record", "s1", mcp_server):
+            pass
+
+        history = service._get_conversation_history("s1")
+        assistant_indices = [i for i, m in enumerate(history) if m["role"] == "assistant"]
+        tool_indices = [i for i, m in enumerate(history) if m["role"] == "tool"]
+
+        if assistant_indices and tool_indices:
+            assert (
+                assistant_indices[-1] < tool_indices[0]
+            ), "assistant message with tool_calls must appear before tool result messages"
+
+    @pytest.mark.asyncio
     async def test_handles_streaming_error(self, mcp_server):
         service = make_streaming_service("OK")
 

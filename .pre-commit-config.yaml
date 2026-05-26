@@ -56,7 +56,7 @@ repos:
         pass_filenames: false
       - id: pytest-unit
         name: pytest unit tests with coverage
-        entry: pytest
+        entry: venv/bin/pytest
         args: [
           'tests/unit/',
           '-v',

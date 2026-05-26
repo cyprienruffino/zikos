@@ -350,6 +350,17 @@ class LLMService:
             if tool_calls and isinstance(tool_calls, list):
                 cleaned_content = self.tool_call_parser.strip_tool_call_tags(cleaned_content)
 
+                # Native tool calling backends (Anthropic, OpenAI) require the assistant message
+                # with tool_calls to appear in history before the tool results, so the
+                # tool_use_id in tool_result blocks can be matched back to tool_use blocks.
+                history.append(
+                    {
+                        "role": "assistant",
+                        "content": cleaned_content or None,
+                        "tool_calls": tool_calls,
+                    }
+                )
+
                 should_continue, result, tool_call_infos = (
                     await self.orchestrator.process_tool_calls(
                         tool_calls,
