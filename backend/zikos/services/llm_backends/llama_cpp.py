@@ -22,20 +22,22 @@ class LlamaCppBackend(LLMBackend):
         self.system_prompt_cache_path: str | None = None
         self._cached_system_prompt_text: str | None = None
 
-    def initialize(
-        self,
-        model_path: str,
-        n_ctx: int = 32768,
-        n_gpu_layers: int = 0,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        **kwargs: Any,
-    ) -> None:
-        """Initialize llama-cpp-python backend"""
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize llama-cpp-python backend.
+
+        Expected kwargs: model_path, n_ctx, n_gpu_layers, temperature, top_p, ...
+        Extra kwargs are forwarded to the Llama constructor.
+        """
         if Llama is None:
             raise ImportError(
                 "llama-cpp-python is not installed. Install with: pip install llama-cpp-python"
             )
+
+        model_path: str = kwargs.pop("model_path")
+        n_ctx: int = kwargs.pop("n_ctx", 32768)
+        n_gpu_layers: int = kwargs.pop("n_gpu_layers", 0)
+        kwargs.pop("temperature", None)
+        kwargs.pop("top_p", None)
 
         cuda_available = False
         if n_gpu_layers != 0:
@@ -77,8 +79,7 @@ class LlamaCppBackend(LLMBackend):
             "n_ctx": n_ctx,
             "n_gpu_layers": n_gpu_layers,
         }
-
-        init_kwargs.update(kwargs)
+        init_kwargs.update(kwargs)  # forward remaining Llama-specific kwargs
 
         if "rope_freq_base" not in init_kwargs:
             init_kwargs["rope_freq_base"] = 0.0

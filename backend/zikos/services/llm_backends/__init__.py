@@ -1,17 +1,25 @@
 """LLM backend implementations"""
 
 from zikos.services.llm_backends.base import LLMBackend
+from zikos.services.llm_backends.cloud import CloudBackend
 from zikos.services.llm_backends.llama_cpp import LlamaCppBackend
 from zikos.services.llm_backends.transformers import TransformersBackend
 
-__all__ = ["LLMBackend", "LlamaCppBackend", "TransformersBackend", "create_backend"]
+__all__ = ["LLMBackend", "LlamaCppBackend", "TransformersBackend", "CloudBackend", "create_backend"]
+
+_CLOUD_PROVIDERS = {"openai", "anthropic", "gemini", "mistral", "cohere", "groq", "together"}
 
 
 def create_backend(
     model_path: str | None = None, backend_type: str | None = None
 ) -> LLMBackend | None:
-    """Create appropriate LLM backend based on model path or explicit type"""
+    """Create appropriate LLM backend based on provider, model path, or explicit type."""
     from zikos.config import settings
+
+    # Cloud provider takes precedence over local model path
+    provider = settings.llm_provider.lower() if settings.llm_provider else ""
+    if provider in _CLOUD_PROVIDERS:
+        return CloudBackend()
 
     if not model_path:
         model_path = settings.llm_model_path

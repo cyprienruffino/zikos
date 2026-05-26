@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from zikos.config import settings
-from zikos.services.llm_backends import create_backend
+from zikos.services.llm_backends import _CLOUD_PROVIDERS, create_backend
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser, get_tool_call_parser
 from zikos.services.model_strategy import ModelStrategy, get_model_strategy
 from zikos.utils.context_length import detect_context_length, get_recommended_context_length
@@ -32,6 +32,10 @@ def initialize_llm_backend() -> LLMInitResult:
     Returns an LLMInitResult with the backend, strategy, and context window on success,
     or just an error message on failure. The application can start either way.
     """
+    provider = settings.llm_provider.lower() if settings.llm_provider else ""
+    if provider in _CLOUD_PROVIDERS:
+        return _initialize_cloud_backend()
+
     result = LLMInitResult()
 
     if not settings.llm_model_path:
@@ -166,3 +170,36 @@ def _initialize_with_oom_retry(
                 raise
 
     raise last_error or RuntimeError("Failed to initialize after retries")
+
+
+def _initialize_cloud_backend() -> LLMInitResult:
+    """Initialize a cloud LLM backend via litellm. No GPU/OOM logic needed."""
+    from zikos.services.llm_backends.cloud import CloudBackend
+
+    if not settings.llm_model_name:
+        return LLMInitResult(error="LLM_MODEL_NAME must be set when using a cloud LLM provider")
+
+    try:
+        backend = CloudBackend()
+        backend.initialize(
+            model_name=settings.llm_model_name,
+            api_key=settings.llm_api_key if settings.llm_api_key else None,
+            temperature=settings.llm_temperature,
+            top_p=settings.llm_top_p,
+        )
+        # Cloud backends always use native tool calling
+        strategy = get_model_strategy(settings.llm_model_name, tool_format="native")
+        context_window = backend.get_context_window()
+        _logger.info(
+            f"Cloud backend initialized: provider={settings.llm_provider} "
+            f"model={settings.llm_model_name} context_window={context_window}"
+        )
+        return LLMInitResult(
+            backend=backend,
+            strategy=strategy,
+            tool_call_parser=strategy.tool_call_parser,
+            context_window=context_window,
+        )
+    except Exception as e:
+        _logger.error(f"Error initializing cloud backend: {e}", exc_info=True)
+        return LLMInitResult(error=str(e))

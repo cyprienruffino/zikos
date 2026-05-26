@@ -42,9 +42,9 @@ class FakeBackend(LLMBackend):
         self._initialized = False
         self._messages_received: list[list[dict[str, Any]]] = []
 
-    def initialize(self, model_path: str, n_ctx: int = 32768, n_gpu_layers: int = 0, **kwargs):
+    def initialize(self, **kwargs):
         self._initialized = True
-        self._context_window = n_ctx
+        self._context_window = kwargs.get("n_ctx", self._context_window)
 
     def create_chat_completion(self, messages: list[dict[str, Any]], **kwargs) -> dict[str, Any]:
         self._messages_received.append(messages)

@@ -32,20 +32,22 @@ class TransformersBackend(LLMBackend):
         self.n_ctx: int = 32768
         self.device: str = "cpu"
 
-    def initialize(
-        self,
-        model_path: str,
-        n_ctx: int = 131072,
-        n_gpu_layers: int = 0,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        **kwargs: Any,
-    ) -> None:
-        """Initialize HuggingFace Transformers backend"""
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize HuggingFace Transformers backend.
+
+        Expected kwargs: model_path, n_ctx, n_gpu_layers, temperature, top_p, ...
+        Extra kwargs (torch_dtype, trust_remote_code, attn_implementation) are passed through.
+        """
         if not HAS_TRANSFORMERS:
             raise ImportError(
                 "transformers is not installed. Install with: pip install transformers torch"
             )
+
+        model_path: str = kwargs.pop("model_path")
+        n_ctx: int = kwargs.pop("n_ctx", 131072)
+        kwargs.pop("n_gpu_layers", None)
+        kwargs.pop("temperature", None)
+        kwargs.pop("top_p", None)
 
         self.n_ctx = n_ctx
 

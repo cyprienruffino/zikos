@@ -9,16 +9,12 @@ class LLMBackend(ABC):
     """Abstract interface for LLM backends"""
 
     @abstractmethod
-    def initialize(
-        self,
-        model_path: str,
-        n_ctx: int = 32768,
-        n_gpu_layers: int = 0,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        **kwargs: Any,
-    ) -> None:
-        """Initialize the backend with model and configuration"""
+    def initialize(self, **kwargs: Any) -> None:
+        """Initialize the backend with model and configuration.
+
+        Local backends expect: model_path, n_ctx, n_gpu_layers, temperature, top_p, ...
+        Cloud backend expects: model_name, api_key, temperature, top_p
+        """
         pass
 
     @abstractmethod

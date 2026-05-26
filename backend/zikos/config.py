@@ -22,7 +22,7 @@ class Settings(BaseModel):
     api_port: int = 8000
     api_reload: bool = False
 
-    # LLM
+    # LLM — local backends
     llm_model_path: str = ""
     llm_backend: str = "auto"
     llm_tool_format: str = "auto"  # auto, qwen, simplified, native
@@ -32,6 +32,11 @@ class Settings(BaseModel):
     llm_top_p: float = LLMConstants.DEFAULT_TOP_P
     llm_top_k: int = LLMConstants.DEFAULT_TOP_K
     llm_max_thinking_tokens: int = LLMConstants.DEFAULT_MAX_THINKING_TOKENS
+
+    # LLM — cloud backends (used when LLM_PROVIDER is set)
+    llm_provider: str = ""  # openai | anthropic | gemini | mistral | ...
+    llm_api_key: str = ""  # forwarded to litellm; alternatively set provider-specific env var
+    llm_model_name: str = ""  # litellm model string, e.g. gpt-4o, gemini/gemini-2.0-flash
 
     # Storage
     audio_storage_path: Path = Path("audio_storage")
@@ -91,6 +96,9 @@ class Settings(BaseModel):
                 "DEBUG_TOOL_CALLS", str(defaults.debug_tool_calls).lower()
             ).lower()
             == "true",
+            llm_provider=os.getenv("LLM_PROVIDER", defaults.llm_provider),
+            llm_api_key=os.getenv("LLM_API_KEY", defaults.llm_api_key),
+            llm_model_name=os.getenv("LLM_MODEL_NAME", defaults.llm_model_name),
         )
 
 
