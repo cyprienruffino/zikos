@@ -66,6 +66,7 @@ class ToolExecutor:
 
         if is_widget:
             if settings.debug_tool_calls:
+                print(f"[WIDGET TOOL CALL] {tool_name}")
                 _logger.debug(
                     f"Widget tool: Returning {tool_name} to frontend (pausing conversation)"
                 )
