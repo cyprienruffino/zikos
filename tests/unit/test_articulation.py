@@ -60,12 +60,10 @@ class TestArticulationAnalysis:
         """Test basic articulation analysis"""
         result = await analyze_articulation(str(staccato_audio))
 
-        assert "articulation_types" in result
         assert "legato_percentage" in result
         assert "staccato_percentage" in result
         assert "articulation_consistency" in result
 
-        assert isinstance(result["articulation_types"], list)
         assert 0.0 <= result["legato_percentage"] <= 1.0
         assert 0.0 <= result["staccato_percentage"] <= 1.0
 
@@ -75,7 +73,6 @@ class TestArticulationAnalysis:
         result = await analyze_articulation(str(staccato_audio))
 
         assert result["staccato_percentage"] > result["legato_percentage"]
-        assert "staccato" in result["articulation_types"]
 
     @pytest.mark.asyncio
     async def test_analyze_articulation_legato(self, legato_audio):
@@ -83,4 +80,3 @@ class TestArticulationAnalysis:
         result = await analyze_articulation(str(legato_audio))
 
         assert result["legato_percentage"] > result["staccato_percentage"]
-        assert "legato" in result["articulation_types"]

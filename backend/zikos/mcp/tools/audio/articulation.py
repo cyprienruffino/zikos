@@ -12,7 +12,7 @@ def get_analyze_articulation_tool() -> Tool:
     """Get the analyze_articulation tool definition"""
     return Tool(
         name="analyze_articulation",
-        description="Analyze articulation types (staccato, legato, etc.). Returns: attack_time (ms), articulation_types, finger_noise (0.0-1.0), muting_effectiveness (0.0-1.0)",
+        description="Analyze articulation. Returns: legato_percentage, staccato_percentage, articulation_consistency (0.0-1.0), accents",
         category=ToolCategory.AUDIO_ANALYSIS,
         parameters={
             "audio_file_id": {"type": "string"},
@@ -100,14 +100,6 @@ async def analyze_articulation(audio_path: str) -> dict[str, Any]:
         staccato_percentage = staccato_count / total_notes if total_notes > 0 else 0.0
         legato_percentage = legato_count / total_notes if total_notes > 0 else 0.0
 
-        articulation_types = []
-        if staccato_percentage > 0.3:
-            articulation_types.append("staccato")
-        if legato_percentage > 0.3:
-            articulation_types.append("legato")
-        if not articulation_types:
-            articulation_types.append("mixed")
-
         duration_std = float(np.std(note_durations))
         articulation_consistency = float(1.0 / (1.0 + duration_std))
         articulation_consistency = max(0.0, min(1.0, articulation_consistency))
@@ -133,7 +125,6 @@ async def analyze_articulation(audio_path: str) -> dict[str, Any]:
                         )
 
         return {
-            "articulation_types": articulation_types,
             "legato_percentage": float(legato_percentage),
             "staccato_percentage": float(staccato_percentage),
             "articulation_consistency": articulation_consistency,
