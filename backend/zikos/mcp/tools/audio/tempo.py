@@ -13,7 +13,7 @@ def get_analyze_tempo_tool() -> Tool:
     """Get the analyze_tempo tool definition"""
     return Tool(
         name="analyze_tempo",
-        description="Analyze tempo/BPM and timing consistency. Returns: bpm, tempo_stability_score (0.0-1.0), is_steady, tempo_changes, rushing_detected, dragging_detected",
+        description="Analyze tempo/BPM and timing consistency. Returns: bpm, tempo_stability_score (0.0-1.0), tempo_changes, mean_inter_beat_interval_ms",
         category=ToolCategory.AUDIO_ANALYSIS,
         parameters={
             "audio_file_id": {"type": "string"},
@@ -21,11 +21,12 @@ def get_analyze_tempo_tool() -> Tool:
         required=["audio_file_id"],
         detailed_description="""Analyze tempo/BPM and timing consistency.
 
-Returns: dict with bpm, tempo_stability_score (0.0-1.0), is_steady, tempo_changes, rushing_detected, dragging_detected
+Returns: dict with bpm, tempo_stability_score (0.0-1.0), tempo_changes, mean_inter_beat_interval_ms
 
 Interpretation Guidelines:
 - tempo_stability_score: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-- When tempo_stability_score < 0.80 AND rushing_detected, consider suggesting metronome practice""",
+- mean_inter_beat_interval_ms vs 60000/bpm: shorter = rushing, longer = dragging
+- tempo_changes: time-series of local BPM — use to identify where tempo drifts""",
     )
 
 
@@ -64,8 +65,6 @@ async def analyze_tempo(audio_path: str) -> dict[str, Any]:
         )
         tempo_stability = float(max(0.0, min(1.0, tempo_stability)))
 
-        is_steady = bool(tempo_stability > AUDIO.TEMPO_STABILITY_THRESHOLD)
-
         tempo_changes = []
         if len(beat_times) > 4:
             window_size = min(AUDIO.TEMPO_WINDOW_SIZE, len(beat_times) // 2)
@@ -81,24 +80,14 @@ async def analyze_tempo(audio_path: str) -> dict[str, Any]:
                     }
                 )
 
-        rushing_detected = False
-        dragging_detected = False
-        if len(inter_beat_intervals) > 0:
-            mean_ibi = np.mean(inter_beat_intervals)
-            expected_ibi = 60.0 / tempo
-            if mean_ibi < expected_ibi * AUDIO.TEMPO_RUSHING_THRESHOLD:
-                rushing_detected = True
-            elif mean_ibi > expected_ibi * AUDIO.TEMPO_DRAGGING_THRESHOLD:
-                dragging_detected = True
+        mean_inter_beat_interval_ms = float(np.mean(inter_beat_intervals) * 1000)
 
         return {
             "bpm": tempo,
             "confidence": AUDIO.TEMPO_CONFIDENCE,
-            "is_steady": is_steady,
             "tempo_stability_score": float(tempo_stability),
             "tempo_changes": tempo_changes,
-            "rushing_detected": rushing_detected,
-            "dragging_detected": dragging_detected,
+            "mean_inter_beat_interval_ms": mean_inter_beat_interval_ms,
         }
     except FileNotFoundError:
         return {

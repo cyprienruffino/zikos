@@ -47,10 +47,10 @@ class TestTempoAnalysis:
         assert result["bpm"] > 0
         assert "confidence" in result
         assert 0.0 <= result["confidence"] <= 1.0
-        assert "is_steady" in result
-        assert isinstance(result["is_steady"], bool)
         assert "tempo_stability_score" in result
         assert 0.0 <= result["tempo_stability_score"] <= 1.0
+        assert "mean_inter_beat_interval_ms" in result
+        assert result["mean_inter_beat_interval_ms"] > 0
 
     @pytest.mark.asyncio
     async def test_analyze_tempo_with_changes(self, audio_tools, temp_dir):
@@ -89,11 +89,8 @@ class TestTempoAnalysis:
 
         result = await audio_tools.analyze_tempo(audio_path=str(audio_file))
 
-        assert "rushing_detected" in result or "dragging_detected" in result
-        # At least one should be present
-        assert isinstance(result.get("rushing_detected", False), bool) or isinstance(
-            result.get("dragging_detected", False), bool
-        )
+        assert "mean_inter_beat_interval_ms" in result
+        assert result["mean_inter_beat_interval_ms"] > 0
 
     @pytest.mark.asyncio
     async def test_analyze_tempo_file_not_found(self, audio_tools):

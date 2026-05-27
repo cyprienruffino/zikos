@@ -156,10 +156,10 @@ class TestTempoAnalysisIntegration:
         assert result["bpm"] > 0
         assert "confidence" in result
         assert 0.0 <= result["confidence"] <= 1.0
-        assert "is_steady" in result
-        assert isinstance(result["is_steady"], bool)
         assert "tempo_stability_score" in result
         assert 0.0 <= result["tempo_stability_score"] <= 1.0
+        assert "mean_inter_beat_interval_ms" in result
+        assert result["mean_inter_beat_interval_ms"] > 0
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -189,7 +189,6 @@ class TestTempoAnalysisIntegration:
         assert "bpm" in result
         assert "tempo_changes" in result
         assert isinstance(result["tempo_changes"], list)
-        assert "is_steady" in result
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -199,7 +198,6 @@ class TestTempoAnalysisIntegration:
 
         assert "tempo_stability_score" in result
         assert 0.0 <= result["tempo_stability_score"] <= 1.0
-        assert "is_steady" in result
 
 
 class TestPitchDetectionIntegration:
