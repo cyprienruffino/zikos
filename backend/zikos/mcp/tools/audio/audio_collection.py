@@ -10,6 +10,7 @@ from zikos.mcp.tools.audio import (
     comprehensive,
     dynamics,
     groove,
+    instrument_detector,
     key,
     phrase_segmentation,
     pitch,
@@ -295,6 +296,29 @@ Interpretation Guidelines:
         return await self.call_tool(
             "analyze_rhythm", audio_file_id=audio_file_id, audio_path=audio_path
         )
+
+    async def detect_instrument(
+        self, audio_file_id: str | None = None, audio_path: str | None = None
+    ) -> dict[str, Any]:
+        """Detect instrument class from audio characteristics (always run as part of baseline)."""
+        if audio_path:
+            resolved_path = audio_path
+        elif audio_file_id:
+            try:
+                resolved_path = str(resolve_audio_path(audio_file_id))
+            except FileNotFoundError:
+                return {
+                    "error": True,
+                    "error_type": "FILE_NOT_FOUND",
+                    "message": f"Audio file {audio_file_id} not found",
+                }
+        else:
+            return {
+                "error": True,
+                "error_type": "MISSING_PARAMETER",
+                "message": "detect_instrument requires audio_file_id or audio_path",
+            }
+        return dict(await instrument_detector.detect_instrument(resolved_path))
 
     async def analyze_dynamics(
         self, audio_file_id: str | None = None, audio_path: str | None = None

@@ -48,11 +48,13 @@ class AudioService:
         tempo_result = await self.analysis_tools.analyze_tempo(audio_file_id)
         pitch_result = await self.analysis_tools.detect_pitch(audio_file_id)
         rhythm_result = await self.analysis_tools.analyze_rhythm(audio_file_id)
+        instrument_result = await self.analysis_tools.detect_instrument(audio_file_id)
 
         return {
             "tempo": tempo_result,
             "pitch": pitch_result,
             "rhythm": rhythm_result,
+            "instrument": instrument_result,
         }
 
     async def get_audio_info(self, audio_file_id: str) -> dict[str, Any]:
