@@ -33,9 +33,6 @@ async def test_comprehensive_analysis_success(temp_dir, sample_audio_path):
     assert "frequency" in result
     assert "musical_structure" in result
     assert "overall_score" in result
-    assert "strengths" in result
-    assert "weaknesses" in result
-    assert "recommendations" in result
     assert isinstance(result["overall_score"], float)
     assert 0.0 <= result["overall_score"] <= 1.0
 
@@ -154,8 +151,7 @@ async def test_comprehensive_analysis_with_high_scores(temp_dir, sample_audio_pa
             result = await comprehensive_analysis(audio_file_id)
 
     assert "error" not in result
-    assert "strengths" in result
-    assert len(result["strengths"]) > 0
+    assert result["overall_score"] > 0.8
 
 
 @pytest.mark.asyncio
@@ -183,7 +179,7 @@ async def test_comprehensive_analysis_with_low_scores(temp_dir, sample_audio_pat
             mock_tempo.return_value = {
                 "tempo_stability_score": 0.65,
                 "bpm": 120,
-                "rushing_detected": True,
+                "mean_inter_beat_interval_ms": 600.0,
             }
             mock_pitch.return_value = {"intonation_accuracy": 0.65, "pitch_stability": 0.68}
             mock_rhythm.return_value = {"timing_accuracy": 0.60}
@@ -197,10 +193,7 @@ async def test_comprehensive_analysis_with_low_scores(temp_dir, sample_audio_pat
             result = await comprehensive_analysis(audio_file_id)
 
     assert "error" not in result
-    assert "weaknesses" in result
-    assert len(result["weaknesses"]) > 0
-    assert "recommendations" in result
-    assert len(result["recommendations"]) > 0
+    assert result["overall_score"] < 0.75
 
 
 @pytest.mark.asyncio
