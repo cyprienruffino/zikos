@@ -416,7 +416,7 @@ Error Handling:
             fs.delete()
 
     async def midi_to_notation(self, midi_file_id: str, format: str) -> dict[str, Any]:
-        """Render MIDI to notation using music21"""
+        """Render MIDI to notation SVG using music21 + verovio (no MuseScore required)"""
         midi_path = self.storage_path / f"{midi_file_id}.mid"
 
         if not midi_path.exists():
@@ -427,44 +427,50 @@ Error Handling:
             )
 
         try:
+            import tempfile
+
+            import verovio
             from music21 import midi
 
             score = midi.translate.midiFilePathToStream(str(midi_path))
             if score is None:
                 raise ValueError("Failed to parse MIDI file")
 
+            # Export to MusicXML (music21's native format — no external tools needed)
+            with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            score.write("musicxml", fp=str(tmp_path))
+            xml_str = tmp_path.read_text(encoding="utf-8")
+            tmp_path.unlink(missing_ok=True)
+
+            # Render MusicXML → SVG with verovio
+            tk = verovio.toolkit()
+            tk.setOptions({"adjustPageWidth": True, "adjustPageHeight": True, "scale": 40})
+            tk.loadData(xml_str)
+
             notation_path = Path(settings.notation_storage_path)
             notation_path.mkdir(parents=True, exist_ok=True)
 
-            result: dict[str, Any] = {
-                "midi_file_id": midi_file_id,
-                "format": format,
-            }
+            result: dict[str, Any] = {"midi_file_id": midi_file_id, "format": format}
 
             if format in ("sheet_music", "both"):
-                sheet_path = notation_path / f"sheet_{midi_file_id}.png"
-                try:
-                    score.write("musicxml.png", fp=str(sheet_path))
-                    if sheet_path.exists():
-                        result["sheet_music_url"] = f"/notation/sheet_{midi_file_id}.png"
-                    else:
-                        result["sheet_music_error"] = "Failed to generate sheet music image"
-                except Exception as e:
-                    result["sheet_music_error"] = str(e)
+                sheet_path = notation_path / f"sheet_{midi_file_id}.svg"
+                sheet_path.write_text(tk.renderToSVG(1), encoding="utf-8")
+                result["sheet_music_url"] = f"/notation/sheet_{midi_file_id}.svg"
 
             if format in ("tabs", "both"):
-                tabs_path = notation_path / f"tabs_{midi_file_id}.png"
-                try:
-                    score.write("musicxml.png", fp=str(tabs_path))
-                    if tabs_path.exists():
-                        result["tabs_url"] = f"/notation/tabs_{midi_file_id}.png"
-                    else:
-                        result["tabs_error"] = "Failed to generate tabs image"
-                except Exception as e:
-                    result["tabs_error"] = str(e)
+                # verovio doesn't do guitar tabs — note this limitation clearly
+                result["tabs_error"] = (
+                    "Tab rendering is not supported with the current notation engine (verovio). "
+                    "Use format='sheet_music' for standard notation."
+                )
 
             return result
 
+        except ImportError:
+            raise RuntimeError(
+                "verovio is required for notation rendering. Install it with: pip install verovio"
+            ) from None
         except Exception as e:
             raise RuntimeError(f"Failed to render notation: {str(e)}") from e
 
