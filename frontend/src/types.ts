@@ -8,6 +8,7 @@ export interface WebSocketMessage {
     arguments?: Record<string, unknown>;
     audio_file_id?: string;
     notation_url?: string;
+    tabs_url?: string;
 }
 
 export interface MetronomeState {

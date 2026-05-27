@@ -36,6 +36,13 @@ export function addMessage(
         messageEl.appendChild(notationEl);
     }
 
+    if (data?.tabs_url) {
+        const tabsEl = document.createElement("div");
+        tabsEl.className = "notation";
+        tabsEl.innerHTML = `<img src="${data.tabs_url}" alt="Tablature" />`;
+        messageEl.appendChild(tabsEl);
+    }
+
     const messagesEl = getMessagesEl();
     messagesEl.appendChild(messageEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -128,6 +135,13 @@ export function finishStreamingMessage(data: Partial<WebSocketMessage> | null = 
             notationEl.className = "notation";
             notationEl.innerHTML = `<img src="${data.notation_url}" alt="Musical notation" />`;
             streamingMessageEl.appendChild(notationEl);
+        }
+
+        if (data?.tabs_url) {
+            const tabsEl = document.createElement("div");
+            tabsEl.className = "notation";
+            tabsEl.innerHTML = `<img src="${data.tabs_url}" alt="Tablature" />`;
+            streamingMessageEl.appendChild(tabsEl);
         }
     }
 

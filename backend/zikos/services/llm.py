@@ -1,5 +1,6 @@
 """LLM service"""
 
+import ast
 import json
 import logging
 import re
@@ -183,6 +184,31 @@ class LLMService:
         self, history: list[dict[str, Any]], error_type: str, error_details: str
     ) -> None:
         history.append({"role": "system", "content": f"ERROR: {error_type}: {error_details}"})
+
+    def _media_events_from_tool_results(
+        self, tool_results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Yield frontend display events for media-producing tools (audio, notation)."""
+        events = []
+        for tr in tool_results:
+            name = tr.get("name", "")
+            try:
+                data = ast.literal_eval(tr.get("content", ""))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if name == "midi_to_audio" and data.get("audio_file_id"):
+                events.append({"type": "audio_result", "audio_file_id": data["audio_file_id"]})
+            elif name == "midi_to_notation":
+                event: dict[str, Any] = {"type": "notation_result"}
+                if data.get("sheet_music_url"):
+                    event["notation_url"] = data["sheet_music_url"]
+                if data.get("tabs_url"):
+                    event["tabs_url"] = data["tabs_url"]
+                if len(event) > 1:
+                    events.append(event)
+        return events
 
     # --- Streaming generation ---
 
@@ -429,6 +455,8 @@ class LLMService:
                         }
                     )
                     history.extend(tool_results)
+                    for event in self._media_events_from_tool_results(tool_results):
+                        yield event
                 continue
 
             # Check for malformed tool calls

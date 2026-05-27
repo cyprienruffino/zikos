@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from zikos.api import router
+from zikos.config import settings as _settings
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,11 @@ class NoCacheStaticFiles(StaticFiles):
 if dist_dir.exists():
     static_files = NoCacheStaticFiles(directory=str(dist_dir))
     app.mount("/static", static_files, name="static")
+
+# Serve generated notation images (sheet music, tabs)
+_notation_dir = _settings.notation_storage_path
+_notation_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/notation", StaticFiles(directory=str(_notation_dir)), name="notation")
 
 
 @app.get("/")

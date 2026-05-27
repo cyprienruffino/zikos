@@ -227,6 +227,10 @@ export function connect(): void {
                     args.break_interval_minutes,
                     args.description
                 );
+            } else if (data.type === "audio_result" && data.audio_file_id) {
+                addMessage("", "assistant", data);
+            } else if (data.type === "notation_result" && (data.notation_url || data.tabs_url)) {
+                addMessage("", "assistant", data);
             } else if (data.type === "recording_cancelled") {
                 const recordingId = data.tool_id || "";
                 removeRecordingWidget(recordingId);
