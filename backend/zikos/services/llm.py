@@ -210,6 +210,58 @@ class LLMService:
                     events.append(event)
         return events
 
+    # --- Debug helpers ---
+
+    def _log_api_call_snapshot(
+        self, messages: list[dict[str, Any]], iteration: int, session_id: str, label: str = ""
+    ) -> None:
+        """Log compact message sequence and flag any tool_use/tool_result pairing violations."""
+        if not settings.debug_tool_calls:
+            return
+
+        tag = f" [{label}]" if label else ""
+        lines = [f"--- API call snapshot{tag} (session={session_id}, iteration={iteration}) ---"]
+        pending: dict[str, int] = {}  # tool_call_id → message index
+
+        for i, msg in enumerate(messages):
+            role = msg.get("role", "?")
+            content_preview = str(msg.get("content") or "").replace("\n", " ")[:100]
+            tool_calls = msg.get("tool_calls") or []
+            tool_call_id = msg.get("tool_call_id")
+
+            if tool_calls:
+                ids_names = [
+                    (tc.get("id", "?"), (tc.get("function") or {}).get("name", "?"))
+                    for tc in tool_calls
+                    if isinstance(tc, dict)
+                ]
+                for tc_id, _ in ids_names:
+                    pending[tc_id] = i
+                calls_str = ", ".join(f"{name}({tc_id})" for tc_id, name in ids_names)
+                lines.append(f"  [{i:02d}] {role}: tool_calls=[{calls_str}] | {content_preview!r}")
+            elif tool_call_id:
+                tool_name = msg.get("name", "?")
+                marker = "✓" if tool_call_id in pending else "!! ORPHAN"
+                pending.pop(tool_call_id, None)
+                lines.append(
+                    f"  [{i:02d}] {role}({tool_name}): refs={tool_call_id} {marker} | {content_preview!r}"
+                )
+            else:
+                lines.append(f"  [{i:02d}] {role}: {content_preview!r}")
+
+        if pending:
+            for tc_id, msg_idx in pending.items():
+                lines.append(
+                    f"  !! INTEGRITY VIOLATION: tool_use id={tc_id} (from message {msg_idx}) has no tool_result"
+                )
+
+        _conversation_logger.info("\n".join(lines))
+        if pending:
+            _logger.error(
+                f"[{session_id}] iteration={iteration}{tag}: "
+                f"tool_use/tool_result mismatch — dangling ids: {list(pending.keys())}"
+            )
+
     # --- Streaming generation ---
 
     def _get_max_thinking(self, nothink_retry: bool) -> int:
@@ -279,7 +331,7 @@ class LLMService:
 
         thinking_part = f"Thinking:\n{thinking_content}\n" if thinking_content else ""
         _conversation_logger.info(
-            f"Session: {session_id}\n"
+            f"Session: {session_id} | iteration={state.iteration}\n"
             f"Assistant Response:\n{thinking_part}"
             f"{cleaned_content}\n"
             f"{'=' * 80}"
@@ -335,6 +387,8 @@ class LLMService:
                     history, token_error["error_type"], token_error["error_details"]
                 )
                 continue
+
+            self._log_api_call_snapshot(current_messages, state.iteration, session_id)
 
             # Stream LLM response
             try:
@@ -480,10 +534,12 @@ class LLMService:
             return
 
         # Max iterations fallback
-        async for chunk in self._max_iterations_fallback(history, tools, tool_schemas, state):
+        async for chunk in self._max_iterations_fallback(
+            history, tools, tool_schemas, state, session_id
+        ):
             yield chunk
 
-    async def _max_iterations_fallback(self, history, tools, tool_schemas, state):
+    async def _max_iterations_fallback(self, history, tools, tool_schemas, state, session_id: str):
         """Last-resort generation after max iterations exceeded."""
         self._inject_error_system_message(
             history,
@@ -493,6 +549,10 @@ class LLMService:
 
         current_messages, _ = self.orchestrator.prepare_iteration_messages(
             history, self.context_window
+        )
+
+        self._log_api_call_snapshot(
+            current_messages, state.iteration, session_id, label="max_iterations_fallback"
         )
 
         try:
