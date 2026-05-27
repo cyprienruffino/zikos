@@ -121,10 +121,8 @@ class MessagePreparer:
             msg_content = str(msg.get("content", ""))
             msg_tokens = len(enc.encode(msg_content))
 
-            # Check if this is an audio analysis message
-            is_audio_analysis = any(
-                marker in msg_content
-                for marker in ["[Audio Analysis", "Audio analysis complete", "audio_file_id"]
+            is_audio_analysis = msg.get("role") == "user" and any(
+                marker in msg_content for marker in ["[Audio Analysis", "Audio analysis complete"]
             )
 
             if msg.get("role") == "user" and system_prompt and not system_added:
