@@ -425,6 +425,36 @@ class TestRhythmAnalysis:
             assert "rushing_tendency" in result or "average_deviation_ms" in result
             assert "dragging_tendency" in result or "average_deviation_ms" in result
 
+    @pytest.mark.asyncio
+    async def test_on_beat_notes_not_in_beat_deviations(
+        self, audio_tools, sample_audio_file, mock_audio_data
+    ):
+        """Notes landing exactly on the beat (within <10ms) must not appear in beat_deviations.
+
+        Regression test: with hop_length=512 at sr=22050, the minimum representable
+        deviation was ~11.6ms, so perfectly-timed notes showed as spurious 'minor' deviations.
+        """
+        audio, sr = mock_audio_data  # sr=22050
+
+        # With _HOP_LENGTH=128 at sr=22050, one frame = 128/22050 * 1000 ≈ 5.8ms.
+        # Place onsets and beats at the same frame indices so deviation = 0ms.
+        perfect_frames = np.array([10, 20, 30, 40])
+
+        with (
+            patch("librosa.load") as mock_load,
+            patch("librosa.onset.onset_strength") as mock_strength,
+            patch("librosa.onset.onset_detect") as mock_onset,
+            patch("librosa.beat.beat_track") as mock_beat,
+        ):
+            mock_load.return_value = (audio, sr)
+            mock_strength.return_value = np.ones(200)
+            mock_onset.return_value = perfect_frames
+            mock_beat.return_value = (120.0, perfect_frames)
+
+            result = await audio_tools.analyze_rhythm(audio_path=str(sample_audio_file))
+
+            assert result.get("beat_deviations") == []
+
 
 class TestAudioInfo:
     """Tests for audio info tool"""

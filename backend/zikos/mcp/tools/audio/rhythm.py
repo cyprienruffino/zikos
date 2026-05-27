@@ -7,6 +7,10 @@ import numpy as np
 
 from zikos.mcp.tool import Tool, ToolCategory
 
+# Finer hop gives ~2.9ms resolution at 44100 Hz, preventing the 11.6ms quantization
+# artifact where on-beat notes appear as "minor" deviations instead of being filtered out.
+_HOP_LENGTH = 128
+
 
 def get_analyze_rhythm_tool() -> Tool:
     """Get the analyze_rhythm tool definition"""
@@ -31,24 +35,16 @@ Interpretation Guidelines:
     )
 
 
-def calculate_timing_accuracy(
-    onsets: np.ndarray, expected_beats: np.ndarray, sample_rate: int
-) -> float:
-    """Calculate timing accuracy score (0.0-1.0)"""
-    if len(onsets) == 0 or len(expected_beats) == 0:
+def calculate_timing_accuracy(onset_times: np.ndarray, beat_times: np.ndarray) -> float:
+    """Calculate timing accuracy score (0.0-1.0) from time arrays (seconds)"""
+    if len(onset_times) == 0 or len(beat_times) == 0:
         return 0.0
-
-    onset_times = librosa.frames_to_time(onsets, sr=sample_rate)
-    beat_times = librosa.frames_to_time(expected_beats, sr=sample_rate)
 
     deviations = []
     for onset_time in onset_times:
         closest_beat_idx = np.argmin(np.abs(beat_times - onset_time))
         deviation_ms = (onset_time - beat_times[closest_beat_idx]) * 1000
         deviations.append(abs(deviation_ms))
-
-    if len(deviations) == 0:
-        return 0.0
 
     avg_deviation_ms = float(np.mean(deviations))
 
@@ -87,8 +83,8 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
                 "message": "Audio is too short (minimum 0.5 seconds required)",
             }
 
-        onset_strength = librosa.onset.onset_strength(y=y, sr=sr)
-        onsets = librosa.onset.onset_detect(y=y, sr=sr)
+        onset_strength = librosa.onset.onset_strength(y=y, sr=sr, hop_length=_HOP_LENGTH)
+        onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=_HOP_LENGTH)
 
         if len(onsets) == 0:
             return {
@@ -106,7 +102,7 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
                 "message": "Could not detect any valid onsets in audio",
             }
 
-        onset_times = librosa.frames_to_time(valid_onsets, sr=sr)
+        onset_times = librosa.frames_to_time(valid_onsets, sr=sr, hop_length=_HOP_LENGTH)
         onset_strengths = onset_strength[valid_onsets]
 
         onsets_list = [
@@ -117,7 +113,7 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
             for time, strength in zip(onset_times, onset_strengths, strict=False)
         ]
 
-        tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+        tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=_HOP_LENGTH)
 
         timing_accuracy = 0.87
         beat_deviations = []
@@ -126,9 +122,8 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
         average_deviation_ms = 0.0
 
         if len(beats) > 0 and len(onsets) > 0:
-            timing_accuracy = calculate_timing_accuracy(onsets, beats, int(sr))
-
-            beat_times = librosa.frames_to_time(beats, sr=sr)
+            beat_times = librosa.frames_to_time(beats, sr=sr, hop_length=_HOP_LENGTH)
+            timing_accuracy = calculate_timing_accuracy(onset_times, beat_times)
 
             deviations = []
             for onset_time in onset_times:
