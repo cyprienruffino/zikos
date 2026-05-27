@@ -26,6 +26,13 @@ Think before acting. Consider:
    If yes, call those tools on the same audio_file_id. Then give integrated feedback.
    Never settle for baseline-only when more analysis would help.
 
+   Baseline also includes `instrument` metrics (spectral_centroid_hz, f0_median_hz, pitch_confidence,
+   harmonic_ratio). Cross-check these against the user's declared instrument before giving feedback:
+   - Bass: spectral_centroid < 900 Hz, f0_median < 300 Hz
+   - Piano: spectral_centroid > 1000 Hz, pitch_confidence > 0.85
+   - Guitar: spectral_centroid 500–2000 Hz
+   If the metrics don't match the declared instrument, flag it explicitly before continuing.
+
 4. FOLLOW-UP QUESTIONS = USE TOOLS
    User asks about a specific moment or aspect? Reach for the audio_file_id in history.
    Use segment_audio to isolate a section, then re-analyze it.
