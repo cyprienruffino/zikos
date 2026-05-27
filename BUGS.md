@@ -17,16 +17,12 @@
 
 ---
 
-### BUG-004 — `analyze_timbre` returns physically impossible values
-**Priority:** Medium
-**Area:** `backend/zikos/mcp/tools/audio/`
-**Symptom:** `attack_time: 0.0 ms` and `timbre_consistency: 0.19` reported for real instrument recordings. The LLM itself flagged these as suspicious.
-**Suspected cause:** Algorithm bug — likely a boundary condition in onset detection or consistency calculation.
+### ~~BUG-004 — `analyze_timbre` returns physically impossible values~~ CLOSED
+**Resolution:**
+- `attack_time=0`: `onset_frame` (librosa frames) was used as a sample index — off by 512×. Fixed to `int(onset_time * sr)`.
+- `timbre_consistency=0.19`: `TIMBRE_CONSISTENCY_DIVISOR` was 500, too tight for real music. Spectral centroid std easily reaches 2000 Hz, saturating the formula. Raised to 1500.
 
 ---
 
-### BUG-005 — `detect_pitch` fails silently for low-register instruments
-**Priority:** Medium
-**Area:** `backend/zikos/mcp/tools/audio/`
-**Symptom:** Returns `NO_PITCH_DETECTED` for bass recordings. LLM continues with partial data without flagging the gap.
-**Suspected cause:** Pitch detection algorithm (likely `librosa.yin` or `pyin`) has a frequency floor that excludes bass range. Error is returned but not escalated clearly.
+### ~~BUG-005 — `detect_pitch` fails silently for low-register instruments~~ CLOSED
+**Resolution:** `pyin` prefers to report sub-octaves; with `fmin=C2 (65.4 Hz)`, any note whose sub-octave fell below C2 returned `NO_PITCH_DETECTED`. Lowered to `fmin=C1 (32.7 Hz)` and `frame_length=4096`. Now detects bass notes from ~D2 (73 Hz) upward — note names are correct, octave may be off by one for the lowest register. E1/A1 remain undetectable (pyin fundamental limitation below ~50 Hz).
