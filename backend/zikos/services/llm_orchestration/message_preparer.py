@@ -58,9 +58,11 @@ class MessagePreparer:
             if for_user and msg.get("role") == "thinking":
                 continue
             content = str(msg.get("content", ""))
-            if any(
-                marker in content
-                for marker in ["[Audio Analysis", "Audio analysis complete", "audio_file_id"]
+            # Only pin user-role messages as audio analysis context — never tool results
+            # or assistant messages, as reordering those breaks the tool_use/tool_result
+            # pairing that Anthropic (and other APIs) strictly enforce.
+            if msg.get("role") == "user" and any(
+                marker in content for marker in ["[Audio Analysis", "Audio analysis complete"]
             ):
                 audio_analysis_messages.append(msg)
             else:
