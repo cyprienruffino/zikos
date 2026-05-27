@@ -231,7 +231,13 @@ async function startRecording(metronomeId: string): Promise<void> {
     }
 
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+            },
+        });
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
 
