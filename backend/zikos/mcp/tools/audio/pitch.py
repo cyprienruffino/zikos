@@ -93,8 +93,9 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
 
         f0, voiced_flag, voiced_prob = librosa.pyin(
             y,
-            fmin=float(librosa.note_to_hz("C2")),
+            fmin=float(librosa.note_to_hz("C1")),
             fmax=float(librosa.note_to_hz("C7")),
+            frame_length=4096,
         )
 
         valid_f0 = f0[voiced_flag & (voiced_prob > 0.5)]

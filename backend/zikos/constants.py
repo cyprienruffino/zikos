@@ -59,7 +59,7 @@ class AudioAnalysisConstants:
     # Timbre analysis
     BRIGHTNESS_DIVISOR: float = 5000.0
     SHARPNESS_DIVISOR: float = 8000.0
-    TIMBRE_CONSISTENCY_DIVISOR: float = 500.0
+    TIMBRE_CONSISTENCY_DIVISOR: float = 1500.0
 
     # Dynamics analysis
     DYNAMIC_CONSISTENCY_DIVISOR: float = 10.0

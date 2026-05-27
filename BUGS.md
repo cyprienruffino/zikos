@@ -7,20 +7,13 @@
 
 ---
 
-### BUG-002 — Audio analysis context re-injected into every subsequent user message
-**Priority:** High
-**Area:** `AudioContextEnricher`
-**Symptom:** API snapshots show the first recording's `[Audio Analysis Results]` block appearing at an ever-increasing message index across turns — it is re-appended as part of every user message that contains an audio keyword ("recording", "sound", etc.). The LLM keeps commenting on the first recording as if no new one arrived.
-**Confirmed:** In session `aeb93f4f`, `audio_file_id 12cbcd28` appears at positions [12], [14], [16], [18], [20], [21], [23], [25], [26], [28] across successive snapshots.
-**Root cause:** `enrich_message` injects analysis into the user message on every call if audio keywords are present, with no check for whether the same analysis is already in history.
+### ~~BUG-002 — Audio analysis context re-injected into every subsequent user message~~ CLOSED
+**Resolution:** `AudioContextEnricher` removed entirely. Analysis is now injected exactly once (in `handle_audio_ready`); the LLM calls its own tools for any further context it needs.
 
 ---
 
-### BUG-003 — LLM not proactive with optional tool calls
-**Priority:** Medium
-**Area:** System prompt / LLM behaviour
-**Symptom:** `analyze_timbre`, `detect_chords`, comparison tools etc. are only called after the user explicitly asks. In a multi-recording session, `compare_audio` was never called.
-**Suspected cause:** System prompt does not sufficiently motivate proactive tool use; optional tools section is likely too passive.
+### ~~BUG-003 — LLM not proactive with optional tool calls~~ CLOSED
+**Resolution:** System prompt updated with explicit rules: "AUDIO ANALYSIS = GO DEEPER" (call key/chords/timbre/dynamics before giving feedback when useful) and "FOLLOW-UP QUESTIONS = USE TOOLS" (use `segment_audio` + re-analysis rather than guessing from history).
 
 ---
 

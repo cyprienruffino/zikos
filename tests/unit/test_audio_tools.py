@@ -291,6 +291,32 @@ class TestPitchDetection:
         if "sharp_tendency" in result:
             assert 0.0 <= result["sharp_tendency"] <= 1.0
 
+    @pytest.mark.asyncio
+    async def test_detect_pitch_bass_register(self, audio_tools, temp_dir):
+        """G2 (98 Hz) was undetectable with the old fmin=C2 because pyin prefers sub-octaves
+        and G1 (49 Hz) fell below the floor. With fmin=C1 it should now return a result."""
+        import numpy as np
+        import soundfile as sf
+
+        sr = 44100
+        duration = 2.0
+        t = np.linspace(0, duration, int(sr * duration))
+        # G2 with harmonics (pure sines are harder to detect than real instruments)
+        audio = np.sin(2 * np.pi * 98 * t) * 0.6
+        for h in range(2, 5):
+            audio += np.sin(2 * np.pi * 98 * h * t) * (0.4 / h)
+        audio = audio / np.abs(audio).max() * 0.9
+
+        audio_path = temp_dir / "bass_g2.wav"
+        sf.write(str(audio_path), audio, sr)
+
+        result = await audio_tools.detect_pitch(audio_path=str(audio_path))
+
+        assert (
+            result.get("error_type") != "NO_PITCH_DETECTED"
+        ), "G2 (98 Hz) should be detected — fmin=C1 allows pyin to report its sub-octave G1"
+        assert "notes" in result
+
 
 class TestRhythmAnalysis:
     """Tests for rhythm analysis"""

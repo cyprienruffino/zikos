@@ -91,10 +91,9 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
         onset_times = librosa.frames_to_time(onsets, sr=sr)
         attack_times = []
         for onset_time in onset_times[:10]:
-            onset_frame = librosa.time_to_frames(onset_time, sr=sr)
-            if onset_frame < len(y):
-                start_sample = int(onset_frame)
-                end_sample = min(int(onset_frame + sr * 0.1), len(y))
+            start_sample = int(onset_time * sr)
+            end_sample = min(start_sample + int(sr * 0.1), len(y))
+            if start_sample < len(y):
                 segment = y[start_sample:end_sample]
                 if len(segment) > 0:
                     max_idx = int(np.argmax(np.abs(segment)))

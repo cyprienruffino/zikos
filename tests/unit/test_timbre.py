@@ -48,6 +48,22 @@ def warm_audio_file(temp_dir):
     return audio_path
 
 
+@pytest.fixture
+def percussive_audio_file(temp_dir):
+    """Create audio with sharp onset followed by decay — piano-like attack."""
+    sr = 22050
+    duration = 1.0
+    t = np.linspace(0, duration, int(sr * duration))
+
+    # Exponential decay envelope: peak at t=0, 37% after ~50ms
+    envelope = np.exp(-t / 0.05)
+    audio = np.sin(2 * np.pi * 440 * t) * envelope
+
+    audio_path = temp_dir / "percussive.wav"
+    sf.write(str(audio_path), audio, sr)
+    return audio_path
+
+
 class TestTimbreAnalysis:
     """Tests for timbre analysis with real audio"""
 
@@ -85,3 +101,22 @@ class TestTimbreAnalysis:
         assert "spectral_bandwidth" in result
         assert isinstance(result["spectral_rolloff"], int | float)
         assert isinstance(result["spectral_bandwidth"], int | float)
+
+    @pytest.mark.asyncio
+    async def test_attack_time_nonzero_for_percussive_audio(self, percussive_audio_file):
+        """attack_time must be a positive number of seconds, not 0."""
+        result = await analyze_timbre(str(percussive_audio_file))
+
+        assert "attack_time" in result
+        assert result["attack_time"] > 0.0, "attack_time should be > 0 for audio with a real onset"
+
+    @pytest.mark.asyncio
+    async def test_timbre_consistency_reasonable_range(self, bright_audio_file):
+        """timbre_consistency should be in a useful range for sustained tones."""
+        result = await analyze_timbre(str(bright_audio_file))
+
+        assert "timbre_consistency" in result
+        # Sustained sine-based audio should score well (>= 0.5)
+        assert (
+            result["timbre_consistency"] >= 0.5
+        ), f"timbre_consistency {result['timbre_consistency']:.2f} too low for sustained tone"
