@@ -77,8 +77,6 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
                 if env["rms"] >= max_rms * AUDIO.PEAK_THRESHOLD_RATIO:
                     peaks.append({"time": env["time"], "amplitude": env["rms"]})
 
-        is_consistent = dynamic_consistency > AUDIO.DYNAMIC_CONSISTENCY_THRESHOLD
-
         return {
             "average_rms": average_rms,
             "average_loudness": average_rms,
@@ -88,7 +86,6 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
             "lufs": average_rms,
             "amplitude_envelope": amplitude_envelope,
             "dynamic_consistency": dynamic_consistency,
-            "is_consistent": is_consistent,
             "peaks": peaks,
         }
     except FileNotFoundError:
