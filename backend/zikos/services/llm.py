@@ -363,22 +363,10 @@ class LLMService:
                 for tc in tool_calls:
                     tc["id"] = str(uuid.uuid4())
 
-                # Native tool calling backends (Anthropic, OpenAI) require the assistant message
-                # with tool_calls to appear in history before the tool results, so the
-                # tool_use_id in tool_result blocks can be matched back to tool_use blocks.
-                history.append(
-                    {
-                        "role": "assistant",
-                        "content": cleaned_content or None,
-                        "tool_calls": tool_calls,
-                    }
-                )
-
-                should_continue, result, tool_call_infos = (
+                should_continue, result, tool_call_infos, tool_results = (
                     await self.orchestrator.process_tool_calls(
                         tool_calls,
                         state,
-                        history,
                         tool_registry,
                         mcp_server,
                         session_id,
@@ -391,6 +379,7 @@ class LLMService:
 
                 if not should_continue:
                     if result and "error_type" in result:
+                        # Loop detected: no tools ran, nothing to commit to history.
                         self._inject_error_system_message(
                             history, result["error_type"], result["error_details"]
                         )
@@ -398,6 +387,16 @@ class LLMService:
                     elif result:
                         yield result
                         return
+                else:
+                    # All tools completed: commit assistant message and results atomically.
+                    history.append(
+                        {
+                            "role": "assistant",
+                            "content": cleaned_content or None,
+                            "tool_calls": tool_calls,
+                        }
+                    )
+                    history.extend(tool_results)
                 continue
 
             # Check for malformed tool calls

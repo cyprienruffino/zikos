@@ -191,7 +191,7 @@ class TestProcessToolCalls:
         return server
 
     @pytest.mark.asyncio
-    async def test_executes_tool_and_adds_result_to_history(self, orchestrator, mcp_server):
+    async def test_executes_tool_and_returns_results(self, orchestrator, mcp_server):
         tool_calls = [
             {
                 "id": "call_1",
@@ -199,18 +199,17 @@ class TestProcessToolCalls:
             }
         ]
         state = IterationState()
-        history: list[dict[str, Any]] = []
         registry = mcp_server.get_tool_registry()
 
-        should_continue, result, infos = await orchestrator.process_tool_calls(
-            tool_calls, state, history, registry, mcp_server, "s1", ""
+        should_continue, result, infos, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
         )
 
         assert should_continue is True
         assert result is None
-        assert len(history) == 1
-        assert history[0]["role"] == "tool"
-        assert "120" in history[0]["content"]
+        assert len(tool_results) == 1
+        assert tool_results[0]["role"] == "tool"
+        assert "120" in tool_results[0]["content"]
         assert state.consecutive_tool_calls == 1
 
     @pytest.mark.asyncio
@@ -228,8 +227,8 @@ class TestProcessToolCalls:
         state = IterationState()
         registry = mcp_server.get_tool_registry()
 
-        _, _, infos = await orchestrator.process_tool_calls(
-            tool_calls, state, [], registry, mcp_server, "s1", ""
+        _, _, infos, _ = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
         )
 
         assert len(infos) == 2
@@ -249,8 +248,8 @@ class TestProcessToolCalls:
         state = IterationState()
         registry = server.get_tool_registry()
 
-        should_continue, result, infos = await orchestrator.process_tool_calls(
-            tool_calls, state, [], registry, server, "s1", "Here's a metronome"
+        should_continue, result, infos, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, server, "s1", "Here's a metronome"
         )
 
         assert should_continue is False
@@ -258,6 +257,7 @@ class TestProcessToolCalls:
         assert result["type"] == "tool_call"
         assert result["tool_name"] == "create_metronome"
         assert result["arguments"]["bpm"] == 120
+        assert tool_results == []
 
     @pytest.mark.asyncio
     async def test_loop_detection_triggers(self, orchestrator, mcp_server):
@@ -271,14 +271,15 @@ class TestProcessToolCalls:
         ]
         registry = mcp_server.get_tool_registry()
 
-        should_continue, result, _ = await orchestrator.process_tool_calls(
-            tool_calls, state, [], registry, mcp_server, "s1", ""
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
         )
 
         assert should_continue is False
         assert result is not None
         assert "error_type" in result
         assert "too_many" in result["error_type"]
+        assert tool_results == []
 
     @pytest.mark.asyncio
     async def test_tracks_recent_tool_calls(self, orchestrator, mcp_server):
@@ -289,7 +290,7 @@ class TestProcessToolCalls:
             {"id": "c2", "function": {"name": "detect_pitch", "arguments": "{}"}},
         ]
 
-        await orchestrator.process_tool_calls(tool_calls, state, [], registry, mcp_server, "s1", "")
+        await orchestrator.process_tool_calls(tool_calls, state, registry, mcp_server, "s1", "")
 
         assert state.recent_tool_calls == ["analyze_tempo", "detect_pitch"]
 

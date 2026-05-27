@@ -149,19 +149,22 @@ class LLMOrchestrator:
         self,
         tool_calls: list[dict[str, Any]],
         iteration_state: IterationState,
-        history: list[dict[str, Any]],
         tool_registry: Any,
         mcp_server: MCPServer,
         session_id: str,
         cleaned_content: str,
-    ) -> tuple[bool, dict[str, Any] | None, list[dict[str, Any]]]:
-        """Process tool calls, handle loops, execute tools
+    ) -> tuple[bool, dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
+        """Process tool calls, handle loops, execute tools.
+
+        Does not mutate history — the caller commits the assistant message and
+        tool results atomically once execution is confirmed complete.
 
         Returns:
-            Tuple of (should_continue, response_or_error, tool_call_infos)
+            Tuple of (should_continue, response_or_error, tool_call_infos, tool_results)
             - should_continue: True if iteration should continue normally
             - response_or_error: Widget response or loop error dict, or None
             - tool_call_infos: Tool call info dicts for UI streaming
+            - tool_results: Tool result messages; empty list on early exit
         """
         iteration_state.consecutive_tool_calls += 1
 
@@ -212,7 +215,7 @@ class LLMOrchestrator:
             iteration_state.max_consecutive_tool_calls,
         )
         if loop_error:
-            return False, loop_error, tool_call_infos
+            return False, loop_error, tool_call_infos, []
 
         # Track recent tool calls
         iteration_state.recent_tool_calls.extend(current_tool_names)
@@ -236,16 +239,14 @@ class LLMOrchestrator:
                 self.tool_call_parser,
             )
             if widget_response:
-                return False, widget_response, tool_call_infos
+                return False, widget_response, tool_call_infos, []
 
             tool_result = await self.tool_executor.execute_tool_and_get_result(
                 tool_call, tool_registry, mcp_server, session_id
             )
             tool_results.append(tool_result)
 
-        history.extend(tool_results)
-
-        return True, None, tool_call_infos
+        return True, None, tool_call_infos, tool_results
 
     def finalize_response(
         self, cleaned_content: str, thinking_content: str, iteration_state: IterationState

@@ -1,6 +1,6 @@
 """Tests for LLM streaming functionality"""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -105,32 +105,43 @@ class TestLLMStreaming:
         assert len(user_msgs) == 2
 
     @pytest.mark.asyncio
-    async def test_tool_call_assistant_message_precedes_tool_results(self, mcp_server):
-        """Anthropic requires tool_use assistant message before tool_result in history."""
+    async def test_tool_call_history_committed_atomically(self, mcp_server):
+        """Assistant message and tool results are added to history together after execution."""
         service = make_streaming_service(
-            response="",
-            tool_calls=[
+            responses=[
                 {
-                    "id": "call_abc",
-                    "function": {
-                        "name": "request_audio_recording",
-                        "arguments": '{"prompt": "Record"}',
-                    },
-                }
-            ],
+                    "tool_calls": [
+                        {
+                            "id": "call_abc",
+                            "function": {
+                                "name": "analyze_tempo",
+                                "arguments": '{"audio_file_id": "test.wav"}',
+                            },
+                        }
+                    ]
+                },
+                "Here is your tempo analysis.",
+            ]
         )
 
-        async for _ in service.generate_response_stream("Let's record", "s1", mcp_server):
+        mcp_server.call_tool = AsyncMock(return_value={"bpm": 120})
+
+        async for _ in service.generate_response_stream("Analyse this", "s1", mcp_server):
             pass
 
         history = service._get_conversation_history("s1")
-        assistant_indices = [i for i, m in enumerate(history) if m["role"] == "assistant"]
-        tool_indices = [i for i, m in enumerate(history) if m["role"] == "tool"]
+        assistant_msgs = [
+            (i, m)
+            for i, m in enumerate(history)
+            if m["role"] == "assistant" and m.get("tool_calls")
+        ]
+        tool_msgs = [(i, m) for i, m in enumerate(history) if m["role"] == "tool"]
 
-        if assistant_indices and tool_indices:
-            assert (
-                assistant_indices[-1] < tool_indices[0]
-            ), "assistant message with tool_calls must appear before tool result messages"
+        assert len(assistant_msgs) == 1, "exactly one assistant message with tool_calls"
+        assert len(tool_msgs) == 1, "exactly one tool result"
+        assert (
+            assistant_msgs[0][0] + 1 == tool_msgs[0][0]
+        ), "tool result must immediately follow assistant message"
 
     @pytest.mark.asyncio
     async def test_handles_streaming_error(self, mcp_server):
