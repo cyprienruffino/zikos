@@ -37,14 +37,12 @@ async def test_analyze_groove_success(temp_dir, sample_audio_path):
         result = await analyze_groove(str(sample_audio_path))
 
     assert "error" not in result
-    assert "groove_type" in result
     assert "swing_ratio" in result
-    assert "microtiming_pattern" in result
     assert "feel_score" in result
     assert "groove_consistency" in result
-    assert result["groove_type"] in ["straight", "swung", "reverse_swing"]
+    assert "average_microtiming_deviation_ms" in result
+    assert "microtiming_std_ms" in result
     assert 0.0 <= result["swing_ratio"] <= 2.0
-    assert result["microtiming_pattern"] in ["consistent", "variable", "inconsistent"]
     assert 0.0 <= result["feel_score"] <= 1.0
     assert 0.0 <= result["groove_consistency"] <= 1.0
 
@@ -109,7 +107,7 @@ async def test_analyze_groove_via_tools_class(temp_dir, sample_audio_path):
         result = await tools.analyze_groove(audio_file_id)
 
     assert "error" not in result
-    assert "groove_type" in result
+    assert "swing_ratio" in result
 
 
 @pytest.mark.asyncio
@@ -145,7 +143,7 @@ async def test_analyze_groove_few_beats(temp_dir, sample_audio_path):
         result = await analyze_groove(str(sample_audio_path))
 
     if "error" not in result:
-        assert "groove_type" in result
+        assert "swing_ratio" in result
 
 
 @pytest.mark.asyncio
@@ -174,8 +172,7 @@ async def test_analyze_groove_swung_pattern(temp_dir, sample_audio_path):
         result = await analyze_groove(str(sample_audio_path))
 
     if "error" not in result:
-        assert "groove_type" in result
-        assert result["groove_type"] in ["straight", "swung", "reverse_swing"]
+        assert "swing_ratio" in result
 
 
 @pytest.mark.asyncio
@@ -204,8 +201,7 @@ async def test_analyze_groove_inconsistent_microtiming(temp_dir, sample_audio_pa
         result = await analyze_groove(str(sample_audio_path))
 
     if "error" not in result:
-        assert "microtiming_pattern" in result
-        assert result["microtiming_pattern"] in ["consistent", "variable", "inconsistent"]
+        assert "microtiming_std_ms" in result
 
 
 @pytest.mark.asyncio
@@ -234,7 +230,7 @@ async def test_analyze_groove_variable_microtiming(temp_dir, sample_audio_path):
         result = await analyze_groove(str(sample_audio_path))
 
     if "error" not in result:
-        assert "microtiming_pattern" in result
+        assert "microtiming_std_ms" in result
 
 
 @pytest.mark.asyncio
@@ -262,4 +258,4 @@ async def test_analyze_groove_short_intervals(temp_dir, sample_audio_path):
         result = await analyze_groove(str(sample_audio_path))
 
     if "error" not in result:
-        assert "groove_type" in result
+        assert "swing_ratio" in result

@@ -21,17 +21,13 @@ def get_analyze_groove_tool() -> Tool:
         required=["audio_file_id"],
         detailed_description="""Analyze microtiming patterns, swing, and groove feel.
 
-Returns: dict with groove_type ("straight", "swung", "reverse_swing"), swing_ratio, microtiming_pattern ("consistent", "variable", "inconsistent"), feel_score (0.0-1.0), groove_consistency (0.0-1.0), average_microtiming_deviation_ms, microtiming_std_ms
+Returns: dict with swing_ratio, feel_score (0.0-1.0), groove_consistency (0.0-1.0), average_microtiming_deviation_ms, microtiming_std_ms
 
 Interpretation Guidelines:
-- groove_type: "straight" (even timing), "swung" (long-short pattern), "reverse_swing" (short-long pattern)
-- swing_ratio: 1.0 = straight, >1.3 = swung, <0.8 = reverse swing
+- swing_ratio: 1.0 = straight, >1.3 = swung feel, <0.8 = reverse swing
 - feel_score: >0.85 excellent groove, 0.75-0.85 good, <0.75 needs work
 - groove_consistency: >0.85 very consistent, 0.75-0.85 good, <0.75 inconsistent
 - average_microtiming_deviation_ms: <15ms excellent, 15-30ms good, >30ms needs work
-- When groove_type is "swung" and feel_score > 0.80, the performance has good swing feel
-- When microtiming_pattern is "inconsistent", suggest practicing with metronome to develop steady groove
-- High groove_consistency with good feel_score indicates strong rhythmic feel and musicality
 - Use to assess jazz, blues, or any style where groove and feel are important""",
     )
 
@@ -102,11 +98,11 @@ async def analyze_groove(audio_path: str) -> dict[str, Any]:
 
         if len(microtiming_deviations) == 0:
             return {
-                "groove_type": "straight",
                 "swing_ratio": 1.0,
-                "microtiming_pattern": "consistent",
                 "feel_score": 0.85,
                 "groove_consistency": 0.90,
+                "average_microtiming_deviation_ms": 0.0,
+                "microtiming_std_ms": 0.0,
             }
 
         microtiming_std = float(np.std(microtiming_deviations))
@@ -119,8 +115,6 @@ async def analyze_groove(audio_path: str) -> dict[str, Any]:
         feel_score = max(0.0, min(1.0, feel_score))
 
         swing_ratio = 1.0
-        groove_type = "straight"
-        microtiming_pattern = "consistent"
 
         if len(inter_onset_intervals) >= 4:
             interval_ratios = []
@@ -131,29 +125,10 @@ async def analyze_groove(audio_path: str) -> dict[str, Any]:
                         interval_ratios.append(ratio)
 
             if len(interval_ratios) > 0:
-                avg_ratio = np.mean(interval_ratios)
-
-                if avg_ratio > 1.3:
-                    groove_type = "swung"
-                    swing_ratio = float(avg_ratio)
-                elif avg_ratio < 0.8:
-                    groove_type = "reverse_swing"
-                    swing_ratio = float(avg_ratio)
-                else:
-                    groove_type = "straight"
-                    swing_ratio = 1.0
-
-        if microtiming_std > 30:
-            microtiming_pattern = "inconsistent"
-        elif microtiming_std > 15:
-            microtiming_pattern = "variable"
-        else:
-            microtiming_pattern = "consistent"
+                swing_ratio = float(np.mean(interval_ratios))
 
         return {
-            "groove_type": groove_type,
             "swing_ratio": float(swing_ratio),
-            "microtiming_pattern": microtiming_pattern,
             "feel_score": float(feel_score),
             "groove_consistency": float(groove_consistency),
             "average_microtiming_deviation_ms": float(microtiming_mean),
