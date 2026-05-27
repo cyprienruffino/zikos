@@ -70,7 +70,11 @@ class LLMOrchestrator:
         original_message = message
         message, _ = self.audio_context_enricher.enrich_message(message, history)
 
-        history.append({"role": "user", "content": message})
+        # Skip adding an empty user message when history already ends with a tool result
+        # (handle_audio_ready closes a pending interaction and triggers LLM continuation).
+        last_role = history[-1].get("role") if history else None
+        if message or last_role != "tool":
+            history.append({"role": "user", "content": message})
         _conversation_logger.info(
             f"Session: {session_id}\nUser Prompt:\n{original_message}\n{'=' * 80}"
         )

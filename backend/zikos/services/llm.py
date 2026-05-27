@@ -411,6 +411,11 @@ class LLMService:
                             # Commit the assistant message now; tool_result appended
                             # by handle_audio_ready when the user completes the action.
                             history.append(assistant_msg)
+                            tool_call_id = result.get("tool_id") or ""
+                            if tool_call_id:
+                                self.conversation_manager.set_pending_interaction(
+                                    session_id, tool_call_id, tool_name
+                                )
                         yield result
                         return
                 else:
@@ -511,8 +516,28 @@ class LLMService:
         analysis_str = (
             json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
         )
-        message = AudioAnalysisContextFormatter.format_analysis_results(audio_file_id, analysis_str)
-        return await self.generate_response(message, session_id or "default", mcp_server)
+        effective_session = session_id or "default"
+        analysis_content = AudioAnalysisContextFormatter.format_analysis_results(
+            audio_file_id, analysis_str
+        )
+
+        pending = self.conversation_manager.pop_pending_interaction(effective_session)
+        if pending:
+            # Close the pending tool_use/tool_result pair, then let the LLM continue
+            # from the tool_result without adding a new user message.
+            history = self._get_conversation_history(effective_session)
+            history.append(
+                {
+                    "role": "tool",
+                    "name": pending["tool_name"],
+                    "content": analysis_content,
+                    "tool_call_id": pending["tool_call_id"],
+                }
+            )
+            return await self.generate_response("", effective_session, mcp_server)
+
+        # No pending interaction — inject as a plain user message (backwards compatibility).
+        return await self.generate_response(analysis_content, effective_session, mcp_server)
 
     # --- System prompt ---
 

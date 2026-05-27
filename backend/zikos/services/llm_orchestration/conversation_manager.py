@@ -7,13 +7,10 @@ class ConversationManager:
     """Manages conversation history for different sessions"""
 
     def __init__(self, system_prompt_getter):
-        """Initialize conversation manager
-
-        Args:
-            system_prompt_getter: Callable that returns the system prompt string
-        """
         self.conversations: dict[str, list[dict[str, Any]]] = {}
         self._get_system_prompt = system_prompt_getter
+        # Pending interaction requests: session_id → {tool_call_id, tool_name}
+        self._pending_interactions: dict[str, dict[str, str]] = {}
 
     def get_history(self, session_id: str) -> list[dict[str, Any]]:
         """Get conversation history for session
@@ -28,6 +25,15 @@ class ConversationManager:
             system_prompt = self._get_system_prompt()
             self.conversations[session_id] = [{"role": "system", "content": system_prompt}]
         return self.conversations[session_id]
+
+    def set_pending_interaction(self, session_id: str, tool_call_id: str, tool_name: str) -> None:
+        self._pending_interactions[session_id] = {
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+        }
+
+    def pop_pending_interaction(self, session_id: str) -> dict[str, str] | None:
+        return self._pending_interactions.pop(session_id, None)
 
     def get_thinking_for_session(self, session_id: str) -> list[dict[str, Any]]:
         """Get all thinking messages for a session (for debugging)

@@ -132,6 +132,58 @@ class TestLLMStreaming:
         assert assistant_msgs[0]["tool_calls"][0]["id"] == tool_result_msgs[0]["tool_call_id"]
 
     @pytest.mark.asyncio
+    async def test_recording_round_trip_closes_tool_use_pair(self, mcp_server):
+        """Full recording flow: tool_use committed when widget shown, tool_result when audio arrives."""
+        service = make_streaming_service(
+            responses=[
+                {
+                    "tool_calls": [
+                        {
+                            "id": "rec_id_1",
+                            "function": {
+                                "name": "request_audio_recording",
+                                "arguments": '{"prompt": "Record yourself"}',
+                            },
+                        }
+                    ]
+                },
+                "Great recording! Here is my feedback.",
+            ]
+        )
+
+        # Step 1: LLM requests recording
+        async for _ in service.generate_response_stream("Teach me", "s1", mcp_server):
+            pass
+
+        history = service._get_conversation_history("s1")
+        assert any(m["role"] == "assistant" and m.get("tool_calls") for m in history)
+        assert not any(m["role"] == "tool" for m in history), "no tool_result yet"
+
+        # Step 2: user finishes recording → handle_audio_ready closes the pair
+        mcp_server.call_tool = AsyncMock(return_value={"bpm": 100})
+        with patch.object(
+            service.audio_service, "run_baseline_analysis", return_value={"bpm": 100}
+        ):
+            await service.handle_audio_ready("audio_1.wav", None, "s1", mcp_server)
+
+        history = service._get_conversation_history("s1")
+        tool_results = [m for m in history if m["role"] == "tool"]
+        assert len(tool_results) == 1, "tool_result injected after recording"
+
+        # The tool_call_id must match the assistant's tool_use id (UUID-reassigned).
+        assistant_tool_use = next(
+            m for m in history if m["role"] == "assistant" and m.get("tool_calls")
+        )
+        assert tool_results[0]["tool_call_id"] == assistant_tool_use["tool_calls"][0]["id"]
+
+        # History must be a valid append-only sequence: assistant(tool_use) then tool(result)
+        assistant_idx = next(
+            i for i, m in enumerate(history) if m["role"] == "assistant" and m.get("tool_calls")
+        )
+        tool_idx = next(i for i, m in enumerate(history) if m["role"] == "tool")
+        assert assistant_idx + 1 == tool_idx, "tool_result immediately follows assistant tool_use"
+
+    @pytest.mark.asyncio
     async def test_preserves_conversation_history(self, mcp_server):
         service = make_streaming_service("First reply")
 
