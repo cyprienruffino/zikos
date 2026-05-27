@@ -475,7 +475,8 @@ Error Handling:
         1. SOUNDFONT_PATH config/env var — explicit user override, always works
         2. SOUNDFONT / SDL_SOUNDFONTS env vars — common conventions
         3. ~/.fluidsynth/default_sound_font.sf2 — midi2audio convention, cross-platform
-        4. Ask FluidSynth itself for its compile-time synth.default-soundfont setting
+        4. Ask FluidSynth itself for its compile-time synth.default-soundfont setting;
+           if the reported path doesn't exist, scan sibling .sf2 files in that directory
         """
         import os
         import shutil
@@ -502,8 +503,10 @@ Error Handling:
         if user_default.exists():
             return user_default
 
-        # 4. Ask FluidSynth for its compile-time default (works on any OS where
-        #    fluidsynth is installed; subprocess stdin works on Windows too)
+        # 4. Ask FluidSynth for its compile-time default. Some distros ship a
+        #    different filename than what FluidSynth reports (e.g. Arch reports
+        #    default.sf2 but only FluidR3_GM.sf2 exists). If the exact file is
+        #    missing, scan siblings in the same directory.
         fluidsynth_cmd = shutil.which("fluidsynth")
         if fluidsynth_cmd:
             try:
@@ -520,6 +523,9 @@ Error Handling:
                         p = Path(line)
                         if p.exists():
                             return p
+                        for candidate in sorted(p.parent.glob("*.sf2")):
+                            if candidate.exists():
+                                return candidate
             except Exception:
                 pass
 
