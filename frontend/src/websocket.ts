@@ -51,6 +51,7 @@ export function connect(): void {
         if (sendButton) {
             sendButton.disabled = false;
         }
+        ws!.send(JSON.stringify({ type: "connect", session_id: sessionId }));
     };
 
     ws.onmessage = (event: MessageEvent) => {

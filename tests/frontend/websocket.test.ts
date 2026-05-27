@@ -172,7 +172,8 @@ describe("WebSocket Module", () => {
 
             sendMessage("Hello, world!");
             expect(ws.send).toHaveBeenCalled();
-            const sentData = JSON.parse((ws.send as any).mock.calls[0][0]);
+            const calls = (ws.send as any).mock.calls;
+            const sentData = JSON.parse(calls[calls.length - 1][0]);
             expect(sentData.type).toBe("message");
             expect(sentData.message).toBe("Hello, world!");
             expect(sentData.session_id).toBeDefined();
