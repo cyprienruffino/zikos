@@ -290,9 +290,8 @@ class TestRhythmAnalysisIntegration:
         assert isinstance(result["onsets"], list)
         assert "timing_accuracy" in result
         assert 0.0 <= result["timing_accuracy"] <= 1.0
-        assert "rhythmic_pattern" in result
-        assert "is_on_beat" in result
-        assert isinstance(result["is_on_beat"], bool)
+        assert "inter_onset_interval_cv" in result
+        assert result["inter_onset_interval_cv"] >= 0.0
 
     @pytest.mark.integration
     @pytest.mark.asyncio

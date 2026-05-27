@@ -16,7 +16,7 @@ def get_analyze_rhythm_tool() -> Tool:
     """Get the analyze_rhythm tool definition"""
     return Tool(
         name="analyze_rhythm",
-        description="Analyze rhythm and timing accuracy. Returns: onsets, timing_accuracy (0.0-1.0), rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency",
+        description="Analyze rhythm and timing accuracy. Returns: onsets, timing_accuracy (0.0-1.0), inter_onset_interval_cv, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency",
         category=ToolCategory.AUDIO_ANALYSIS,
         parameters={
             "audio_file_id": {"type": "string"},
@@ -24,12 +24,13 @@ def get_analyze_rhythm_tool() -> Tool:
         required=["audio_file_id"],
         detailed_description="""Analyze rhythm and timing accuracy.
 
-Returns: dict with onsets, timing_accuracy (0.0-1.0), rhythmic_pattern, is_on_beat, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency
+Returns: dict with onsets, timing_accuracy (0.0-1.0), inter_onset_interval_cv, beat_deviations, average_deviation_ms, rushing_tendency, dragging_tendency
 
 Interpretation Guidelines:
 - timing_accuracy: >0.90 excellent, 0.80-0.90 good, 0.70-0.80 needs work, <0.70 poor
 - average_deviation_ms: <10ms excellent, 10-20ms good, 20-50ms needs work, >50ms poor
 - rushing_tendency/dragging_tendency: <0.15 low, 0.15-0.30 moderate, >0.30 high
+- inter_onset_interval_cv (coefficient of variation): <0.1 very regular, 0.1-0.3 moderate variation, >0.3 irregular
 - When timing_accuracy < 0.80 AND rushing_tendency > 0.15, consider suggesting metronome practice
 - When deviations are clustered, identify patterns (e.g., "rushing on the downbeat")""",
     )
@@ -56,19 +57,6 @@ def calculate_timing_accuracy(onset_times: np.ndarray, beat_times: np.ndarray) -
         return float(0.8 - (avg_deviation_ms - 20) / 300)
     else:
         return float(max(0.0, 0.7 - (avg_deviation_ms - 50) / 500))
-
-
-def classify_deviation_severity(deviation_ms: float) -> str:
-    """Classify deviation severity"""
-    abs_dev = abs(deviation_ms)
-    if abs_dev < 10:
-        return "negligible"
-    elif abs_dev < 20:
-        return "minor"
-    elif abs_dev < 50:
-        return "moderate"
-    else:
-        return "major"
 
 
 async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
@@ -136,7 +124,6 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
                         {
                             "time": float(onset_time),
                             "deviation_ms": float(deviation_ms),
-                            "severity": classify_deviation_severity(deviation_ms),
                         }
                     )
 
@@ -147,19 +134,17 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
                 rushing_tendency = rushing_count / len(deviations)
                 dragging_tendency = dragging_count / len(deviations)
 
-        is_on_beat = timing_accuracy > 0.80
-
-        rhythmic_pattern = "unknown"
-        if len(onsets) >= 4:
+        inter_onset_interval_cv = 0.0
+        if len(onset_times) >= 4:
             inter_onset_intervals = np.diff(onset_times)
-            if np.std(inter_onset_intervals) / np.mean(inter_onset_intervals) < 0.1:
-                rhythmic_pattern = "regular"
+            mean_ioi = np.mean(inter_onset_intervals)
+            if mean_ioi > 0:
+                inter_onset_interval_cv = float(np.std(inter_onset_intervals) / mean_ioi)
 
         return {
             "onsets": onsets_list,
             "timing_accuracy": float(timing_accuracy),
-            "rhythmic_pattern": rhythmic_pattern,
-            "is_on_beat": is_on_beat,
+            "inter_onset_interval_cv": inter_onset_interval_cv,
             "beat_deviations": beat_deviations,
             "average_deviation_ms": float(average_deviation_ms),
             "rushing_tendency": float(rushing_tendency),

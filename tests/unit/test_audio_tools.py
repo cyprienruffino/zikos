@@ -402,7 +402,6 @@ class TestRhythmAnalysis:
                 deviation = result["beat_deviations"][0]
                 assert "time" in deviation
                 assert "deviation_ms" in deviation
-                assert "severity" in deviation
 
     @pytest.mark.asyncio
     async def test_analyze_rhythm_rushing_dragging(
