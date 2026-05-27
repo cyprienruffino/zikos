@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import librosa
 import pytest
 
 from zikos.services.audio_preprocessing import AudioPreprocessingService
@@ -186,6 +187,44 @@ class TestAudioPreprocessingService:
         assert output_path.suffix == ".wav"
         assert output_path.exists()
         assert output_path.stat().st_size > 0
+
+    @pytest.mark.asyncio
+    async def test_silence_trimmed_from_output(self, preprocessing_service, temp_dir):
+        """Preprocessed audio must be shorter than input padded with silence."""
+        import numpy as np
+        import soundfile as sf
+
+        sr = 44100
+        one_sec_silence = np.zeros(sr, dtype=np.float32)
+        tone = (np.sin(2 * np.pi * 440 * np.linspace(0, 1, sr)) * 0.8).astype(np.float32)
+        # 1 s silence + 1 s tone + 1 s silence = 3 s total
+        padded = np.concatenate([one_sec_silence, tone, one_sec_silence])
+        input_path = temp_dir / "padded.wav"
+        sf.write(str(input_path), padded, sr)
+
+        output_path = await preprocessing_service.preprocess_audio(
+            input_path, target_format="wav", target_sample_rate=sr
+        )
+
+        out_audio, _ = librosa.load(str(output_path), sr=None)
+        assert len(out_audio) < len(padded), "Output should be shorter after silence trimming"
+
+    def test_trim_silence_directly(self, preprocessing_service, temp_dir):
+        """_trim_silence shortens a file that has leading/trailing silence."""
+        import numpy as np
+        import soundfile as sf
+
+        sr = 22050
+        silence = np.zeros(sr // 2, dtype=np.float32)
+        tone = (np.sin(2 * np.pi * 440 * np.linspace(0, 0.5, sr // 2)) * 0.8).astype(np.float32)
+        audio = np.concatenate([silence, tone, silence])
+        path = temp_dir / "silent.wav"
+        sf.write(str(path), audio, sr)
+
+        preprocessing_service._trim_silence(path)
+
+        trimmed, _ = sf.read(str(path))
+        assert len(trimmed) < len(audio)
 
     def test_clear_cache(self, preprocessing_service, temp_dir):
         """Test clearing preprocessing cache"""

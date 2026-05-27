@@ -5,9 +5,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import librosa
+import soundfile as sf
 from fastapi import UploadFile
 
 from zikos.config import settings
+
+# Trim anything more than this many dB below the peak — balanced for instruments.
+_SILENCE_TOP_DB = 30
 
 
 class AudioPreprocessingService:
@@ -103,7 +108,15 @@ class AudioPreprocessingService:
         if not cache_path.exists():
             raise RuntimeError(f"FFmpeg did not create output file: {cache_path}")
 
+        self._trim_silence(cache_path)
+
         return cache_path
+
+    def _trim_silence(self, audio_path: Path) -> None:
+        """Trim leading and trailing silence in-place."""
+        y, sr = librosa.load(str(audio_path), sr=None)
+        y_trimmed, _ = librosa.effects.trim(y, top_db=_SILENCE_TOP_DB)
+        sf.write(str(audio_path), y_trimmed, sr)
 
     async def preprocess_upload_file(
         self,
