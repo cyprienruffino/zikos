@@ -2,19 +2,17 @@
 
 ## Open
 
-### BUG-001 — Same audio file reused across re-recordings
-**Priority:** High
-**Area:** Frontend / recording widget
-**Symptom:** After re-recording, the LLM reports the same `audio_file_id` as the previous session. The user re-recorded but the system served the old file.
-**Suspected cause:** Unknown — could be the recording widget not resetting state, the upload endpoint deduplicating by content, or session state leaking the old ID.
+### BUG-001 — ~~Same audio file reused across re-recordings~~ CLOSED: not a real bug
+**Resolution:** Each upload correctly generates a fresh `uuid4`. The "same file" observation was caused by BUG-002: the `AudioContextEnricher` re-injects the first recording's analysis on every subsequent turn, so the LLM kept seeing and commenting on the old data.
 
 ---
 
-### BUG-002 — Duplicate audio analysis context messages injected into history
+### BUG-002 — Audio analysis context re-injected into every subsequent user message
 **Priority:** High
-**Area:** `AudioContextEnricher` / `ConversationManager`
-**Symptom:** API snapshots show multiple consecutive `[Audio Analysis Context]` user messages with identical content. LLM repeats phrases like "Oui, je vois le nouvel enregistrement !" across turns because the context is injected again and again.
-**Suspected cause:** `enrich_message` likely called on every turn without checking whether the analysis is already present in history.
+**Area:** `AudioContextEnricher`
+**Symptom:** API snapshots show the first recording's `[Audio Analysis Results]` block appearing at an ever-increasing message index across turns — it is re-appended as part of every user message that contains an audio keyword ("recording", "sound", etc.). The LLM keeps commenting on the first recording as if no new one arrived.
+**Confirmed:** In session `aeb93f4f`, `audio_file_id 12cbcd28` appears at positions [12], [14], [16], [18], [20], [21], [23], [25], [26], [28] across successive snapshots.
+**Root cause:** `enrich_message` injects analysis into the user message on every call if audio keywords are present, with no check for whether the same analysis is already in history.
 
 ---
 
