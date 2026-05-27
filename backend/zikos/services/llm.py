@@ -145,7 +145,10 @@ class LLMService:
                 tool_name = chunk.get("tool_name")
                 if tool_name:
                     tool = tool_registry.get_tool(tool_name)
-                    if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
+                    if tool and tool.category in (
+                        ToolCategory.DISPLAY_WIDGET,
+                        ToolCategory.INTERACTION_REQUEST,
+                    ):
                         tool_call_response = chunk
 
             if chunk_type in ("response", "error"):

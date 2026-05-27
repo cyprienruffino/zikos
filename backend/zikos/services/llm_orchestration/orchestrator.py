@@ -184,7 +184,10 @@ class LLMOrchestrator:
             # Build UI info, filtering out widget/recording tools
             if tool_name:
                 tool = tool_registry.get_tool(tool_name)
-                if tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING):
+                if tool and tool.category in (
+                    ToolCategory.DISPLAY_WIDGET,
+                    ToolCategory.INTERACTION_REQUEST,
+                ):
                     continue
 
             tool_args_str = (

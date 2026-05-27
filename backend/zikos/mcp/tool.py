@@ -8,8 +8,10 @@ from typing import Any
 class ToolCategory(Enum):
     """Categories for organizing tools"""
 
-    WIDGET = "widget"
-    RECORDING = "recording"
+    DISPLAY_WIDGET = "display_widget"  # show UI to user, result is immediate ("widget shown")
+    INTERACTION_REQUEST = (
+        "interaction_request"  # blocks until user completes an action (e.g. recording)
+    )
     AUDIO_ANALYSIS = "audio_analysis"
     MIDI = "midi"
     OTHER = "other"

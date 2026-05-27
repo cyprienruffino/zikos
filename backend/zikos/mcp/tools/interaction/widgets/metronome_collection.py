@@ -16,7 +16,7 @@ class MetronomeTools(ToolCollection):
             Tool(
                 name="create_metronome",
                 description="Create a metronome widget with built-in recording controls. The user can start the metronome, then record directly from the widget. No need to use request_audio_recording separately when a metronome is active.",
-                category=ToolCategory.WIDGET,
+                category=ToolCategory.DISPLAY_WIDGET,
                 detailed_description="""Create a metronome widget with built-in recording controls.
 
 The widget includes:

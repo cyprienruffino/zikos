@@ -16,7 +16,7 @@ class TunerTools(ToolCollection):
             Tool(
                 name="create_tuner",
                 description="Create a tuner widget that detects pitch in real-time. Useful for tuning instruments before recording or practicing intonation.",
-                category=ToolCategory.WIDGET,
+                category=ToolCategory.DISPLAY_WIDGET,
                 detailed_description="""Create a tuner widget that detects pitch in real-time.
 
 Returns: dict with status, tuner_id, reference_frequency, note, octave, description

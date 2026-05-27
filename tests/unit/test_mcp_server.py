@@ -42,8 +42,11 @@ class TestMCPServer:
         registry = mcp_server.get_tool_registry()
 
         assert registry.get_tool("analyze_tempo").category == ToolCategory.AUDIO_ANALYSIS
-        assert registry.get_tool("create_metronome").category == ToolCategory.WIDGET
-        assert registry.get_tool("request_audio_recording").category == ToolCategory.RECORDING
+        assert registry.get_tool("create_metronome").category == ToolCategory.DISPLAY_WIDGET
+        assert (
+            registry.get_tool("request_audio_recording").category
+            == ToolCategory.INTERACTION_REQUEST
+        )
 
     @pytest.mark.asyncio
     async def test_call_metronome_tool(self, mcp_server):

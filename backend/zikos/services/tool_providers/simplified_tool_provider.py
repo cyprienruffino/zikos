@@ -37,8 +37,8 @@ midi_text: |
             by_category[tool.category].append(tool)
 
         cat_labels = {
-            ToolCategory.RECORDING: "Recording",
-            ToolCategory.WIDGET: "Widgets",
+            ToolCategory.INTERACTION_REQUEST: "Recording",
+            ToolCategory.DISPLAY_WIDGET: "Widgets",
             ToolCategory.AUDIO_ANALYSIS: "Analysis",
             ToolCategory.MIDI: "MIDI",
             ToolCategory.OTHER: "Utility",
@@ -46,8 +46,8 @@ midi_text: |
 
         lines = ["# TOOLS"]
         for category in [
-            ToolCategory.RECORDING,
-            ToolCategory.WIDGET,
+            ToolCategory.INTERACTION_REQUEST,
+            ToolCategory.DISPLAY_WIDGET,
             ToolCategory.AUDIO_ANALYSIS,
             ToolCategory.MIDI,
             ToolCategory.OTHER,

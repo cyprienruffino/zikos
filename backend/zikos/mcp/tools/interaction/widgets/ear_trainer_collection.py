@@ -16,7 +16,7 @@ class EarTrainerTools(ToolCollection):
             Tool(
                 name="create_ear_trainer",
                 description="Create an ear training widget for interval or chord recognition. Plays intervals/chords and helps users develop their ear.",
-                category=ToolCategory.WIDGET,
+                category=ToolCategory.DISPLAY_WIDGET,
                 detailed_description="""Create an ear training widget for interval or chord recognition.
 
 Returns: dict with status, trainer_id, mode, difficulty, root_note, description

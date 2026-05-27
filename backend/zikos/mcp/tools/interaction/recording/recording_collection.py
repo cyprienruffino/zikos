@@ -17,7 +17,7 @@ class RecordingTools(ToolCollection):
             Tool(
                 name="request_audio_recording",
                 description="Create a recording widget that allows the user to record audio. Use this when you need to hear the student's performance for analysis. The widget provides an interactive recording interface with record/stop/send controls.",
-                category=ToolCategory.RECORDING,
+                category=ToolCategory.INTERACTION_REQUEST,
                 detailed_description="""Create a recording widget that allows the user to record audio.
 
 Returns: dict with status, prompt, max_duration, recording_id

@@ -59,7 +59,10 @@ class ToolExecutor:
             _logger.debug(f"  Arguments: {json.dumps(tool_args, indent=2)}")
 
         tool = tool_registry.get_tool(tool_name)
-        is_widget = tool and tool.category in (ToolCategory.WIDGET, ToolCategory.RECORDING)
+        is_widget = tool and tool.category in (
+            ToolCategory.DISPLAY_WIDGET,
+            ToolCategory.INTERACTION_REQUEST,
+        )
 
         if is_widget:
             if settings.debug_tool_calls:

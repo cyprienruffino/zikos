@@ -16,7 +16,7 @@ class PracticeTimerTools(ToolCollection):
             Tool(
                 name="create_practice_timer",
                 description="Create a practice timer widget to track practice sessions. Helps build consistent practice habits with optional goals and break reminders.",
-                category=ToolCategory.WIDGET,
+                category=ToolCategory.DISPLAY_WIDGET,
                 detailed_description="""Create a practice timer widget to track practice sessions.
 
 Returns: dict with status, timer_id, duration_minutes, goal, break_interval_minutes, description

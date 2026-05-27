@@ -16,7 +16,7 @@ class TempoTrainerTools(ToolCollection):
             Tool(
                 name="create_tempo_trainer",
                 description="Create a tempo trainer widget that gradually increases or decreases tempo over time. Useful for building speed or maintaining accuracy at higher tempos.",
-                category=ToolCategory.WIDGET,
+                category=ToolCategory.DISPLAY_WIDGET,
                 detailed_description="""Create a tempo trainer widget that gradually increases or decreases tempo over time.
 
 Returns: dict with status, trainer_id, start_bpm, end_bpm, duration_minutes, time_signature, ramp_type, description

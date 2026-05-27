@@ -16,7 +16,7 @@ class ChordProgressionTools(ToolCollection):
             Tool(
                 name="create_chord_progression",
                 description="Create a chord progression player widget that loops chord progressions as backing. Useful for practicing scales, improvisation, or rhythm work.",
-                category=ToolCategory.WIDGET,
+                category=ToolCategory.DISPLAY_WIDGET,
                 detailed_description="""Create a chord progression player widget that loops chord progressions as backing.
 
 Returns: dict with status, progression_id, chords, tempo, time_signature, chords_per_bar, instrument, description

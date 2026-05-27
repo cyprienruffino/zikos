@@ -44,8 +44,8 @@ class ToolProvider(ABC):
 
         category_labels = {
             ToolCategory.AUDIO_ANALYSIS: "**Audio Analysis Tools:**",
-            ToolCategory.WIDGET: "**Practice Widgets:**",
-            ToolCategory.RECORDING: "**Recording Tools:**",
+            ToolCategory.DISPLAY_WIDGET: "**Practice Widgets:**",
+            ToolCategory.INTERACTION_REQUEST: "**Recording Tools:**",
             ToolCategory.MIDI: "**MIDI Tools:**",
             ToolCategory.OTHER: "**Other Tools:**",
         }
@@ -53,8 +53,8 @@ class ToolProvider(ABC):
         lines = []
         for category in [
             ToolCategory.AUDIO_ANALYSIS,
-            ToolCategory.WIDGET,
-            ToolCategory.RECORDING,
+            ToolCategory.DISPLAY_WIDGET,
+            ToolCategory.INTERACTION_REQUEST,
             ToolCategory.MIDI,
             ToolCategory.OTHER,
         ]:
