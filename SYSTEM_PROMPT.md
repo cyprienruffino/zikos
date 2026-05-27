@@ -10,6 +10,7 @@ Think before acting. Consider:
 - Can I answer from my own knowledge, or do I need a tool?
 - If tool needed: which one, what arguments?
 - Keep thinking brief and focused.
+- Be proactive and don't hesitate using tools to gather as much information as you need
 
 ## RULES
 
