@@ -94,6 +94,24 @@ class ChatService:
                 "audio_file_id": audio_file_id,
             }
 
+    async def handle_connect(
+        self,
+        session_id: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Trigger a greeting from the LLM when a new session opens."""
+        if not session_id:
+            session_id = self._create_session()
+
+        yield {"type": "session_id", "session_id": session_id}
+
+        async for chunk in self.llm_service.generate_response_stream(
+            "",
+            session_id,
+            self.mcp_server,
+        ):
+            chunk["session_id"] = session_id
+            yield chunk
+
     def _create_session(self) -> str:
         """Create new session"""
         import uuid

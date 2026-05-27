@@ -33,7 +33,16 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_json()
 
-            if data["type"] == "message":
+            if data["type"] == "connect":
+                try:
+                    chat_service = get_chat_service()
+                    async for chunk in chat_service.handle_connect(data.get("session_id")):
+                        await websocket.send_json(chunk)
+                except Exception as e:
+                    _logger.error(f"Error handling connect: {e}")
+                    await websocket.send_json({"type": "error", "message": str(e)})
+
+            elif data["type"] == "message":
                 try:
                     # Check if streaming is requested
                     chat_service = get_chat_service()
