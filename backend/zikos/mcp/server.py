@@ -13,16 +13,18 @@ from zikos.mcp.tools import (
     MidiTools,
     PracticeTimerTools,
     RecordingTools,
+    SettingsTools,
     SystemTools,
     TempoTrainerTools,
     TunerTools,
 )
+from zikos.services.user_settings import UserSettingsService
 
 
 class MCPServer:
     """MCP server for tool management"""
 
-    def __init__(self):
+    def __init__(self, user_settings_service: UserSettingsService | None = None):
         self.audio_tools = AudioAnalysisTools()
         self.chord_progression_tools = ChordProgressionTools()
         self.ear_trainer_tools = EarTrainerTools()
@@ -32,6 +34,10 @@ class MCPServer:
         self.recording_tools = RecordingTools()
         self.tempo_trainer_tools = TempoTrainerTools()
         self.tuner_tools = TunerTools()
+
+        if user_settings_service is None:
+            user_settings_service = UserSettingsService(settings.user_settings_path)
+        self.settings_tools = SettingsTools(user_settings_service)
 
         self._registry = ToolRegistry()
         self._registry.register_many(self.audio_tools.get_tools(), self.audio_tools)
@@ -47,6 +53,7 @@ class MCPServer:
         self._registry.register_many(self.recording_tools.get_tools(), self.recording_tools)
         self._registry.register_many(self.tempo_trainer_tools.get_tools(), self.tempo_trainer_tools)
         self._registry.register_many(self.tuner_tools.get_tools(), self.tuner_tools)
+        self._registry.register_many(self.settings_tools.get_tools(), self.settings_tools)
 
         self.system_tools = SystemTools(self._registry)
         self._registry.register_many(self.system_tools.get_tools(), self.system_tools)

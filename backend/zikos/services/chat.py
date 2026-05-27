@@ -14,7 +14,8 @@ class ChatService:
 
     def __init__(self):
         self.llm_service = LLMService()
-        self.mcp_server = MCPServer()
+        # Share the same UserSettingsService so tool writes are visible to the prompt builder
+        self.mcp_server = MCPServer(user_settings_service=self.llm_service.user_settings_service)
         self.sessions: dict[str, dict[str, Any]] = {}
 
     async def process_message(

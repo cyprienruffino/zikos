@@ -28,7 +28,9 @@ from zikos.services.prompt.sections import (
     AudioAnalysisContextFormatter,
     CorePromptSection,
     ToolInstructionsSection,
+    UserProfileSection,
 )
+from zikos.services.user_settings import UserSettingsService
 
 _conversation_logger = logging.getLogger("zikos.conversation")
 _conversation_logger.setLevel(logging.DEBUG)
@@ -53,6 +55,7 @@ class LLMService:
     """Service for LLM interactions"""
 
     def __init__(self):
+        self.user_settings_service = UserSettingsService(settings.user_settings_path)
         self.audio_service = AudioService()
         self.thinking_extractor = ThinkingExtractor()
         self.conversation_manager = ConversationManager(self._get_system_prompt)
@@ -643,6 +646,7 @@ class LLMService:
 
         builder = SystemPromptBuilder()
         builder.add_section(CorePromptSection(prompt_file_path))
+        builder.add_section(UserProfileSection(self.user_settings_service.load()))
 
         result: str = builder.build()
 

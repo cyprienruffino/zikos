@@ -11,6 +11,7 @@ from zikos.mcp.tools.interaction import (
     TunerTools,
 )
 from zikos.mcp.tools.processing import MidiTools
+from zikos.mcp.tools.settings import SettingsTools
 from zikos.mcp.tools.system import SystemTools
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "TempoTrainerTools",
     "TunerTools",
     "SystemTools",
+    "SettingsTools",
 ]

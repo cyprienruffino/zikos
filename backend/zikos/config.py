@@ -48,6 +48,9 @@ class Settings(BaseModel):
     mcp_server_host: str = "localhost"
     mcp_server_port: int = 8001
 
+    # User settings
+    user_settings_path: Path = Path("data/user_settings.json")
+
     # Debug
     debug_tool_calls: bool = False
 
@@ -93,6 +96,9 @@ class Settings(BaseModel):
             ),
             mcp_server_host=os.getenv("MCP_SERVER_HOST", defaults.mcp_server_host),
             mcp_server_port=int(os.getenv("MCP_SERVER_PORT", str(defaults.mcp_server_port))),
+            user_settings_path=Path(
+                os.getenv("USER_SETTINGS_PATH", str(defaults.user_settings_path))
+            ),
             debug_tool_calls=os.getenv(
                 "DEBUG_TOOL_CALLS", str(defaults.debug_tool_calls).lower()
             ).lower()
