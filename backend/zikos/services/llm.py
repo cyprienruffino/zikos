@@ -383,10 +383,11 @@ class LLMService:
                 if not should_continue:
                     if result and "error_type" in result:
                         # Loop detected: no tools ran, nothing to commit to history.
+                        # Do NOT extend max_iterations — the LLM must generate a text
+                        # response within the remaining budget, not keep retrying tools.
                         self._inject_error_system_message(
                             history, result["error_type"], result["error_details"]
                         )
-                        state.max_iterations += 1
                     elif result:
                         tool_name = result.get("tool_name", "")
                         tool = tool_registry.get_tool(tool_name) if tool_name else None
@@ -467,7 +468,8 @@ class LLMService:
         )
 
         try:
-            stream = self._create_stream(current_messages, tools, tool_schemas)
+            # Pass no tools so the LLM is forced to produce text, not more tool calls.
+            stream = self._create_stream(current_messages, None, tool_schemas)
             accumulated_content = ""
             async for chunk in stream:
                 choice = chunk.get("choices", [{}])[0]

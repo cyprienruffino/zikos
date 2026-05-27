@@ -12,7 +12,12 @@ def resolve_audio_path(audio_file_id: str) -> Path:
     file_path = storage_path / f"{audio_file_id}.wav"
 
     if not file_path.exists():
-        raise FileNotFoundError(f"Audio file {audio_file_id} not found")
+        raise FileNotFoundError(
+            f"Audio file '{audio_file_id}' not found. "
+            "audio_file_id must be a UUID returned by a prior tool call in the current session "
+            "(e.g. from the audio upload notification, midi_to_audio, time_stretch, or pitch_shift). "
+            "Do not fabricate or guess IDs."
+        )
 
     return file_path
 

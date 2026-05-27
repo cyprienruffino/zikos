@@ -134,18 +134,29 @@ Track 1:
         assert result["metadata"]["key"] == "C major"
 
     def test_parse_midi_no_block(self):
-        """Test parsing MIDI without [MIDI] block"""
         with pytest.raises(MidiParseError, match="No \\[MIDI\\]"):
             parse_midi_text("Just some text")
 
+    def test_parse_midi_no_block_includes_format_hint(self):
+        with pytest.raises(MidiParseError, match="Track 1:"):
+            parse_midi_text("Just some text")
+
     def test_parse_midi_no_tracks(self):
-        """Test parsing MIDI without tracks"""
         midi_text = """
 [MIDI]
 Tempo: 120
 [/MIDI]
 """
         with pytest.raises(MidiParseError, match="No tracks found"):
+            parse_midi_text(midi_text)
+
+    def test_parse_midi_no_tracks_includes_hint(self):
+        midi_text = """
+[MIDI]
+Tempo: 120
+[/MIDI]
+"""
+        with pytest.raises(MidiParseError, match="Track 1:"):
             parse_midi_text(midi_text)
 
     def test_parse_midi_invalid_tempo(self):
@@ -190,7 +201,6 @@ class TestCreateMusic21Stream:
 
     @pytest.mark.asyncio
     async def test_create_stream_invalid_note(self):
-        """Test creating stream with invalid note"""
         try:
             parsed_data = {
                 "metadata": {"tempo": 120, "time_signature": "4/4", "key": "C major"},
@@ -202,8 +212,31 @@ class TestCreateMusic21Stream:
                     }
                 ],
             }
-            with pytest.raises(MidiParseError, match="Invalid note"):
+            with pytest.raises(MidiParseError, match="Invalid note name"):
                 create_music21_stream(parsed_data)
+        except ImportError:
+            pytest.skip("music21 not available")
+
+    @pytest.mark.asyncio
+    async def test_create_stream_with_rest(self):
+        try:
+            parsed_data = {
+                "metadata": {"tempo": 120, "time_signature": "4/4", "key": "C major"},
+                "tracks": [
+                    {
+                        "number": 1,
+                        "name": None,
+                        "notes": [
+                            {"note": "C4", "velocity": 60, "duration": 1.0},
+                            {"note": "rest", "velocity": 60, "duration": 1.0},
+                            {"note": "E4", "velocity": 60, "duration": 1.0},
+                        ],
+                    }
+                ],
+            }
+            score = create_music21_stream(parsed_data)
+            assert score is not None
+            assert len(score.parts) == 1
         except ImportError:
             pytest.skip("music21 not available")
 

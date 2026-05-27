@@ -94,7 +94,11 @@ Interpretation Guidelines:
                 return {
                     "error": True,
                     "error_type": "MISSING_PARAMETER",
-                    "message": "audio_file_id_1 and audio_file_id_2 are required",
+                    "message": (
+                        "compare_audio requires both audio_file_id_1 and audio_file_id_2 — "
+                        "both must be valid audio UUIDs from the current session. "
+                        "comparison_type must be one of: 'overall' (default), 'tempo', 'pitch', 'rhythm', 'dynamics'."
+                    ),
                 }
 
             try:
@@ -118,7 +122,12 @@ Interpretation Guidelines:
                 return {
                     "error": True,
                     "error_type": "MISSING_PARAMETER",
-                    "message": "audio_file_id and reference_type are required",
+                    "message": (
+                        "compare_to_reference requires audio_file_id (valid audio UUID) and reference_type. "
+                        "Valid reference_type values: "
+                        "'scale' (reference_params: {'scale': 'C major', 'instrument': 'piano'}), "
+                        "'midi' (reference_params: {'midi_file_id': '<id from validate_midi>'})."
+                    ),
                 }
 
             try:
@@ -143,7 +152,12 @@ Interpretation Guidelines:
                 return {
                     "error": True,
                     "error_type": "MISSING_PARAMETER",
-                    "message": "audio_file_id, start_time, and end_time are required",
+                    "message": (
+                        "segment_audio requires audio_file_id (valid audio UUID), "
+                        "start_time (float, seconds from start, e.g. 0.0), and "
+                        "end_time (float, seconds from start, must be greater than start_time). "
+                        "Use get_audio_info first to check the total audio duration."
+                    ),
                 }
 
             result = await segmentation.segment_audio(audio_file_id, start_time, end_time)
@@ -156,7 +170,11 @@ Interpretation Guidelines:
                 return {
                     "error": True,
                     "error_type": "MISSING_PARAMETER",
-                    "message": "audio_file_id and rate are required",
+                    "message": (
+                        "time_stretch requires audio_file_id (valid audio UUID) and rate "
+                        "(float, speed multiplier: 0.5=half speed, 1.0=unchanged, 2.0=double speed). "
+                        "Returns a new audio_file_id for the stretched audio."
+                    ),
                 }
 
             result = await time_stretch_module.time_stretch(audio_file_id, rate)
@@ -169,7 +187,12 @@ Interpretation Guidelines:
                 return {
                     "error": True,
                     "error_type": "MISSING_PARAMETER",
-                    "message": "audio_file_id and semitones are required",
+                    "message": (
+                        "pitch_shift requires audio_file_id (valid audio UUID) and semitones "
+                        "(float, semitones to shift: positive=higher, negative=lower; "
+                        "e.g. 2=up a whole step, -12=down an octave). "
+                        "Returns a new audio_file_id for the shifted audio."
+                    ),
                 }
 
             result = await time_stretch_module.pitch_shift(audio_file_id, semitones)
@@ -198,7 +221,12 @@ Interpretation Guidelines:
             return {
                 "error": True,
                 "error_type": "MISSING_PARAMETER",
-                "message": "audio_file_id or audio_path is required",
+                "message": (
+                    f"'{tool_name}' requires audio_file_id — "
+                    "provide a valid audio UUID from the current session "
+                    "(returned by the audio upload notification, midi_to_audio, time_stretch, or pitch_shift). "
+                    "Do not fabricate or guess IDs."
+                ),
             }
 
         if tool_name == "analyze_tempo":
@@ -358,7 +386,10 @@ Interpretation Guidelines:
                 return {
                     "error": True,
                     "error_type": "MISSING_PARAMETER",
-                    "message": "audio_file_id or audio_path is required",
+                    "message": (
+                        "get_audio_info requires audio_file_id — "
+                        "provide a valid audio UUID from the current session."
+                    ),
                 }
 
             info = sf.info(resolved_path)
@@ -370,10 +401,14 @@ Interpretation Guidelines:
                 "file_size_bytes": info.frames * info.channels * info.samplerate,
             }
         except FileNotFoundError:
+            ref = audio_file_id or audio_path or "unknown"
             return {
                 "error": True,
                 "error_type": "FILE_NOT_FOUND",
-                "message": "Audio file not found",
+                "message": (
+                    f"Audio file '{ref}' not found. "
+                    "Provide a valid audio_file_id UUID from the current session."
+                ),
             }
         except Exception as e:
             error_str = str(e).lower()

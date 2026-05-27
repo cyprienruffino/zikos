@@ -13,13 +13,27 @@ class MidiParseError(Exception):
     pass
 
 
+_FORMAT_HINT = (
+    "Required format:\n"
+    "[MIDI]\n"
+    "Tempo: 120\n"
+    "Time Signature: 4/4\n"
+    "Key: C major\n"
+    "Track 1:\n"
+    "  C4 velocity=60 duration=1.0\n"
+    "  E4 velocity=60 duration=1.0\n"
+    "[/MIDI]\n"
+    "Notes: use names like C4, D#5, Bb3. Duration is in quarter notes (1.0=quarter, 2.0=half, 0.5=eighth)."
+)
+
+
 def parse_midi_text(midi_text: str) -> dict[str, Any]:
     """Parse simplified MIDI format to structured data"""
     midi_block_pattern = r"\[MIDI\](.*?)\[/MIDI\]"
     match = re.search(midi_block_pattern, midi_text, re.DOTALL)
 
     if not match:
-        raise MidiParseError("No [MIDI]...[/MIDI] block found")
+        raise MidiParseError(f"No [MIDI]...[/MIDI] block found. {_FORMAT_HINT}")
 
     content = match.group(1).strip()
     lines = [line.strip() for line in content.split("\n") if line.strip()]
@@ -73,7 +87,12 @@ def parse_midi_text(midi_text: str) -> dict[str, Any]:
         tracks.append(current_track)
 
     if not tracks:
-        raise MidiParseError("No tracks found in MIDI data")
+        raise MidiParseError(
+            "No tracks found in MIDI data. "
+            "Add a 'Track N:' line before your notes, e.g.:\n"
+            "  Track 1:\n"
+            "    C4 velocity=60 duration=1.0"
+        )
 
     return {"metadata": metadata, "tracks": tracks}
 
@@ -129,13 +148,23 @@ def create_music21_stream(parsed_data: dict[str, Any]) -> Any:
             duration = note_data["duration"]
             velocity = note_data["velocity"]
 
+            if note_name.lower() == "rest":
+                r = note.Rest()
+                r.quarterLength = duration
+                part.append(r)
+                continue
+
             try:
                 n = note.Note(note_name)
                 n.quarterLength = duration
                 n.volume.velocity = velocity
                 part.append(n)
             except Exception as e:
-                raise MidiParseError(f"Invalid note: {note_name} - {str(e)}") from e
+                raise MidiParseError(
+                    f"Invalid note name '{note_name}'. "
+                    "Use standard note names like C4, D#5, Bb3, or 'rest'. "
+                    f"Original error: {str(e)}"
+                ) from e
 
         if len(part.notes) > 0:
             score.append(part)

@@ -28,31 +28,55 @@ class MidiTools(ToolCollection):
 
 Returns: dict with valid (bool), midi_file_id (str, empty if invalid), errors (list[str]), warnings (list[str]), metadata (dict with duration, tempo, tracks, note_count)
 
+Required MIDI format — pass the entire block including [MIDI] tags:
+[MIDI]
+Tempo: 120
+Time Signature: 4/4
+Key: C major
+Track 1:
+  C4 velocity=60 duration=1.0
+  E4 velocity=60 duration=1.0
+  G4 velocity=60 duration=2.0
+[/MIDI]
+
+Format rules:
+- Wrap content in [MIDI]...[/MIDI]
+- One or more Track sections required: "Track 1:", "Track 2 (Bass):", etc.
+- Note format: NOTE velocity=V duration=D (e.g. "C4 velocity=80 duration=0.5")
+- Note names: C4, D#5, Bb3, rest (sharps use #, flats use b)
+- Duration in quarter notes: 0.25=16th, 0.5=8th, 1.0=quarter, 2.0=half, 4.0=whole
+- Velocity: 0-127 (40=pp, 60=mp, 80=f, 100=ff)
+
 Interpretation Guidelines:
 - valid: True if MIDI syntax is correct and file was created, False if there are syntax errors
 - midi_file_id: Use this ID with midi_to_audio or midi_to_notation if valid=True
-- errors: Specific syntax errors that need to be fixed - address these before retrying
-- warnings: Non-fatal issues that don't prevent file creation but may affect playback
-- metadata: Information about the MIDI content (duration, tempo, number of tracks, note count)
-- Always call this tool after generating MIDI text to ensure it's valid before using midi_to_audio or midi_to_notation
-- If valid=False, fix the errors and regenerate the MIDI text
-- Check metadata to verify the MIDI matches your expectations (duration, tempo, etc.)""",
+- errors: Exact error messages — read them carefully, they tell you what to fix
+- If valid=False, fix the specific error reported and regenerate. Do not guess at the fix.""",
                 schema={
                     "type": "function",
                     "function": {
                         "name": "validate_midi",
-                        "description": """Validate MIDI text syntax and convert it to a MIDI file. Use this after generating MIDI in your response to ensure it's valid before synthesizing to audio or rendering notation.
+                        "description": """Validate MIDI text syntax and convert it to a MIDI file.
 
-Returns: dict with:
-- valid (bool): True if MIDI is valid, False otherwise
-- midi_file_id (str): UUID of created MIDI file (empty string if invalid)
-- errors (list[str]): List of validation error messages (empty if valid)
-- warnings (list[str]): List of warnings (non-fatal issues)
-- metadata (dict): Parsed metadata including duration, tempo, tracks, note_count
+REQUIRED FORMAT (copy this structure exactly):
+[MIDI]
+Tempo: 120
+Time Signature: 4/4
+Key: C major
+Track 1:
+  C4 velocity=60 duration=1.0
+  E4 velocity=60 duration=1.0
+  G4 velocity=60 duration=2.0
+[/MIDI]
 
-Error Handling:
-- If valid=False, check errors list for specific issues. Fix the MIDI syntax and try again.
-- If valid=True, use the returned midi_file_id with midi_to_audio or midi_to_notation.""",
+Rules:
+- Must have [MIDI]...[/MIDI] wrapper
+- Must have at least one "Track N:" section before notes
+- Note format: NAME velocity=V duration=D (e.g. "C4 velocity=80 duration=0.5")
+- Note names: C4, D#5, Bb3, rest — sharps=#, flats=b
+- Duration in quarter notes: 0.5=eighth, 1.0=quarter, 2.0=half, 4.0=whole
+
+Returns: valid (bool), midi_file_id (str, use with midi_to_audio/midi_to_notation if valid=True), errors (list[str] — read carefully if valid=False), metadata (dict)""",
                         "parameters": {
                             "type": "object",
                             "properties": {
