@@ -13,7 +13,6 @@ from zikos.mcp.server import MCPServer
 from zikos.mcp.tool import ToolCategory
 from zikos.services.audio import AudioService
 from zikos.services.llm_init import initialize_llm_backend
-from zikos.services.llm_orchestration.audio_context_enricher import AudioContextEnricher
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.orchestrator import LLMOrchestrator
@@ -58,7 +57,6 @@ class LLMService:
         self.thinking_extractor = ThinkingExtractor()
         self.conversation_manager = ConversationManager(self._get_system_prompt)
         self.message_preparer = MessagePreparer()
-        self.audio_context_enricher = AudioContextEnricher()
         self.tool_injector = ToolInjector()
         self.tool_call_parser = get_tool_call_parser()
         self.tool_executor = ToolExecutor()
@@ -67,7 +65,6 @@ class LLMService:
         self.orchestrator = LLMOrchestrator(
             self.conversation_manager,
             self.message_preparer,
-            self.audio_context_enricher,
             self.tool_injector,
             self.tool_call_parser,
             self.tool_executor,
@@ -652,8 +649,4 @@ class LLMService:
         if self.strategy and self.strategy.thinking.prompt_suffix:
             result = f"{result}\n\n{self.strategy.thinking.prompt_suffix}"
 
-        return result
-
-    def _find_recent_audio_analysis(self, history: list[dict[str, Any]]) -> str | None:
-        result: str | None = self.audio_context_enricher.find_recent_audio_analysis(history)
         return result

@@ -7,7 +7,6 @@ from typing import Any
 from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
 from zikos.mcp.tool import ToolCategory
-from zikos.services.llm_orchestration.audio_context_enricher import AudioContextEnricher
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
@@ -38,7 +37,6 @@ class LLMOrchestrator:
         self,
         conversation_manager: ConversationManager,
         message_preparer: MessagePreparer,
-        audio_context_enricher: AudioContextEnricher,
         tool_injector: ToolInjector,
         tool_call_parser: ToolCallParser,
         tool_executor: ToolExecutor,
@@ -48,7 +46,6 @@ class LLMOrchestrator:
     ):
         self.conversation_manager = conversation_manager
         self.message_preparer = message_preparer
-        self.audio_context_enricher = audio_context_enricher
         self.tool_injector = tool_injector
         self.tool_call_parser = tool_call_parser
         self.tool_executor = tool_executor
@@ -68,7 +65,6 @@ class LLMOrchestrator:
         history = self.conversation_manager.get_history(session_id)
 
         original_message = message
-        message, _ = self.audio_context_enricher.enrich_message(message, history)
 
         # Skip adding an empty user message when history already ends with a tool result
         # (handle_audio_ready closes a pending interaction and triggers LLM continuation).

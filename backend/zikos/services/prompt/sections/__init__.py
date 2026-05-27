@@ -3,7 +3,6 @@
 from zikos.services.prompt.sections.audio_context import (
     AudioAnalysisContextFormatter,
     AudioAnalysisFeedbackReminderSection,
-    AudioAnalysisReminderSection,
 )
 from zikos.services.prompt.sections.base import PromptSection
 from zikos.services.prompt.sections.core import CorePromptSection
@@ -13,7 +12,6 @@ __all__ = [
     "PromptSection",
     "CorePromptSection",
     "ToolInstructionsSection",
-    "AudioAnalysisReminderSection",
     "AudioAnalysisFeedbackReminderSection",
     "AudioAnalysisContextFormatter",
 ]

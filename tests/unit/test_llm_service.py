@@ -140,25 +140,6 @@ class TestMessagePreparation:
         assert any(m.get("role") == "thinking" for m in for_llm)
 
 
-class TestAudioAnalysisDetection:
-    def test_finds_analysis_in_history(self, llm_service):
-        history = [
-            {"role": "user", "content": "Hello"},
-            {"role": "user", "content": "[Audio Analysis Results]\nTempo: 120 BPM"},
-        ]
-        analysis = llm_service._find_recent_audio_analysis(history)
-
-        assert analysis is not None
-        assert "120 BPM" in analysis
-
-    def test_returns_none_when_no_analysis(self, llm_service):
-        history = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi"},
-        ]
-        assert llm_service._find_recent_audio_analysis(history) is None
-
-
 class TestGenerateResponse:
     @pytest.mark.asyncio
     async def test_returns_error_without_backend(self, mcp_server):

@@ -7,7 +7,6 @@ import pytest
 
 from zikos.constants import LLM
 from zikos.mcp.server import MCPServer
-from zikos.services.llm_orchestration.audio_context_enricher import AudioContextEnricher
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.orchestrator import IterationState, LLMOrchestrator
@@ -24,7 +23,6 @@ def make_orchestrator():
     return LLMOrchestrator(
         conversation_manager=ConversationManager(lambda: SYSTEM_PROMPT),
         message_preparer=MessagePreparer(),
-        audio_context_enricher=AudioContextEnricher(),
         tool_injector=ToolInjector(),
         tool_call_parser=get_tool_call_parser(),
         tool_executor=ToolExecutor(),
@@ -87,25 +85,6 @@ class TestPrepareConversation:
 
         assert isinstance(state, IterationState)
         assert state.iteration == 0
-
-    def test_enriches_message_with_audio_context(self, orchestrator, mcp_server):
-        """When history has audio analysis, message gets enriched."""
-        # First call creates the session with system prompt
-        history, *_ = orchestrator.prepare_conversation("hello", "session_audio", mcp_server)
-        # Add audio analysis to history
-        history.append(
-            {
-                "role": "user",
-                "content": "[Audio Analysis Results]\nAudio File: test.wav\nTempo: 120 BPM",
-            }
-        )
-
-        # Second call — message should be enriched with audio context
-        history2, _, _, _, _, _ = orchestrator.prepare_conversation(
-            "What about this recording?", "session_audio", mcp_server
-        )
-        last_user = [m for m in history2 if m["role"] == "user"][-1]["content"]
-        assert "120" in last_user or "Audio Analysis" in last_user
 
 
 class TestPrepareIterationMessages:
