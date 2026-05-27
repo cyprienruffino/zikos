@@ -388,6 +388,29 @@ class LLMService:
                         )
                         state.max_iterations += 1
                     elif result:
+                        tool_name = result.get("tool_name", "")
+                        tool = tool_registry.get_tool(tool_name) if tool_name else None
+                        assistant_msg = {
+                            "role": "assistant",
+                            "content": cleaned_content or None,
+                            "tool_calls": tool_calls,
+                        }
+                        if tool and tool.category == ToolCategory.DISPLAY_WIDGET:
+                            # Result is immediate: commit assistant + synthetic tool_result now.
+                            history.append(assistant_msg)
+                            history.append(
+                                {
+                                    "role": "tool",
+                                    "name": tool_name,
+                                    "content": f"{tool_name} widget displayed to user",
+                                    "tool_call_id": result.get("tool_id"),
+                                }
+                            )
+                        elif tool and tool.category == ToolCategory.INTERACTION_REQUEST:
+                            # Result arrives later (e.g. audio recording).
+                            # Commit the assistant message now; tool_result appended
+                            # by handle_audio_ready when the user completes the action.
+                            history.append(assistant_msg)
                         yield result
                         return
                 else:

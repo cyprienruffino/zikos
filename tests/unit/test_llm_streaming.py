@@ -70,7 +70,8 @@ class TestLLMStreaming:
         assert chunks[0]["type"] == "error"
 
     @pytest.mark.asyncio
-    async def test_tool_call_streaming(self, mcp_server):
+    async def test_interaction_request_commits_assistant_message(self, mcp_server):
+        """Recording widget: assistant message committed immediately, no tool_result yet."""
         service = make_streaming_service(
             response="",
             tool_calls=[
@@ -90,6 +91,45 @@ class TestLLMStreaming:
 
         tool_chunks = [c for c in chunks if c.get("type") == "tool_call"]
         assert len(tool_chunks) > 0
+
+        history = service._get_conversation_history("s1")
+        assistant_msgs = [m for m in history if m["role"] == "assistant" and m.get("tool_calls")]
+        tool_result_msgs = [m for m in history if m["role"] == "tool"]
+        assert (
+            len(assistant_msgs) == 1
+        ), "assistant message with pending tool_use must be in history"
+        assert len(tool_result_msgs) == 0, "no tool_result yet — arrives when recording is done"
+
+    @pytest.mark.asyncio
+    async def test_display_widget_commits_assistant_and_synthetic_result(self, mcp_server):
+        """Display widget: assistant message + synthetic tool_result committed immediately."""
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "call_met",
+                    "function": {
+                        "name": "create_metronome",
+                        "arguments": '{"bpm": 120}',
+                    },
+                }
+            ],
+        )
+
+        chunks = []
+        async for chunk in service.generate_response_stream("Show metronome", "s1", mcp_server):
+            chunks.append(chunk)
+
+        tool_chunks = [c for c in chunks if c.get("type") == "tool_call"]
+        assert len(tool_chunks) > 0
+
+        history = service._get_conversation_history("s1")
+        assistant_msgs = [m for m in history if m["role"] == "assistant" and m.get("tool_calls")]
+        tool_result_msgs = [m for m in history if m["role"] == "tool"]
+        assert len(assistant_msgs) == 1, "assistant message committed"
+        assert len(tool_result_msgs) == 1, "synthetic tool_result committed immediately"
+        assert "create_metronome" in tool_result_msgs[0]["content"]
+        assert assistant_msgs[0]["tool_calls"][0]["id"] == tool_result_msgs[0]["tool_call_id"]
 
     @pytest.mark.asyncio
     async def test_preserves_conversation_history(self, mcp_server):
