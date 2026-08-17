@@ -135,36 +135,6 @@ class LlamaCppBackend(LLMBackend):
         if tools is not None:
             completion_kwargs["tools"] = tools
 
-        # Log system prompt and tools for debugging
-        system_msg = next((msg for msg in messages if msg.get("role") == "system"), None)
-        if system_msg:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            system_content = system_msg.get("content", "")
-            logger.info(f"System prompt length: {len(system_content)} chars")
-            if "CRITICAL RULE #1" in system_content:
-                logger.info("✓ System prompt contains 'CRITICAL RULE #1'")
-            if "IMMEDIATELY call" in system_content:
-                logger.info("✓ System prompt contains 'IMMEDIATELY call' instruction")
-            if "request_audio_recording" in system_content:
-                logger.info("✓ System prompt contains 'request_audio_recording' reference")
-            if "<tools>" in system_content:
-                logger.info("✓ System prompt contains <tools> XML")
-
-        if tools is not None:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.info(f"Tools passed as parameter: {len(tools)} tools")
-            tool_names = [
-                t.get("function", {}).get("name", "unknown") for t in tools if "function" in t
-            ]
-            if tool_names:
-                logger.info(f"Tool names: {', '.join(tool_names[:5])}")
-            if "I want to practice rhythm accuracy on guitar" in system_content:
-                logger.info("✓ System prompt contains exact practice example")
-
         result = self.llm.create_chat_completion(**completion_kwargs)
         return dict(result)  # type: ignore[arg-type]
 
@@ -193,30 +163,10 @@ class LlamaCppBackend(LLMBackend):
         if tools is not None:
             completion_kwargs["tools"] = tools
 
-        import logging
-
-        logger = logging.getLogger(__name__)
-
-        logger.debug(f"Streaming with kwargs: {completion_kwargs}")
-        logger.debug(f"Messages being sent: {messages}")
-
-        # Log system prompt for debugging
-        system_msg = next((msg for msg in messages if msg.get("role") == "system"), None)
-        if system_msg:
-            system_content = system_msg.get("content", "")
-            logger.info(f"System prompt length: {len(system_content)} chars")
-            if "PRACTICE REQUESTS" in system_content:
-                logger.info("System prompt contains 'PRACTICE REQUESTS' rule")
-            if "IMMEDIATELY call" in system_content:
-                logger.info("System prompt contains 'IMMEDIATELY call' instruction")
-            if "request_audio_recording" in system_content:
-                logger.info("System prompt contains 'request_audio_recording' reference")
-
         stream = self.llm.create_chat_completion(**completion_kwargs)
 
         for chunk in stream:
             chunk_dict = dict(chunk)  # type: ignore[arg-type]
-            logger.debug(f"Received chunk: {chunk_dict}")
 
             yield chunk_dict
 
