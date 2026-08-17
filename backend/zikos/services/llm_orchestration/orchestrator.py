@@ -1,6 +1,5 @@
 """Orchestrate LLM response generation, handling common logic"""
 
-import json
 import logging
 from typing import Any
 
@@ -12,7 +11,7 @@ from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
 from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
-from zikos.services.llm_orchestration.tool_executor import ToolExecutor
+from zikos.services.llm_orchestration.tool_executor import ToolExecutor, parse_tool_arguments
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
 from zikos.services.model_strategy import ModelStrategy, get_model_strategy
 
@@ -210,17 +209,7 @@ class LLMOrchestrator:
                 ):
                     continue
 
-            tool_args_str = (
-                tool_call.get("function", {}).get("arguments", "{}")
-                if isinstance(tool_call.get("function"), dict)
-                else "{}"
-            )
-            try:
-                tool_args = (
-                    json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-                )
-            except json.JSONDecodeError:
-                tool_args = {}
+            tool_args, _args_error = parse_tool_arguments(tool_call)
 
             tool_call_infos.append(
                 {

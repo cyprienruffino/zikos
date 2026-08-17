@@ -13,6 +13,35 @@ _logger = logging.getLogger("zikos.services.llm_orchestration.tool_executor")
 _conversation_logger = logging.getLogger("zikos.conversation")
 
 
+def parse_tool_arguments(tool_call: Any) -> tuple[dict[str, Any], str | None]:
+    """Parse a tool call's arguments.
+
+    Single source of truth for argument parsing — malformed arguments are
+    reported instead of silently degraded to {}.
+
+    Returns:
+        (arguments, error): arguments is {} when parsing fails, and error is a
+        human-readable description of what was wrong (None on success).
+    """
+    if not isinstance(tool_call, dict) or "function" not in tool_call:
+        return {}, "Malformed tool call: missing 'function' field"
+
+    tool_args_raw = tool_call["function"].get("arguments", "{}")
+    if isinstance(tool_args_raw, dict):
+        return tool_args_raw, None
+    if not isinstance(tool_args_raw, str):
+        return {}, f"Malformed tool arguments: expected JSON string, got {type(tool_args_raw).__name__}"
+
+    try:
+        parsed = json.loads(tool_args_raw or "{}")
+    except json.JSONDecodeError as e:
+        return {}, f"Malformed tool arguments: invalid JSON ({e})"
+
+    if not isinstance(parsed, dict):
+        return {}, f"Malformed tool arguments: expected a JSON object, got {type(parsed).__name__}"
+    return parsed, None
+
+
 class ToolExecutor:
     """Executes tools and handles errors, including widget detection"""
 
@@ -43,15 +72,9 @@ class ToolExecutor:
             return None
 
         tool_name = tool_call["function"]["name"]
-        tool_args_str = tool_call["function"].get("arguments", "{}")
-
-        try:
-            tool_args = (
-                json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-            )
-        except json.JSONDecodeError as e:
-            _logger.warning(f"Failed to parse tool arguments: {e}")
-            tool_args = {}
+        tool_args, args_error = parse_tool_arguments(tool_call)
+        if args_error:
+            _logger.warning(f"Failed to parse tool arguments for {tool_name}: {args_error}")
 
         if settings.debug_tool_calls:
             _logger.debug(f"Tool call: {tool_name}")
@@ -125,15 +148,32 @@ class ToolExecutor:
                 "tool_call_id": tool_call_id,
             }
 
+        tool_args, args_error = parse_tool_arguments(tool_call)
+        if args_error:
+            # Never execute with silently-degraded {} arguments: surface the
+            # parse error to the model so it can correct the call.
+            _logger.warning(f"Invalid arguments for tool {tool_name}: {args_error}")
+            return {
+                "role": "tool",
+                "name": tool_name,
+                "content": json.dumps(
+                    {
+                        "error": True,
+                        "error_type": "invalid_arguments",
+                        "message": f"{args_error}. Fix the arguments and call the tool again.",
+                    }
+                ),
+                "tool_call_id": tool_call_id,
+            }
+
         _conversation_logger.info(
             f"Session: {session_id}\n"
             f"Tool Call: {tool_name}\n"
-            f"Arguments: {json.dumps(self._parse_tool_args(tool_call), indent=2, default=str)}\n"
+            f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
             f"{'='*80}"
         )
 
         try:
-            tool_args = self._parse_tool_args(tool_call)
             result = await mcp_server.call_tool(tool_name, **tool_args)
 
             if settings.debug_tool_calls:
@@ -150,16 +190,14 @@ class ToolExecutor:
             return {
                 "role": "tool",
                 "name": tool_name,
-                "content": str(result),
+                "content": json.dumps(result, default=str),
                 "tool_call_id": tool_call_id,
             }
         except FileNotFoundError as e:
             error_msg = str(e)
             enhanced_error = self._enhance_file_not_found_error(tool_name, error_msg)
 
-            if settings.debug_tool_calls:
-                _logger.warning(f"Tool error: {tool_name}")
-                _logger.debug(f"  Error: {error_msg}")
+            _logger.warning(f"Tool {tool_name} file not found: {error_msg}")
 
             return {
                 "role": "tool",
@@ -168,9 +206,7 @@ class ToolExecutor:
                 "tool_call_id": tool_call_id,
             }
         except Exception as e:
-            if settings.debug_tool_calls:
-                _logger.warning(f"Tool error: {tool_name}")
-                _logger.debug(f"  Error: {str(e)}")
+            _logger.exception(f"Tool {tool_name} raised an unexpected error")
 
             return {
                 "role": "tool",
@@ -180,16 +216,9 @@ class ToolExecutor:
             }
 
     def _parse_tool_args(self, tool_call: dict[str, Any]) -> dict[str, Any]:
-        """Parse tool arguments from tool call"""
-        if not isinstance(tool_call, dict) or "function" not in tool_call:
-            return {}
-
-        tool_args_str = tool_call["function"].get("arguments", "{}")
-        try:
-            result = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
-            return result if isinstance(result, dict) else {}
-        except json.JSONDecodeError:
-            return {}
+        """Parse tool arguments from tool call (lenient: {} on failure)"""
+        args, _ = parse_tool_arguments(tool_call)
+        return args
 
     def _enhance_file_not_found_error(self, tool_name: str, error_msg: str) -> str:
         """Enhance FileNotFoundError messages with helpful context"""

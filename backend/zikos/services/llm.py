@@ -1,6 +1,5 @@
 """LLM service"""
 
-import ast
 import json
 import logging
 import re
@@ -197,9 +196,14 @@ class LLMService:
         events = []
         for tr in tool_results:
             name = tr.get("name", "")
+            if name not in ("midi_to_audio", "midi_to_notation"):
+                continue
             try:
-                data = ast.literal_eval(tr.get("content", ""))
-            except Exception:
+                data = json.loads(tr.get("content", ""))
+            except (json.JSONDecodeError, TypeError) as e:
+                # Error results are plain strings — anything else failing to
+                # parse would silently drop media events, so log it.
+                _logger.warning(f"Could not parse {name} tool result as JSON: {e}")
                 continue
             if not isinstance(data, dict):
                 continue
