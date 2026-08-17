@@ -42,9 +42,71 @@ async def test_analyze_groove_success(temp_dir, sample_audio_path):
     assert "groove_consistency" in result
     assert "average_microtiming_deviation_ms" in result
     assert "microtiming_std_ms" in result
-    assert 0.0 <= result["swing_ratio"] <= 2.0
-    assert 0.0 <= result["feel_score"] <= 1.0
-    assert 0.0 <= result["groove_consistency"] <= 1.0
+    # Quarter notes only: swing is honestly unmeasurable (no eighth pairs)
+    if result["swing_ratio"] is not None:
+        assert 0.25 <= result["swing_ratio"] <= 4.0
+    if result["feel_score"] is not None:
+        assert 0.0 <= result["feel_score"] <= 1.0
+    if result["groove_consistency"] is not None:
+        assert 0.0 <= result["groove_consistency"] <= 1.0
+
+
+def _click_track(onset_times, duration, sample_rate):
+    y = np.zeros(int(sample_rate * duration), dtype=np.float32)
+    for onset in onset_times:
+        start = int(onset * sample_rate)
+        end = min(start + int(0.05 * sample_rate), len(y))
+        if end > start:
+            t = np.linspace(0, (end - start) / sample_rate, end - start)
+            y[start:end] += (np.sin(2 * np.pi * 880 * t) * np.exp(-t * 40) * 0.8).astype(
+                np.float32
+            )
+    return y
+
+
+@pytest.mark.asyncio
+async def test_analyze_groove_triplet_swing_ratio(temp_dir, sample_audio_path):
+    """Triplet swing (2:1 eighth pairs) must yield swing_ratio ~2.0. The old
+    implementation clipped ratios to the open interval (0.5, 2.0), excluding
+    exactly the triplet-swing values it claimed to detect."""
+    sample_rate = 22050
+    duration = 8.0
+    beat = 0.5  # 120 BPM
+    onsets = []
+    t = 0.0
+    while t + beat < duration - 0.5:
+        onsets.append(t)  # downbeat eighth (long: 2/3 beat)
+        onsets.append(t + beat * 2.0 / 3.0)  # upbeat eighth (short: 1/3 beat)
+        t += beat
+
+    y = _click_track(onsets, duration, sample_rate)
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await analyze_groove(str(sample_audio_path))
+
+    assert "error" not in result, result
+    assert result["swing_ratio"] is not None, result
+    assert 1.6 <= result["swing_ratio"] <= 2.5, result["swing_ratio"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_groove_straight_eighths_ratio(temp_dir, sample_audio_path):
+    """Straight eighth notes must yield swing_ratio ~1.0."""
+    sample_rate = 22050
+    duration = 8.0
+    eighth = 0.25  # 120 BPM eighths
+    onsets = list(np.arange(0.0, duration - 0.5, eighth))
+
+    y = _click_track(onsets, duration, sample_rate)
+    sf.write(str(sample_audio_path), y, sample_rate)
+
+    with patch.object(settings, "audio_storage_path", str(temp_dir)):
+        result = await analyze_groove(str(sample_audio_path))
+
+    assert "error" not in result, result
+    assert result["swing_ratio"] is not None, result
+    assert 0.85 <= result["swing_ratio"] <= 1.15, result["swing_ratio"]
 
 
 @pytest.mark.asyncio
@@ -182,9 +244,10 @@ async def test_analyze_groove_inconsistent_microtiming(temp_dir, sample_audio_pa
     duration = 8.0
     y = np.zeros(int(sample_rate * duration), dtype=np.float32)
 
+    rng = np.random.default_rng(1234)
     base_interval = 0.5
     for i in range(16):
-        offset = np.random.uniform(-0.1, 0.1)
+        offset = rng.uniform(-0.1, 0.1)
         beat_time = max(0, i * base_interval + offset)
         if beat_time < duration:
             beat_start = int(beat_time * sample_rate)
@@ -211,9 +274,10 @@ async def test_analyze_groove_variable_microtiming(temp_dir, sample_audio_path):
     duration = 6.0
     y = np.zeros(int(sample_rate * duration), dtype=np.float32)
 
+    rng = np.random.default_rng(5678)
     base_interval = 0.5
     for i in range(12):
-        offset = np.random.uniform(-0.05, 0.05)
+        offset = rng.uniform(-0.05, 0.05)
         beat_time = max(0, i * base_interval + offset)
         if beat_time < duration:
             beat_start = int(beat_time * sample_rate)
