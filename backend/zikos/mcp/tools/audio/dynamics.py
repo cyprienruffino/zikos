@@ -4,7 +4,6 @@ from typing import Any
 
 import librosa
 import numpy as np
-import soundfile as sf
 
 from zikos.constants import AUDIO
 from zikos.mcp.tool import Tool, ToolCategory
@@ -14,7 +13,7 @@ def get_analyze_dynamics_tool() -> Tool:
     """Get the analyze_dynamics tool definition"""
     return Tool(
         name="analyze_dynamics",
-        description="Analyze amplitude and dynamic range. Returns: dynamic_range (dB), dynamic_consistency (0.0-1.0), average_amplitude, peak_amplitude",
+        description="Analyze amplitude and dynamic range. Returns: average_rms_db (dBFS), peak_db (dBFS), dynamic_range_db, dynamic_consistency (0.0-1.0), amplitude_envelope, peaks",
         category=ToolCategory.AUDIO_ANALYSIS,
         parameters={
             "audio_file_id": {"type": "string"},
@@ -22,10 +21,12 @@ def get_analyze_dynamics_tool() -> Tool:
         required=["audio_file_id"],
         detailed_description="""Analyze amplitude and dynamic range.
 
-Returns: dict with dynamic_range (dB), dynamic_consistency (0.0-1.0), average_amplitude, peak_amplitude
+Returns: dict with average_rms_db (dBFS), peak_db (dBFS), dynamic_range_db (spread of the loudness envelope in dB), dynamic_consistency (0.0-1.0), amplitude_envelope (time/rms_db points), peaks (loudest moments, within 3 dB of the maximum)
+
+All dB values share one reference (full scale, dBFS), so they are directly comparable.
 
 Interpretation Guidelines:
-- dynamic_range: >20dB excellent, 15-20dB good, 10-15dB needs work, <10dB poor
+- dynamic_range_db: >20dB excellent, 15-20dB good, 10-15dB needs work, <10dB poor
 - dynamic_consistency: >0.85 excellent, 0.75-0.85 good, <0.75 needs work
 - If dynamic_consistency < 0.75, suggest focusing on consistent technique""",
     )
@@ -43,15 +44,19 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
                 "message": f"Audio is too short (minimum {AUDIO.MIN_AUDIO_DURATION} seconds required)",
             }
 
+        # One shared dB reference: full scale (ref=1.0), i.e. dBFS.
         rms = librosa.feature.rms(y=y)[0]
-        rms_db = librosa.power_to_db(rms**2, ref=np.max)
+        rms_db = librosa.amplitude_to_db(rms, ref=1.0)
 
-        peak = np.max(np.abs(y))
-        peak_db = librosa.amplitude_to_db(np.array([peak]))[0]
+        peak = float(np.max(np.abs(y)))
+        peak_db = float(librosa.amplitude_to_db(np.array([peak]), ref=1.0)[0])
 
-        average_rms = float(np.mean(rms_db))
-        peak_amplitude = float(peak_db)
-        dynamic_range_db = float(peak_db - np.min(rms_db))
+        average_rms_db = float(np.mean(rms_db))
+
+        # Dynamic range: spread of the loudness envelope. Percentiles make it
+        # robust to brief silences (which would otherwise pin the minimum at
+        # the dB floor).
+        dynamic_range_db = float(np.percentile(rms_db, 95) - np.percentile(rms_db, 5))
 
         rms_std = float(np.std(rms_db))
         dynamic_consistency = float(1.0 / (1.0 + rms_std / AUDIO.DYNAMIC_CONSISTENCY_DIVISOR))
@@ -70,20 +75,19 @@ async def analyze_dynamics(audio_path: str) -> dict[str, Any]:
             )
         ]
 
+        # Peaks: envelope points within 3 dB of the loudest point. dB values
+        # are negative, so the threshold must be additive, not multiplicative.
         peaks = []
         if len(amplitude_envelope) > 0:
             max_rms = max(env["rms"] for env in amplitude_envelope)
             for env in amplitude_envelope:
-                if env["rms"] >= max_rms * AUDIO.PEAK_THRESHOLD_RATIO:
+                if env["rms"] >= max_rms - 3.0:
                     peaks.append({"time": env["time"], "amplitude": env["rms"]})
 
         return {
-            "average_rms": average_rms,
-            "average_loudness": average_rms,
-            "peak_amplitude": peak_amplitude,
+            "average_rms_db": average_rms_db,
+            "peak_db": peak_db,
             "dynamic_range_db": dynamic_range_db,
-            "dynamic_range": dynamic_range_db,
-            "lufs": average_rms,
             "amplitude_envelope": amplitude_envelope,
             "dynamic_consistency": dynamic_consistency,
             "peaks": peaks,
