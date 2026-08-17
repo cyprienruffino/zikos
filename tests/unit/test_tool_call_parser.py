@@ -231,6 +231,62 @@ midi_text: |
         lines = args["midi_text"].split("\n")
         assert len(lines) == 3
 
+    def test_parse_simplified_dedented_multiline_line_kept_intact(self):
+        """A multiline body line LESS indented than the block must be kept
+        verbatim — never sliced mid-word ('MFile' -> 'ile')."""
+        parser = SimplifiedToolCallParser()
+        message_obj = {"content": ""}
+        raw_content = """<tool name="validate_midi">
+midi_text: |
+  MFile 1 1 480
+MFile 0 0 96
+  TrkEnd
+</tool>"""
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        args = json.loads(result[0]["function"]["arguments"])
+        assert "MFile 0 0 96" in args["midi_text"]
+        assert "ile 0 0 96" not in args["midi_text"].replace("MFile 0 0 96", "")
+
+    def test_parse_simplified_param_after_multiline(self):
+        """A key: value parameter after a multiline block must become its own
+        argument, not be swallowed into the multiline body."""
+        parser = SimplifiedToolCallParser()
+        message_obj = {"content": ""}
+        raw_content = """<tool name="validate_midi">
+midi_text: |
+  MFile 1 1 480
+  TrkEnd
+title: my song
+</tool>"""
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        args = json.loads(result[0]["function"]["arguments"])
+        assert args["title"] == "my song"
+        assert "title" not in args["midi_text"]
+        assert "MFile 1 1 480" in args["midi_text"]
+        assert "TrkEnd" in args["midi_text"]
+
+    def test_parse_simplified_multiline_body_with_colon_lines(self):
+        """Indented body lines that look like key: value stay in the body."""
+        parser = SimplifiedToolCallParser()
+        message_obj = {"content": ""}
+        raw_content = """<tool name="validate_midi">
+midi_text: |
+  tempo: 120
+  key: C
+bpm: 90
+</tool>"""
+
+        result = parser.parse_tool_calls(message_obj, raw_content)
+
+        args = json.loads(result[0]["function"]["arguments"])
+        assert "tempo: 120" in args["midi_text"]
+        assert "key: C" in args["midi_text"]
+        assert args["bpm"] == 90
+
     def test_parse_simplified_multiple_tools(self):
         """Test parsing multiple simplified tool calls"""
         parser = SimplifiedToolCallParser()
