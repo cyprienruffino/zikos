@@ -197,6 +197,78 @@ class TestExecuteToolAndGetResult:
         assert result["name"] == "unknown"
 
 
+class TestJsonResults:
+    @pytest.mark.asyncio
+    async def test_result_content_is_json(self, tool_executor, mcp_server):
+        """Tool results must be JSON (json.dumps), not Python repr, so
+        consumers can round-trip them with json.loads."""
+        import json
+
+        registry = mcp_server.get_tool_registry()
+        tool_call = {
+            "id": "call_1",
+            "function": {"name": "analyze_tempo", "arguments": '{"audio_file_id": "test.wav"}'},
+        }
+
+        result = await tool_executor.execute_tool_and_get_result(
+            tool_call, registry, mcp_server, "s1"
+        )
+
+        data = json.loads(result["content"])
+        assert data == {"tempo": 120, "bpm": 120.0}
+
+    @pytest.mark.asyncio
+    async def test_invalid_arguments_returned_as_structured_error(self, tool_executor, mcp_server):
+        """Malformed arguments must produce a structured error result — never
+        execute the tool with silently-degraded {} arguments."""
+        import json
+
+        registry = mcp_server.get_tool_registry()
+        tool_call = {
+            "id": "call_bad",
+            "function": {"name": "analyze_tempo", "arguments": "not json{"},
+        }
+
+        result = await tool_executor.execute_tool_and_get_result(
+            tool_call, registry, mcp_server, "s1"
+        )
+
+        mcp_server.call_tool.assert_not_awaited()
+        data = json.loads(result["content"])
+        assert data["error"] is True
+        assert data["error_type"] == "invalid_arguments"
+
+
+class TestParseToolArguments:
+    def test_valid(self):
+        from zikos.services.llm_orchestration.tool_executor import parse_tool_arguments
+
+        args, error = parse_tool_arguments({"function": {"name": "t", "arguments": '{"a": 1}'}})
+        assert args == {"a": 1}
+        assert error is None
+
+    def test_invalid_json(self):
+        from zikos.services.llm_orchestration.tool_executor import parse_tool_arguments
+
+        args, error = parse_tool_arguments({"function": {"name": "t", "arguments": "{bad"}})
+        assert args == {}
+        assert error is not None and "invalid JSON" in error
+
+    def test_non_object_json(self):
+        from zikos.services.llm_orchestration.tool_executor import parse_tool_arguments
+
+        args, error = parse_tool_arguments({"function": {"name": "t", "arguments": '"str"'}})
+        assert args == {}
+        assert error is not None
+
+    def test_dict_passthrough(self):
+        from zikos.services.llm_orchestration.tool_executor import parse_tool_arguments
+
+        args, error = parse_tool_arguments({"function": {"name": "t", "arguments": {"a": 1}}})
+        assert args == {"a": 1}
+        assert error is None
+
+
 class TestParseToolArgs:
     def test_valid_json(self, tool_executor):
         tool_call = {

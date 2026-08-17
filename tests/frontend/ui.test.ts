@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { addMessage, addTypingIndicator, removeTypingIndicator, updateStatus } from "../../frontend/src/ui.js";
+import {
+    addMessage,
+    addTypingIndicator,
+    removeTypingIndicator,
+    updateStatus,
+    startStreamingMessage,
+    appendStreamingToken,
+    addThinkingToStreamingMessage,
+    finishStreamingMessage,
+} from "../../frontend/src/ui.js";
 
 describe("UI Module", () => {
     beforeEach(() => {
@@ -28,11 +37,12 @@ describe("UI Module", () => {
             expect(messageEl?.className).toBe("message assistant");
         });
 
-        it("should replace newlines with <br> tags", () => {
+        it("should preserve newlines as text (rendered via pre-wrap CSS)", () => {
             addMessage("Line 1\nLine 2\nLine 3");
             const messageEl = document.getElementById("messages")?.firstElementChild;
             const textEl = messageEl?.querySelector(".message-text");
-            expect(textEl?.innerHTML).toBe("Line 1<br>Line 2<br>Line 3");
+            expect(textEl?.textContent).toBe("Line 1\nLine 2\nLine 3");
+            expect(textEl?.querySelector("br")).toBeNull();
         });
 
         it("should add audio player when audio_file_id is provided", () => {
@@ -82,18 +92,39 @@ describe("UI Module", () => {
             expect(messageEl?.querySelector(".notation")).toBeFalsy();
         });
 
-        it("should render HTML in message text (current behavior)", () => {
+        it("should escape HTML in message text (no XSS)", () => {
             addMessage("<script>alert('xss')</script>");
             const messageEl = document.getElementById("messages")?.firstElementChild;
             const textEl = messageEl?.querySelector(".message-text");
-            expect(textEl?.innerHTML).toBe("<script>alert('xss')</script>");
+            expect(textEl?.querySelector("script")).toBeNull();
+            expect(textEl?.textContent).toBe("<script>alert('xss')</script>");
+            expect(textEl?.innerHTML).toContain("&lt;script&gt;");
         });
 
-        it("should handle messages with HTML tags", () => {
+        it("should render HTML tags as literal text", () => {
             addMessage("Test <strong>bold</strong> text");
             const messageEl = document.getElementById("messages")?.firstElementChild;
             const textEl = messageEl?.querySelector(".message-text");
-            expect(textEl?.innerHTML).toContain("<strong>bold</strong>");
+            expect(textEl?.querySelector("strong")).toBeNull();
+            expect(textEl?.textContent).toBe("Test <strong>bold</strong> text");
+        });
+
+        it("should not create elements from img/onerror payloads", () => {
+            addMessage('<img src=x onerror="window.__pwned = true">');
+            const messageEl = document.getElementById("messages")?.firstElementChild;
+            const textEl = messageEl?.querySelector(".message-text");
+            expect(textEl?.querySelector("img")).toBeNull();
+            expect((window as unknown as Record<string, unknown>).__pwned).toBeUndefined();
+        });
+
+        it("should not allow attribute breakout via audio_file_id", () => {
+            addMessage("Audio", "assistant", {
+                audio_file_id: '"><img src=x onerror=alert(1)>',
+            });
+            const messageEl = document.getElementById("messages")?.firstElementChild;
+            expect(messageEl?.querySelector("img")).toBeNull();
+            const audio = messageEl?.querySelector("audio");
+            expect(audio).toBeTruthy();
         });
 
         it("should handle very long messages", () => {
@@ -199,6 +230,81 @@ describe("UI Module", () => {
             updateStatus("Status & < >", "connected");
             const statusEl = document.getElementById("status");
             expect(statusEl?.textContent).toBe("Status & < >");
+        });
+    });
+
+    describe("Streaming", () => {
+        beforeEach(() => {
+            // Ensure no stale streaming state leaks between tests
+            finishStreamingMessage();
+        });
+
+        it("should append tokens incrementally as text nodes", () => {
+            startStreamingMessage();
+            appendStreamingToken("Hello");
+            appendStreamingToken(" world");
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("Hello world");
+            expect(textEl?.childNodes.length).toBe(2);
+        });
+
+        it("should escape HTML in streamed tokens", () => {
+            startStreamingMessage();
+            appendStreamingToken("<img src=x onerror=alert(1)>");
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.querySelector("img")).toBeNull();
+            expect(textEl?.textContent).toBe("<img src=x onerror=alert(1)>");
+        });
+
+        it("should buffer thinking that arrives before streaming starts", () => {
+            addThinkingToStreamingMessage("early thought");
+            expect(document.querySelector(".thinking-section")).toBeNull();
+
+            startStreamingMessage();
+            const thinking = document.querySelector(".thinking-content");
+            expect(thinking?.textContent).toBe("early thought");
+        });
+
+        it("should append multiple thinking frames to ONE details section", () => {
+            startStreamingMessage();
+            addThinkingToStreamingMessage("first ");
+            addThinkingToStreamingMessage("second");
+            const sections = document.querySelectorAll(".thinking-section");
+            expect(sections.length).toBe(1);
+            expect(sections[0].querySelector(".thinking-content")?.textContent).toBe(
+                "first second"
+            );
+        });
+
+        it("should replace bubble content when final message differs from tokens", () => {
+            startStreamingMessage();
+            appendStreamingToken("partial tok");
+            finishStreamingMessage({ message: "Final cleaned-up message" });
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("Final cleaned-up message");
+        });
+
+        it("should keep accumulated tokens when final message matches", () => {
+            startStreamingMessage();
+            appendStreamingToken("same");
+            finishStreamingMessage({ message: "same" });
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("same");
+        });
+
+        it("should not wipe streamed tokens when final message is empty", () => {
+            startStreamingMessage();
+            appendStreamingToken("streamed text");
+            finishStreamingMessage({ message: "" });
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("streamed text");
+        });
+
+        it("should clear buffered thinking after finish", () => {
+            addThinkingToStreamingMessage("stale thought");
+            finishStreamingMessage();
+            startStreamingMessage();
+            expect(document.querySelector(".thinking-section")).toBeNull();
         });
     });
 

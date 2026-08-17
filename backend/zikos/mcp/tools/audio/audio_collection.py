@@ -1,5 +1,6 @@
 """Main audio analysis tools class"""
 
+from pathlib import Path
 from typing import Any
 
 from zikos.mcp.tool import Tool, ToolCategory
@@ -23,7 +24,7 @@ from zikos.mcp.tools.audio import (
 from zikos.mcp.tools.audio import (
     time_stretch as time_stretch_module,
 )
-from zikos.mcp.tools.audio.utils import resolve_audio_path
+from zikos.mcp.tools.audio.utils import is_valid_audio_file_id, resolve_audio_path
 from zikos.mcp.tools.base import ToolCollection
 
 
@@ -84,8 +85,27 @@ Interpretation Guidelines:
 
         return tools
 
+    @staticmethod
+    def _invalid_id_error(tool_name: str, audio_file_id: Any) -> dict[str, Any]:
+        return {
+            "error": True,
+            "error_type": "INVALID_PARAMETER",
+            "message": (
+                f"'{tool_name}' received audio_file_id '{audio_file_id}', which is not a UUID. "
+                "audio_file_id must be a UUID returned by a prior tool call in the current "
+                "session (e.g. from the audio upload notification, midi_to_audio, "
+                "time_stretch, or pitch_shift). Do not fabricate or guess IDs."
+            ),
+        }
+
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
-        """Call a tool"""
+        """Call a tool (LLM-facing entry point).
+
+        audio_file_id parameters are validated against the UUID format the
+        system issues. Internal callers with a known file path should use the
+        Python-level methods (e.g. analyze_tempo(audio_path=...)) instead;
+        call_tool does not accept paths.
+        """
         if tool_name == "compare_audio":
             audio_file_id_1 = kwargs.get("audio_file_id_1")
             audio_file_id_2 = kwargs.get("audio_file_id_2")
@@ -98,9 +118,13 @@ Interpretation Guidelines:
                     "message": (
                         "compare_audio requires both audio_file_id_1 and audio_file_id_2 — "
                         "both must be valid audio UUIDs from the current session. "
-                        "comparison_type must be one of: 'overall' (default), 'tempo', 'pitch', 'rhythm', 'dynamics'."
+                        "comparison_type must be one of: 'overall' (default), 'tempo', 'pitch', 'rhythm'."
                     ),
                 }
+
+            for file_id in (audio_file_id_1, audio_file_id_2):
+                if not is_valid_audio_file_id(file_id):
+                    return self._invalid_id_error(tool_name, file_id)
 
             try:
                 path_1 = str(resolve_audio_path(audio_file_id_1))
@@ -126,10 +150,13 @@ Interpretation Guidelines:
                     "message": (
                         "compare_to_reference requires audio_file_id (valid audio UUID) and reference_type. "
                         "Valid reference_type values: "
-                        "'scale' (reference_params: {'scale': 'C major', 'instrument': 'piano'}), "
-                        "'midi' (reference_params: {'midi_file_id': '<id from validate_midi>'})."
+                        "'scale' (reference_params: {'scale': 'C major', 'tempo': 120}), "
+                        "'midi_file' (reference_params: {'midi_file_id': '<id from validate_midi>'})."
                     ),
                 }
+
+            if not is_valid_audio_file_id(audio_file_id):
+                return self._invalid_id_error(tool_name, audio_file_id)
 
             try:
                 resolved_path = str(resolve_audio_path(audio_file_id))
@@ -161,6 +188,9 @@ Interpretation Guidelines:
                     ),
                 }
 
+            if not is_valid_audio_file_id(audio_file_id):
+                return self._invalid_id_error(tool_name, audio_file_id)
+
             result = await segmentation.segment_audio(audio_file_id, start_time, end_time)
             return dict(result)
         elif tool_name == "time_stretch":
@@ -177,6 +207,9 @@ Interpretation Guidelines:
                         "Returns a new audio_file_id for the stretched audio."
                     ),
                 }
+
+            if not is_valid_audio_file_id(audio_file_id):
+                return self._invalid_id_error(tool_name, audio_file_id)
 
             result = await time_stretch_module.time_stretch(audio_file_id, rate)
             return dict(result)
@@ -196,29 +229,30 @@ Interpretation Guidelines:
                     ),
                 }
 
+            if not is_valid_audio_file_id(audio_file_id):
+                return self._invalid_id_error(tool_name, audio_file_id)
+
             result = await time_stretch_module.pitch_shift(audio_file_id, semitones)
             return dict(result)
         elif tool_name == "get_audio_info":
             audio_file_id = kwargs.get("audio_file_id")
-            audio_path = kwargs.get("audio_path")
-            result = await self.get_audio_info(audio_file_id=audio_file_id, audio_path=audio_path)
+            if not audio_file_id:
+                return {
+                    "error": True,
+                    "error_type": "MISSING_PARAMETER",
+                    "message": (
+                        "get_audio_info requires audio_file_id — "
+                        "provide a valid audio UUID from the current session."
+                    ),
+                }
+            if not is_valid_audio_file_id(audio_file_id):
+                return self._invalid_id_error(tool_name, audio_file_id)
+            result = await self.get_audio_info(audio_file_id=audio_file_id)
             return dict(result)
 
         audio_file_id = kwargs.get("audio_file_id")
-        audio_path = kwargs.get("audio_path")
 
-        if audio_path:
-            resolved_path = str(audio_path)
-        elif audio_file_id:
-            try:
-                resolved_path = str(resolve_audio_path(audio_file_id))
-            except FileNotFoundError:
-                return {
-                    "error": True,
-                    "error_type": "FILE_NOT_FOUND",
-                    "message": f"Audio file {audio_file_id} not found",
-                }
-        else:
+        if not audio_file_id:
             return {
                 "error": True,
                 "error_type": "MISSING_PARAMETER",
@@ -229,7 +263,22 @@ Interpretation Guidelines:
                     "Do not fabricate or guess IDs."
                 ),
             }
+        if not is_valid_audio_file_id(audio_file_id):
+            return self._invalid_id_error(tool_name, audio_file_id)
 
+        try:
+            resolved_path = str(resolve_audio_path(audio_file_id))
+        except FileNotFoundError:
+            return {
+                "error": True,
+                "error_type": "FILE_NOT_FOUND",
+                "message": f"Audio file {audio_file_id} not found",
+            }
+
+        return await self._dispatch_analysis(tool_name, resolved_path)
+
+    async def _dispatch_analysis(self, tool_name: str, resolved_path: str) -> dict[str, Any]:
+        """Run a single-file analysis tool on an already-resolved path"""
         if tool_name == "analyze_tempo":
             result = await tempo.analyze_tempo(resolved_path)
             return dict(result)
@@ -273,29 +322,51 @@ Interpretation Guidelines:
                 "message": f"Unknown tool: {tool_name}",
             }
 
+    async def _run_internal(
+        self, tool_name: str, audio_file_id: str | None, audio_path: str | None
+    ) -> dict[str, Any]:
+        """Internal (Python-level) entry point for services and tests.
+
+        Unlike call_tool, this accepts an explicit audio_path so services that
+        already know the file location (e.g. baseline analysis on upload) can
+        run tools without minting an ID.
+        """
+        if audio_path:
+            resolved_path = str(audio_path)
+        elif audio_file_id:
+            try:
+                resolved_path = str(resolve_audio_path(audio_file_id))
+            except FileNotFoundError:
+                return {
+                    "error": True,
+                    "error_type": "FILE_NOT_FOUND",
+                    "message": f"Audio file {audio_file_id} not found",
+                }
+        else:
+            return {
+                "error": True,
+                "error_type": "MISSING_PARAMETER",
+                "message": f"'{tool_name}' requires audio_file_id or audio_path",
+            }
+        return await self._dispatch_analysis(tool_name, resolved_path)
+
     async def analyze_tempo(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "analyze_tempo", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("analyze_tempo", audio_file_id, audio_path)
 
     async def detect_pitch(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "detect_pitch", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("detect_pitch", audio_file_id, audio_path)
 
     async def analyze_rhythm(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "analyze_rhythm", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("analyze_rhythm", audio_file_id, audio_path)
 
     async def detect_instrument(
         self, audio_file_id: str | None = None, audio_path: str | None = None
@@ -324,76 +395,61 @@ Interpretation Guidelines:
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "analyze_dynamics", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("analyze_dynamics", audio_file_id, audio_path)
 
     async def analyze_articulation(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "analyze_articulation", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("analyze_articulation", audio_file_id, audio_path)
 
     async def analyze_timbre(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "analyze_timbre", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("analyze_timbre", audio_file_id, audio_path)
 
     async def detect_key(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "detect_key", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("detect_key", audio_file_id, audio_path)
 
     async def detect_chords(
         self, audio_file_id: str | None = None, audio_path: str | None = None
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool(
-            "detect_chords", audio_file_id=audio_file_id, audio_path=audio_path
-        )
+        return await self._run_internal("detect_chords", audio_file_id, audio_path)
 
     async def segment_audio(
         self, audio_file_id: str, start_time: float, end_time: float
     ) -> dict[str, Any]:
-        """Call a tool"""
-        return await self.call_tool(
-            "segment_audio",
-            audio_file_id=audio_file_id,
-            start_time=start_time,
-            end_time=end_time,
-        )
+        """Call a tool (internal entry point; the module resolves the ID itself)"""
+        return dict(await segmentation.segment_audio(audio_file_id, start_time, end_time))
 
     async def segment_phrases(self, audio_file_id: str) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool("segment_phrases", audio_file_id=audio_file_id)
+        return await self._run_internal("segment_phrases", audio_file_id, None)
 
     async def comprehensive_analysis(self, audio_file_id: str) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool("comprehensive_analysis", audio_file_id=audio_file_id)
+        return await self._run_internal("comprehensive_analysis", audio_file_id, None)
 
     async def analyze_groove(self, audio_file_id: str) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool("analyze_groove", audio_file_id=audio_file_id)
+        return await self._run_internal("analyze_groove", audio_file_id, None)
 
     async def time_stretch(self, audio_file_id: str, rate: float) -> dict[str, Any]:
-        """Call a tool"""
-        return await self.call_tool("time_stretch", audio_file_id=audio_file_id, rate=rate)
+        """Call a tool (internal entry point; the module resolves the ID itself)"""
+        return dict(await time_stretch_module.time_stretch(audio_file_id, rate))
 
     async def pitch_shift(self, audio_file_id: str, semitones: float) -> dict[str, Any]:
-        """Call a tool"""
-        return await self.call_tool("pitch_shift", audio_file_id=audio_file_id, semitones=semitones)
+        """Call a tool (internal entry point; the module resolves the ID itself)"""
+        return dict(await time_stretch_module.pitch_shift(audio_file_id, semitones))
 
     async def detect_repetitions(self, audio_file_id: str) -> dict[str, Any]:
         """Call a tool"""
-        return await self.call_tool("detect_repetitions", audio_file_id=audio_file_id)
+        return await self._run_internal("detect_repetitions", audio_file_id, None)
 
     async def get_audio_info(
         self, audio_file_id: str | None = None, audio_path: str | None = None
@@ -422,7 +478,7 @@ Interpretation Guidelines:
                 "sample_rate": info.samplerate,
                 "channels": info.channels,
                 "format": info.format,
-                "file_size_bytes": info.frames * info.channels * info.samplerate,
+                "file_size_bytes": Path(resolved_path).stat().st_size,
             }
         except FileNotFoundError:
             ref = audio_file_id or audio_path or "unknown"

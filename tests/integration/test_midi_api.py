@@ -101,7 +101,9 @@ Track 1:
         from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
 
         try:
-            midi_file_id = "test_api_notation"
+            import uuid
+
+            midi_file_id = str(uuid.uuid4())
             midi_path = Path(settings.midi_storage_path) / f"{midi_file_id}.mid"
             midi_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -116,7 +118,7 @@ Track 1:
             midi_text_to_file(midi_text, midi_path)
 
             try:
-                response = client.post(f"/api/midi/{midi_file_id}/render?format=both")
+                response = client.post(f"/api/midi/{midi_file_id}/render?format=sheet_music")
 
                 assert response.status_code == 200
                 data = response.json()

@@ -1,11 +1,17 @@
 """Prepare messages for LLM, handling truncation and system prompt injection"""
 
+import json
+import logging
 from typing import Any
 
 import tiktoken
 
 from zikos.constants import LLM
-from zikos.utils.token_budget import get_max_tokens_for_preparation
+from zikos.utils.token_budget import calculate_reserve_tokens, get_max_tokens_for_preparation
+
+_logger = logging.getLogger(__name__)
+
+_AUDIO_ANALYSIS_MARKERS = ("[Audio Analysis", "Audio analysis complete")
 
 
 class MessagePreparer:
@@ -18,13 +24,16 @@ class MessagePreparer:
         for_user: bool = False,
         context_window: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Prepare messages for LLM, ensuring system prompt is included
+        """Prepare messages for LLM, ensuring system prompt is included.
 
-        System messages are always kept separate. All supported models (Phi-3, Qwen, Llama 3.x, Mistral)
-        support system messages natively.
-
-        Also truncates conversation history if it exceeds max_tokens to prevent context overflow.
-        IMPORTANT: Always preserves audio analysis messages even if they're older.
+        Guarantees:
+        - The system prompt (FIRST system message in history) is always emitted
+          at index 0. Later system-role messages are treated as ordinary context.
+        - Message order is preserved exactly; nothing is relocated.
+        - Pinned audio-analysis messages are always kept, at their original
+          positions (truncation drops messages around them).
+        - Truncation never splits an assistant(tool_calls) message from its
+          following tool results: the whole group is kept or dropped together.
 
         Args:
             history: Conversation history
@@ -44,113 +53,111 @@ class MessagePreparer:
 
         enc = tiktoken.get_encoding("cl100k_base")
 
-        messages = []
-        system_prompt = None
-        system_added = False
-        total_tokens = 0
-
-        audio_analysis_messages = []
-        other_messages = []
+        # Split off the real system prompt (first system message). Later
+        # system-role messages (e.g. injected notes) are ordinary context.
+        system_prompt: str | None = None
+        body: list[dict[str, Any]] = []
         for msg in history:
-            if msg.get("role") == "system":
+            if msg.get("role") == "system" and system_prompt is None:
                 system_prompt = msg.get("content", "")
                 continue
             if for_user and msg.get("role") == "thinking":
                 continue
-            content = str(msg.get("content", ""))
-            # Only pin user-role messages as audio analysis context — never tool results
-            # or assistant messages, as reordering those breaks the tool_use/tool_result
-            # pairing that Anthropic (and other APIs) strictly enforce.
-            if msg.get("role") == "user" and any(
-                marker in content for marker in ["[Audio Analysis", "Audio analysis complete"]
-            ):
-                audio_analysis_messages.append(msg)
-            else:
-                other_messages.append(msg)
+            body.append(msg)
 
-        # Calculate system prompt tokens (includes tool schemas if injected)
-        system_prompt_tokens = 0
-        if system_prompt:
-            system_prompt_tokens = len(enc.encode(system_prompt))
+        system_prompt_tokens = len(enc.encode(system_prompt)) if system_prompt else 0
 
-        # Calculate available tokens for conversation history
-        # Must account for system prompt size and reserve
+        available_tokens = self._available_tokens(max_tokens, system_prompt_tokens, context_window)
+
+        # Group assistant(tool_calls) messages with their following tool results
+        # so truncation can never orphan a tool_use/tool_result pair.
+        groups = self._group_messages(body)
+
+        def message_tokens(m: dict[str, Any]) -> int:
+            tokens = len(enc.encode(str(m.get("content") or "")))
+            if m.get("tool_calls"):
+                # tool_calls payloads consume context too — count them.
+                tokens += len(enc.encode(json.dumps(m["tool_calls"], default=str)))
+            return tokens
+
+        def group_tokens(group: list[dict[str, Any]]) -> int:
+            return sum(message_tokens(m) for m in group)
+
+        def is_pinned(group: list[dict[str, Any]]) -> bool:
+            # Only user-role messages are pinned as audio analysis context — never
+            # tool results or assistant messages.
+            return any(
+                m.get("role") == "user"
+                and any(marker in str(m.get("content", "")) for marker in _AUDIO_ANALYSIS_MARKERS)
+                for m in group
+            )
+
+        # Pinned groups are always included; then include groups from newest to
+        # oldest until the budget is exhausted. The newest group is always kept.
+        included = [False] * len(groups)
+        total_tokens = 0
+        for idx, group in enumerate(groups):
+            if is_pinned(group):
+                included[idx] = True
+                total_tokens += group_tokens(group)
+
+        newest_added = False
+        for idx in range(len(groups) - 1, -1, -1):
+            if included[idx]:
+                newest_added = True
+                continue
+            tokens = group_tokens(groups[idx])
+            if newest_added and total_tokens + tokens > available_tokens:
+                break  # everything older (except pinned) is dropped
+            included[idx] = True
+            total_tokens += tokens
+            newest_added = True
+
+        # Emit in ORIGINAL order, system prompt always first.
+        messages: list[dict[str, Any]] = []
+        if system_prompt is not None:
+            messages.append({"role": "system", "content": system_prompt})
+        for idx, group in enumerate(groups):
+            if included[idx]:
+                messages.extend(group)
+
+        return messages
+
+    def _available_tokens(
+        self, max_tokens: int, system_prompt_tokens: int, context_window: int | None
+    ) -> int:
+        """Compute the token budget available for conversation history."""
         if context_window is not None:
-            from zikos.utils.token_budget import calculate_reserve_tokens
-
-            reserve = calculate_reserve_tokens(context_window)
-            # Available = max_tokens - system_prompt - reserve
+            reserve = int(calculate_reserve_tokens(context_window))
             available_tokens = max_tokens - system_prompt_tokens - reserve
 
-            # If system prompt is too large, we have a problem
             if available_tokens <= 0:
-                import logging
-
-                _logger = logging.getLogger(__name__)
                 _logger.warning(
                     f"System prompt ({system_prompt_tokens} tokens) + reserve ({reserve} tokens) "
                     f"exceeds max_tokens ({max_tokens}). System prompt is too large for context window."
                 )
                 # Still try to allow some conversation, but very limited
                 available_tokens = max(100, max_tokens // 10)
-        else:
-            available_tokens = max(
-                max_tokens - system_prompt_tokens - LLM.TOKENS_RESERVE_AUDIO_ANALYSIS,
-                max_tokens // 2,
-            )
-            if available_tokens <= 0:
-                available_tokens = 100
+            return available_tokens
 
-        processed_messages: list[dict[str, Any]] = []
-        first_message_added = False
-        for msg in reversed(other_messages):
-            msg_tokens = len(enc.encode(str(msg.get("content", ""))))
-            if total_tokens + msg_tokens > available_tokens and first_message_added:
-                break
+        available_tokens = max(
+            max_tokens - system_prompt_tokens - LLM.TOKENS_RESERVE_AUDIO_ANALYSIS,
+            max_tokens // 2,
+        )
+        return available_tokens if available_tokens > 0 else 100
 
-            processed_messages.insert(0, msg)
-            total_tokens += msg_tokens
-            first_message_added = True
-
-        for msg in audio_analysis_messages:
-            processed_messages.append(msg)
-
-        # Build final messages, ensuring total doesn't exceed max_tokens
-        final_total_tokens = system_prompt_tokens
-        for msg in processed_messages:
-            msg_content = str(msg.get("content", ""))
-            msg_tokens = len(enc.encode(msg_content))
-
-            is_audio_analysis = msg.get("role") == "user" and any(
-                marker in msg_content for marker in ["[Audio Analysis", "Audio analysis complete"]
-            )
-
-            if msg.get("role") == "user" and system_prompt and not system_added:
-                # Always use system messages (all supported models support them)
-                messages.append({"role": "system", "content": system_prompt})
-                messages.append(msg)
-                final_total_tokens += msg_tokens
-                system_added = True
-            elif msg.get("role") != "system":
-                # Always include audio analysis messages, even if they exceed the limit
-                # Other messages are checked against the limit
-                if (
-                    not is_audio_analysis
-                    and context_window
-                    and final_total_tokens + msg_tokens > max_tokens
-                ):
-                    break
-                messages.append(msg)
-                final_total_tokens += msg_tokens
-
-        if not messages and system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        elif not messages and other_messages:
-            first_msg = other_messages[0]
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-                messages.append(first_msg)
-            else:
-                messages.append(first_msg)
-
-        return messages
+    @staticmethod
+    def _group_messages(body: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        """Group each assistant(tool_calls) message with its following tool results."""
+        groups: list[list[dict[str, Any]]] = []
+        i = 0
+        while i < len(body):
+            msg = body[i]
+            group = [msg]
+            i += 1
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                while i < len(body) and body[i].get("role") == "tool":
+                    group.append(body[i])
+                    i += 1
+            groups.append(group)
+        return groups

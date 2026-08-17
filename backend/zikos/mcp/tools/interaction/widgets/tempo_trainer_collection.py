@@ -1,10 +1,15 @@
 """Tempo trainer tools"""
 
+import re
 import uuid
 from typing import Any
 
 from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.base import ToolCollection
+
+MIN_BPM = 20
+MAX_BPM = 400
+TIME_SIGNATURE_PATTERN = re.compile(r"^\d{1,2}/(1|2|4|8|16|32)$")
 
 
 class TempoTrainerTools(ToolCollection):
@@ -102,6 +107,42 @@ Interpretation Guidelines:
         description: str | None,
     ) -> dict[str, Any]:
         """Create tempo trainer widget"""
+        for name, value in (("start_bpm", start_bpm), ("end_bpm", end_bpm)):
+            if not isinstance(value, int | float) or not (MIN_BPM <= value <= MAX_BPM):
+                return {
+                    "error": True,
+                    "error_type": "INVALID_PARAMETER",
+                    "message": (
+                        f"{name} must be a number between {MIN_BPM} and {MAX_BPM}, got: {value}"
+                    ),
+                }
+        if start_bpm >= end_bpm:
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": (f"start_bpm ({start_bpm}) must be less than end_bpm ({end_bpm})."),
+            }
+        if not isinstance(duration_minutes, int | float) or duration_minutes <= 0:
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": f"duration_minutes must be positive, got: {duration_minutes}",
+            }
+        if not isinstance(time_signature, str) or not TIME_SIGNATURE_PATTERN.match(time_signature):
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": (
+                    f"time_signature must look like '4/4', '3/4', or '6/8', got: {time_signature}"
+                ),
+            }
+        if ramp_type not in ("linear", "exponential"):
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": f"ramp_type must be 'linear' or 'exponential', got: {ramp_type}",
+            }
+
         trainer_id = str(uuid.uuid4())
 
         return {

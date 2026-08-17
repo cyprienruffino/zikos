@@ -184,6 +184,139 @@ class TestLLMStreaming:
         assert assistant_idx + 1 == tool_idx, "tool_result immediately follows assistant tool_use"
 
     @pytest.mark.asyncio
+    async def test_mixed_analysis_and_widget_commits_all_results(self, mcp_server):
+        """When one response contains [analysis_call, widget_call], the executed
+        analysis result must be committed to history — every tool_call id gets a
+        tool_result."""
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "call_a",
+                    "function": {
+                        "name": "analyze_tempo",
+                        "arguments": '{"audio_file_id": "f1"}',
+                    },
+                },
+                {
+                    "id": "call_w",
+                    "function": {"name": "create_metronome", "arguments": '{"bpm": 100}'},
+                },
+            ],
+        )
+        mcp_server.call_tool = AsyncMock(return_value={"bpm": 120})
+
+        chunks = []
+        async for chunk in service.generate_response_stream(
+            "Analyse + metronome", "s1", mcp_server
+        ):
+            chunks.append(chunk)
+
+        assert any(
+            c.get("type") == "tool_call" and c.get("tool_name") == "create_metronome"
+            for c in chunks
+        )
+
+        history = service._get_conversation_history("s1")
+        assistant_ids = sorted(
+            tc["id"]
+            for m in history
+            if m["role"] == "assistant"
+            for tc in (m.get("tool_calls") or [])
+        )
+        result_ids = sorted(m["tool_call_id"] for m in history if m["role"] == "tool")
+        assert assistant_ids == result_ids, "every tool_use must have a tool_result"
+        assert len(result_ids) == 2
+
+    @pytest.mark.asyncio
+    async def test_unfulfilled_interaction_closed_on_next_user_message(self, mcp_server):
+        """If the user replies with text instead of recording, the pending
+        tool_use must be closed with a synthesized tool_result before the new
+        user message — never left dangling."""
+        service = make_streaming_service(
+            responses=[
+                {
+                    "tool_calls": [
+                        {
+                            "id": "rec_1",
+                            "function": {
+                                "name": "request_audio_recording",
+                                "arguments": '{"prompt": "Record"}',
+                            },
+                        }
+                    ]
+                },
+                "No problem, let's talk instead.",
+            ]
+        )
+
+        async for _ in service.generate_response_stream("Teach me", "s1", mcp_server):
+            pass
+
+        # User sends a text message instead of recording
+        async for _ in service.generate_response_stream(
+            "Actually, another question", "s1", mcp_server
+        ):
+            pass
+
+        history = service._get_conversation_history("s1")
+        assistant_ids = [
+            tc["id"]
+            for m in history
+            if m["role"] == "assistant"
+            for tc in (m.get("tool_calls") or [])
+        ]
+        result_ids = [m["tool_call_id"] for m in history if m["role"] == "tool"]
+        assert sorted(assistant_ids) == sorted(result_ids), "no dangling tool_use"
+        tool_msg = next(m for m in history if m["role"] == "tool")
+        assert "did not complete" in tool_msg["content"]
+        # Synthesized result comes BEFORE the new user message
+        tool_idx = history.index(tool_msg)
+        user_idx = next(
+            i for i, m in enumerate(history) if m.get("content") == "Actually, another question"
+        )
+        assert tool_idx < user_idx
+
+    @pytest.mark.asyncio
+    async def test_cancel_pending_interaction(self, mcp_server):
+        """Explicit cancel synthesizes a tool_result closing the pending pair."""
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "rec_2",
+                    "function": {
+                        "name": "request_audio_recording",
+                        "arguments": '{"prompt": "Record"}',
+                    },
+                }
+            ],
+        )
+
+        async for _ in service.generate_response_stream("Teach me", "s1", mcp_server):
+            pass
+
+        service.cancel_pending_interaction("s1")
+
+        history = service._get_conversation_history("s1")
+        tool_msgs = [m for m in history if m["role"] == "tool"]
+        assert len(tool_msgs) == 1
+        assert "cancelled" in tool_msgs[0]["content"]
+        assistant_tool_use = next(
+            m for m in history if m["role"] == "assistant" and m.get("tool_calls")
+        )
+        assert tool_msgs[0]["tool_call_id"] == assistant_tool_use["tool_calls"][0]["id"]
+
+        # Cancelling again is a no-op
+        service.cancel_pending_interaction("s1")
+        assert len([m for m in history if m["role"] == "tool"]) == 1
+
+    def test_cancel_pending_interaction_without_session_is_noop(self):
+        service = make_streaming_service("OK")
+        service.cancel_pending_interaction(None)
+        service.cancel_pending_interaction("unknown_session_no_pending")
+
+    @pytest.mark.asyncio
     async def test_preserves_conversation_history(self, mcp_server):
         service = make_streaming_service("First reply")
 
@@ -234,6 +367,36 @@ class TestLLMStreaming:
         assert (
             assistant_msgs[0][0] + 1 == tool_msgs[0][0]
         ), "tool result must immediately follow assistant message"
+
+    @pytest.mark.asyncio
+    async def test_non_transient_error_fails_fast(self, mcp_server):
+        """Auth/config errors fail identically on retry — surface immediately
+        instead of burning through max_iterations."""
+        service = make_streaming_service("OK")
+        calls = {"count": 0}
+
+        async def failing_stream(*args, **kwargs):
+            calls["count"] += 1
+            raise RuntimeError("Invalid API key: authentication failed")
+            yield  # pragma: no cover — makes this an async generator
+
+        service.backend.stream_chat_completion = failing_stream  # type: ignore[assignment]
+
+        chunks = []
+        async for chunk in service.generate_response_stream("Hello", "s1", mcp_server):
+            chunks.append(chunk)
+
+        assert chunks[-1]["type"] == "error"
+        assert calls["count"] == 1, "non-transient errors must not be retried"
+
+    def test_transient_error_classification(self):
+        service = make_streaming_service("OK")
+
+        assert service._is_transient_backend_error(TimeoutError("read timeout")) is True
+        assert service._is_transient_backend_error(RuntimeError("rate limit exceeded")) is True
+        assert service._is_transient_backend_error(RuntimeError("some unknown blip")) is True
+        assert service._is_transient_backend_error(RuntimeError("Backend not initialized")) is False
+        assert service._is_transient_backend_error(RuntimeError("401 unauthorized")) is False
 
     @pytest.mark.asyncio
     async def test_handles_streaming_error(self, mcp_server):

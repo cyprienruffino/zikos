@@ -35,7 +35,6 @@ def mock_chat_service():
         return_value={"type": "response", "message": "Audio processed"}
     )
     service.get_thinking = MagicMock(return_value={"thinking": []})
-    service.disconnect = AsyncMock()
 
     return service
 
@@ -172,7 +171,7 @@ class TestWebSocketStreaming:
 
     @pytest.mark.asyncio
     async def test_websocket_streaming_disconnect(self, mock_websocket, mock_chat_service):
-        """Test WebSocket handles disconnect during streaming"""
+        """Test WebSocket handles disconnect cleanly (no error frames sent)"""
         with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
 
             async def receive_json():
@@ -180,9 +179,118 @@ class TestWebSocketStreaming:
 
             mock_websocket.receive_json = receive_json
 
-            try:
-                await websocket_endpoint(mock_websocket)
-            except WebSocketDisconnect:
-                pass
+            # Must return normally, not propagate the disconnect
+            await websocket_endpoint(mock_websocket)
 
-            mock_chat_service.disconnect.assert_called_once_with(mock_websocket)
+            mock_websocket.send_json.assert_not_called()
+
+
+class TestWebSocketFrameValidation:
+    """Malformed frames must produce error replies, not kill the connection"""
+
+    @pytest.mark.asyncio
+    async def test_missing_type_field_replies_error_and_continues(
+        self, mock_websocket, mock_chat_service
+    ):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
+            frames = [
+                {"message": "no type here"},
+                {"type": "message", "message": "Hello", "stream": False},
+            ]
+
+            async def receive_json():
+                if frames:
+                    return frames.pop(0)
+                raise WebSocketDisconnect()
+
+            mock_websocket.receive_json = receive_json
+
+            await websocket_endpoint(mock_websocket)
+
+            sent = [call.args[0] for call in mock_websocket.send_json.call_args_list]
+            assert any(m.get("type") == "error" for m in sent)
+            # Connection survived the bad frame: the valid message was processed
+            mock_chat_service.process_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_message_frame_without_message_replies_error(
+        self, mock_websocket, mock_chat_service
+    ):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
+            frames = [{"type": "message", "stream": False}]
+
+            async def receive_json():
+                if frames:
+                    return frames.pop(0)
+                raise WebSocketDisconnect()
+
+            mock_websocket.receive_json = receive_json
+
+            await websocket_endpoint(mock_websocket)
+
+            sent = [call.args[0] for call in mock_websocket.send_json.call_args_list]
+            assert any(m.get("type") == "error" for m in sent)
+            mock_chat_service.process_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_type_replies_error_and_continues(
+        self, mock_websocket, mock_chat_service
+    ):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
+            frames = [
+                {"type": "bogus_frame_type"},
+                {"type": "message", "message": "Hi", "stream": False},
+            ]
+
+            async def receive_json():
+                if frames:
+                    return frames.pop(0)
+                raise WebSocketDisconnect()
+
+            mock_websocket.receive_json = receive_json
+
+            await websocket_endpoint(mock_websocket)
+
+            sent = [call.args[0] for call in mock_websocket.send_json.call_args_list]
+            assert any(
+                m.get("type") == "error" and "bogus_frame_type" in m.get("message", "")
+                for m in sent
+            )
+            mock_chat_service.process_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_audio_ready_without_id_replies_error(self, mock_websocket, mock_chat_service):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
+            frames = [{"type": "audio_ready"}]
+
+            async def receive_json():
+                if frames:
+                    return frames.pop(0)
+                raise WebSocketDisconnect()
+
+            mock_websocket.receive_json = receive_json
+
+            await websocket_endpoint(mock_websocket)
+
+            sent = [call.args[0] for call in mock_websocket.send_json.call_args_list]
+            assert any(m.get("type") == "error" for m in sent)
+            mock_chat_service.handle_audio_ready.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_dict_frame_replies_error_and_continues(
+        self, mock_websocket, mock_chat_service
+    ):
+        with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
+            frames = ["just a string"]
+
+            async def receive_json():
+                if frames:
+                    return frames.pop(0)
+                raise WebSocketDisconnect()
+
+            mock_websocket.receive_json = receive_json
+
+            await websocket_endpoint(mock_websocket)
+
+            sent = [call.args[0] for call in mock_websocket.send_json.call_args_list]
+            assert any(m.get("type") == "error" for m in sent)

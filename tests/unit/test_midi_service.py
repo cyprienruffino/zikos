@@ -113,7 +113,7 @@ Track 1:
             midi_text_to_file(midi_text, midi_path)
 
             try:
-                result = await midi_service.render_notation(midi_file_id, "both")
+                result = await midi_service.render_notation(midi_file_id, "sheet_music")
 
                 assert "midi_file_id" in result
                 assert result["midi_file_id"] == midi_file_id
@@ -147,3 +147,33 @@ Track 1:
         """Test getting MIDI path when file doesn't exist"""
         with pytest.raises(FileNotFoundError):
             await midi_service.get_midi_path("nonexistent")
+
+
+class TestSynthesizeErrorPropagation:
+    """synthesize must not return HTTP-200-shaped empty ids on tool errors"""
+
+    @pytest.mark.asyncio
+    async def test_synthesize_raises_on_tool_error_dict(self, midi_service):
+        from unittest.mock import AsyncMock, patch
+
+        with patch.object(
+            midi_service.midi_tools,
+            "midi_to_audio",
+            AsyncMock(
+                return_value={
+                    "error": True,
+                    "error_type": "synthesis_failed",
+                    "message": "FluidSynth exploded",
+                }
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="FluidSynth exploded"):
+                await midi_service.synthesize("some-id", "piano")
+
+    @pytest.mark.asyncio
+    async def test_synthesize_raises_on_missing_audio_file_id(self, midi_service):
+        from unittest.mock import AsyncMock, patch
+
+        with patch.object(midi_service.midi_tools, "midi_to_audio", AsyncMock(return_value={})):
+            with pytest.raises(RuntimeError, match="no audio file ID"):
+                await midi_service.synthesize("some-id", "piano")

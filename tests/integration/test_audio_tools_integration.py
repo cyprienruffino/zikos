@@ -154,8 +154,6 @@ class TestTempoAnalysisIntegration:
         assert "bpm" in result
         assert isinstance(result["bpm"], int | float)
         assert result["bpm"] > 0
-        assert "confidence" in result
-        assert 0.0 <= result["confidence"] <= 1.0
         assert "tempo_stability_score" in result
         assert 0.0 <= result["tempo_stability_score"] <= 1.0
         assert "mean_inter_beat_interval_ms" in result

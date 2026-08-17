@@ -1,6 +1,5 @@
 """LLM service"""
 
-import ast
 import json
 import logging
 import re
@@ -72,7 +71,6 @@ class LLMService:
             self.tool_call_parser,
             self.tool_executor,
             self.response_validator,
-            self.thinking_extractor,
             self._get_system_prompt,
         )
         self.conversations = self.conversation_manager.conversations
@@ -180,10 +178,40 @@ class LLMService:
     def _yield_error(self, message: str) -> dict[str, Any]:
         return {"type": "error", "message": message}
 
+    @staticmethod
+    def _is_transient_backend_error(error: Exception) -> bool:
+        """Classify backend errors: only transient ones are worth retrying."""
+        text = f"{type(error).__name__} {error}".lower()
+        non_transient_markers = (
+            "not initialized",
+            "authentication",
+            "api key",
+            "unauthorized",
+            "401",
+            "403",
+            "permission",
+            "invalid request",
+            "bad request",
+            "importerror",
+            "not implemented",
+            "context window",
+            "maximum context",
+        )
+        if any(marker in text for marker in non_transient_markers):
+            return False
+        # Timeouts, rate limits, connection blips, provider overload etc. —
+        # and unknown errors — are retried (previous behavior for everything).
+        return True
+
     def _inject_error_system_message(
         self, history: list[dict[str, Any]], error_type: str, error_details: str
     ) -> None:
-        history.append({"role": "system", "content": f"ERROR: {error_type}: {error_details}"})
+        # Injected as a clearly-marked user message, NOT role "system": appending
+        # system-role messages mid-conversation risks displacing the real system
+        # prompt (persona/rules/tools) and is rejected by some strict APIs.
+        history.append(
+            {"role": "user", "content": f"[system note] ERROR: {error_type}: {error_details}"}
+        )
 
     def _media_events_from_tool_results(
         self, tool_results: list[dict[str, Any]]
@@ -192,9 +220,14 @@ class LLMService:
         events = []
         for tr in tool_results:
             name = tr.get("name", "")
+            if name not in ("midi_to_audio", "midi_to_notation"):
+                continue
             try:
-                data = ast.literal_eval(tr.get("content", ""))
-            except Exception:
+                data = json.loads(tr.get("content", ""))
+            except (json.JSONDecodeError, TypeError) as e:
+                # Error results are plain strings — anything else failing to
+                # parse would silently drop media events, so log it.
+                _logger.warning(f"Could not parse {name} tool result as JSON: {e}")
                 continue
             if not isinstance(data, dict):
                 continue
@@ -310,7 +343,7 @@ class LLMService:
         )
         for msg in history:
             if msg["role"] == "system" and msg["content"].endswith("/think"):
-                msg["content"] = msg["content"][:-6] + "/nothink"
+                msg["content"] = msg["content"].removesuffix("/think") + "/nothink"
                 break
 
     def _finalize_response(
@@ -347,7 +380,7 @@ class LLMService:
         if nothink_retry:
             for msg in history:
                 if msg["role"] == "system" and msg["content"].endswith("/nothink"):
-                    msg["content"] = msg["content"][:-8] + "/think"
+                    msg["content"] = msg["content"].removesuffix("/nothink") + "/think"
                     break
 
         chunks: list[dict[str, Any]] = []
@@ -371,6 +404,21 @@ class LLMService:
             yield self._yield_error(error_msg)
             return
 
+        # Serialize the whole generation turn per session so concurrent turns
+        # can't interleave history mutations.
+        async with self.conversation_manager.lock(session_id):
+            async for chunk in self._generate_response_stream_locked(
+                message, session_id, mcp_server
+            ):
+                yield chunk
+
+    async def _generate_response_stream_locked(
+        self,
+        message: str,
+        session_id: str,
+        mcp_server: MCPServer,
+    ):
+        """Generation turn body; caller must hold the session lock."""
         history, original_message, tool_registry, tools, tool_schemas, state = (
             self.orchestrator.prepare_conversation(message, session_id, mcp_server)
         )
@@ -417,6 +465,13 @@ class LLMService:
                 }
 
             except Exception as e:
+                if not self._is_transient_backend_error(e):
+                    # Auth failures, bad requests, uninitialized backends etc.
+                    # will fail identically on every retry — surface immediately
+                    # instead of burning through max_iterations.
+                    _logger.error(f"Non-transient backend error, not retrying: {e}")
+                    yield self._yield_error(f"LLM backend error: {str(e)}")
+                    return
                 self._inject_error_system_message(
                     history, "streaming_error", f"Error during streaming: {str(e)}"
                 )
@@ -446,15 +501,18 @@ class LLMService:
                 for tc in tool_calls:
                     tc["id"] = str(uuid.uuid4())
 
-                should_continue, result, tool_call_infos, tool_results = (
-                    await self.orchestrator.process_tool_calls(
-                        tool_calls,
-                        state,
-                        tool_registry,
-                        mcp_server,
-                        session_id,
-                        cleaned_content,
-                    )
+                (
+                    should_continue,
+                    result,
+                    tool_call_infos,
+                    tool_results,
+                ) = await self.orchestrator.process_tool_calls(
+                    tool_calls,
+                    state,
+                    tool_registry,
+                    mcp_server,
+                    session_id,
+                    cleaned_content,
                 )
 
                 for info in tool_call_infos:
@@ -471,14 +529,32 @@ class LLMService:
                     elif result:
                         tool_name = result.get("tool_name", "")
                         tool = tool_registry.get_tool(tool_name) if tool_name else None
-                        assistant_msg = {
-                            "role": "assistant",
-                            "content": cleaned_content or None,
-                            "tool_calls": tool_calls,
-                        }
-                        if tool and tool.category == ToolCategory.DISPLAY_WIDGET:
-                            # Result is immediate: commit assistant + synthetic tool_result now.
-                            history.append(assistant_msg)
+                        # Commit the assistant message plus every tool result that
+                        # was executed in this batch (analysis tools mixed with the
+                        # widget call) so no tool_use is ever left dangling.
+                        history.append(
+                            {
+                                "role": "assistant",
+                                "content": cleaned_content or None,
+                                "tool_calls": tool_calls,
+                            }
+                        )
+                        if tool_results:
+                            history.extend(tool_results)
+                            for event in self._media_events_from_tool_results(tool_results):
+                                yield event
+                        if tool and tool.category == ToolCategory.INTERACTION_REQUEST:
+                            # Result arrives later (e.g. audio recording); tool_result
+                            # appended by handle_audio_ready when the user completes
+                            # the action, or synthesized on cancel/next message.
+                            tool_call_id = result.get("tool_id") or ""
+                            if tool_call_id:
+                                self.conversation_manager.set_pending_interaction(
+                                    session_id, tool_call_id, tool_name
+                                )
+                        else:
+                            # Display widgets are immediate: commit a synthetic
+                            # tool_result now.
                             history.append(
                                 {
                                     "role": "tool",
@@ -487,16 +563,6 @@ class LLMService:
                                     "tool_call_id": result.get("tool_id"),
                                 }
                             )
-                        elif tool and tool.category == ToolCategory.INTERACTION_REQUEST:
-                            # Result arrives later (e.g. audio recording).
-                            # Commit the assistant message now; tool_result appended
-                            # by handle_audio_ready when the user completes the action.
-                            history.append(assistant_msg)
-                            tool_call_id = result.get("tool_id") or ""
-                            if tool_call_id:
-                                self.conversation_manager.set_pending_interaction(
-                                    session_id, tool_call_id, tool_name
-                                )
                         yield result
                         return
                 else:
@@ -560,7 +626,10 @@ class LLMService:
             stream = self._create_stream(current_messages, None, tool_schemas)
             accumulated_content = ""
             async for chunk in stream:
-                choice = chunk.get("choices", [{}])[0]
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                choice = choices[0]
                 delta = choice.get("delta", {})
                 finish_reason = choice.get("finish_reason")
 
@@ -573,6 +642,9 @@ class LLMService:
                     break
 
             cleaned_content, _ = self._extract_thinking(accumulated_content)
+            # The model may still attempt tool-call markup here even without
+            # tools; strip it rather than showing raw XML to the user.
+            cleaned_content = self.tool_call_parser.strip_tool_call_tags(cleaned_content)
             if cleaned_content:
                 history.append({"role": "assistant", "content": cleaned_content})
                 yield {"type": "response", "message": cleaned_content}
@@ -580,6 +652,29 @@ class LLMService:
                 yield self._yield_error("Maximum iterations reached.")
         except Exception as e:
             yield self._yield_error(f"Error after max iterations: {str(e)}")
+
+    # --- Pending interactions ---
+
+    def cancel_pending_interaction(self, session_id: str | None) -> None:
+        """Close a pending interaction request (e.g. cancelled recording).
+
+        Synthesizes the missing tool_result so the assistant tool_call does not
+        dangle forever in history (strict APIs reject unpaired tool_use blocks).
+        """
+        if not session_id:
+            return
+        pending = self.conversation_manager.pop_pending_interaction(session_id)
+        if not pending:
+            return
+        history = self._get_conversation_history(session_id)
+        history.append(
+            {
+                "role": "tool",
+                "name": pending["tool_name"],
+                "content": "The user cancelled the recording.",
+                "tool_call_id": pending["tool_call_id"],
+            }
+        )
 
     # --- Audio handling ---
 
@@ -591,43 +686,54 @@ class LLMService:
         mcp_server: MCPServer,
     ) -> dict[str, Any]:
         """Handle audio ready and generate response"""
+        if not session_id:
+            # Never fall back to a shared "default" session — that would leak
+            # conversation state across unrelated clients.
+            session_id = str(uuid.uuid4())
+            _logger.warning(f"handle_audio_ready called without session_id; generated {session_id}")
+
         try:
             analysis = await self.audio_service.run_baseline_analysis(audio_file_id)
         except Exception as e:
-            session_id = session_id or "default"
-            history = self._get_conversation_history(session_id)
-            self._inject_error_system_message(
-                history,
-                "audio_analysis_error",
-                f"Error analyzing audio file {audio_file_id}: {str(e)}. The file may be corrupted or in an unsupported format.",
-            )
+            async with self.conversation_manager.lock(session_id):
+                history = self._get_conversation_history(session_id)
+                self._inject_error_system_message(
+                    history,
+                    "audio_analysis_error",
+                    f"Error analyzing audio file {audio_file_id}: {str(e)}. The file may be corrupted or in an unsupported format.",
+                )
             return await self.generate_response("", session_id, mcp_server)
 
         analysis_str = (
             json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
         )
-        effective_session = session_id or "default"
         analysis_content = AudioAnalysisContextFormatter.format_analysis_results(
             audio_file_id, analysis_str
         )
 
-        pending = self.conversation_manager.pop_pending_interaction(effective_session)
+        # Mutate history under the session lock; the generation turn itself is
+        # serialized by generate_response_stream (the lock is not reentrant, so
+        # it must be released before generating).
+        async with self.conversation_manager.lock(session_id):
+            pending = self.conversation_manager.pop_pending_interaction(session_id)
+            if pending:
+                # Close the pending tool_use/tool_result pair, then let the LLM continue
+                # from the tool_result without adding a new user message.
+                history = self._get_conversation_history(session_id)
+                history.append(
+                    {
+                        "role": "tool",
+                        "name": pending["tool_name"],
+                        "content": analysis_content,
+                        "tool_call_id": pending["tool_call_id"],
+                    }
+                )
+
         if pending:
-            # Close the pending tool_use/tool_result pair, then let the LLM continue
-            # from the tool_result without adding a new user message.
-            history = self._get_conversation_history(effective_session)
-            history.append(
-                {
-                    "role": "tool",
-                    "name": pending["tool_name"],
-                    "content": analysis_content,
-                    "tool_call_id": pending["tool_call_id"],
-                }
-            )
-            return await self.generate_response("", effective_session, mcp_server)
+            return await self.generate_response("", session_id, mcp_server)
 
         # No pending interaction — inject as a plain user message (backwards compatibility).
-        return await self.generate_response(analysis_content, effective_session, mcp_server)
+        return await self.generate_response(analysis_content, session_id, mcp_server)
 
     # --- System prompt ---
 

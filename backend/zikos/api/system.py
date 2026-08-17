@@ -66,9 +66,8 @@ class SystemStatusResponse(BaseModel):
     hardware: HardwareResponse
 
 
-@router.get("/hardware", response_model=HardwareResponse)
-async def get_hardware():
-    """Get detected hardware profile"""
+def _build_hardware_response() -> HardwareResponse:
+    """Detect hardware and assemble the response model"""
     profile = detect_hardware()
     tier = get_hardware_tier(profile)
 
@@ -78,6 +77,12 @@ async def get_hardware():
         gpu_hint=GpuHintResponse(**asdict(profile.gpu_hint)) if profile.gpu_hint else None,
         tier=tier,
     )
+
+
+@router.get("/hardware", response_model=HardwareResponse)
+async def get_hardware():
+    """Get detected hardware profile"""
+    return _build_hardware_response()
 
 
 @router.get("/model-recommendations", response_model=ModelRecommendationsResponse)
@@ -99,11 +104,7 @@ async def get_model_recommendations():
 async def get_status():
     """Get system status including model state and hardware info"""
     from zikos.api.chat import get_chat_service
-    from zikos.config import Settings
-
-    settings = Settings()
-    profile = detect_hardware()
-    tier = get_hardware_tier(profile)
+    from zikos.config import settings
 
     chat_service = get_chat_service()
     llm_service = chat_service.llm_service
@@ -115,10 +116,5 @@ async def get_status():
         model_loaded=model_loaded,
         model_path=settings.llm_model_path if settings.llm_model_path else None,
         initialization_error=initialization_error,
-        hardware=HardwareResponse(
-            gpu=GpuInfoResponse(**asdict(profile.gpu)),
-            ram=RamInfoResponse(**asdict(profile.ram)),
-            gpu_hint=GpuHintResponse(**asdict(profile.gpu_hint)) if profile.gpu_hint else None,
-            tier=tier,
-        ),
+        hardware=_build_hardware_response(),
     )

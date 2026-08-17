@@ -20,15 +20,14 @@ def get_analyze_articulation_tool() -> Tool:
         required=["audio_file_id"],
         detailed_description="""Analyze articulation types (staccato, legato, etc.).
 
-Returns: dict with attack_time (ms), articulation_types, finger_noise (0.0-1.0), muting_effectiveness (0.0-1.0)
+Returns: dict with legato_percentage (0.0-1.0), staccato_percentage (0.0-1.0), articulation_consistency (0.0-1.0), accents (list of {time, intensity, relative_loudness})
 
 Interpretation Guidelines:
-- attack_time: <10ms very fast (pick, slap), 10-20ms fast (clear attack), 20-50ms moderate (smooth), >50ms slow (legato)
-- If attack_time varies significantly, focus on uniform attack
-- finger_noise: <0.05 excellent, 0.05-0.10 good, 0.10-0.20 needs work, >0.20 poor
-- muting_effectiveness: >0.90 excellent, 0.80-0.90 good, <0.80 needs work
-- High finger_noise + low intonation_accuracy → likely related technique issues
-- Low muting_effectiveness → suggest practicing muting technique""",
+- legato_percentage/staccato_percentage: fraction of notes sustained (>70% of the inter-onset gap) vs clipped short (<40%)
+- articulation_consistency: >0.85 very uniform note lengths, <0.7 inconsistent articulation
+- accents: notes noticeably louder than the median note (relative_loudness is the ratio to the median note peak)
+- High staccato_percentage on a legato passage (or vice versa) suggests articulation practice
+- Clustered accents can indicate intended phrasing; scattered accents may indicate uneven touch""",
     )
 
 
@@ -54,7 +53,6 @@ async def analyze_articulation(audio_path: str) -> dict[str, Any]:
             }
 
         onset_times = librosa.frames_to_time(onsets, sr=sr)
-        inter_onset_intervals = np.diff(onset_times)
 
         note_durations = []
         for i in range(len(onsets) - 1):
@@ -87,9 +85,6 @@ async def analyze_articulation(audio_path: str) -> dict[str, Any]:
                 "message": "Could not calculate note durations",
             }
 
-        np.mean(note_durations)
-        np.mean(inter_onset_intervals)
-
         staccato_threshold = 0.4
         legato_threshold = 0.7
 
@@ -104,25 +99,31 @@ async def analyze_articulation(audio_path: str) -> dict[str, Any]:
         articulation_consistency = float(1.0 / (1.0 + duration_std))
         articulation_consistency = max(0.0, min(1.0, articulation_consistency))
 
+        # Accents: notes noticeably louder than the typical (median) note.
+        # (The old heuristic compared a loudness ratio to 1.2x the mean note
+        # DURATION ratio - two unrelated quantities.)
+        note_peaks = []
+        for i in range(len(onset_times) - 1):
+            start_sample = int(onset_times[i] * sr)
+            end_sample = int(onset_times[i + 1] * sr)
+            segment = y[start_sample:end_sample]
+            note_peaks.append(float(np.max(np.abs(segment))) if len(segment) > 0 else 0.0)
+
         accents = []
-        mean_duration = float(np.mean(note_durations))
-        for i, onset_time in enumerate(onset_times[:-1]):
-            if i < len(onset_times) - 1:
-                start_sample = int(onset_time * sr)
-                end_sample = int(onset_times[i + 1] * sr)
-                segment = y[start_sample:end_sample]
-                if len(segment) > 0:
-                    max_amp = float(np.max(np.abs(segment)))
-                    relative_loudness = max_amp / (np.max(np.abs(y)) + 1e-10)
-                    if relative_loudness > 1.2 * mean_duration:
-                        intensity = min(1.0, relative_loudness)
-                        accents.append(
-                            {
-                                "time": float(onset_time),
-                                "intensity": float(intensity),
-                                "relative_loudness": float(relative_loudness),
-                            }
-                        )
+        positive_peaks = [p for p in note_peaks if p > 0]
+        median_peak = float(np.median(positive_peaks)) if positive_peaks else 0.0
+        if median_peak > 0:
+            accent_ratio_threshold = 1.5
+            for i, peak in enumerate(note_peaks):
+                relative_loudness = peak / median_peak
+                if relative_loudness > accent_ratio_threshold:
+                    accents.append(
+                        {
+                            "time": float(onset_times[i]),
+                            "intensity": float(min(1.0, relative_loudness / 2.0)),
+                            "relative_loudness": float(relative_loudness),
+                        }
+                    )
 
         return {
             "legato_percentage": float(legato_percentage),

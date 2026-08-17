@@ -1,5 +1,6 @@
 """Validate LLM responses for safety and quality"""
 
+import json
 import logging
 from typing import Any
 
@@ -28,7 +29,12 @@ class ResponseValidator:
         """
         try:
             enc = tiktoken.get_encoding("cl100k_base")
-            total_tokens = sum(len(enc.encode(str(msg.get("content", "")))) for msg in messages)
+            total_tokens = 0
+            for msg in messages:
+                total_tokens += len(enc.encode(str(msg.get("content", ""))))
+                if msg.get("tool_calls"):
+                    # tool_calls payloads consume context too — count them.
+                    total_tokens += len(enc.encode(json.dumps(msg["tool_calls"], default=str)))
 
             if context_window is not None:
                 max_tokens = get_max_tokens_for_validation(context_window)
@@ -120,13 +126,14 @@ class ResponseValidator:
         if len(recent_tool_calls) >= LLM.REPETITIVE_PATTERN_THRESHOLD:
             if len(set(recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD :])) == 1:
                 _logger.warning(
-                    f"Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD:]}). "
+                    f"Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD :]}). "
                     "Breaking loop to prevent infinite recursion."
                 )
-                tool_name = recent_tool_calls[-1]
+                # Entries may be "name(canonical_args)" signatures — report just the name
+                tool_name = recent_tool_calls[-1].split("(", 1)[0]
                 return {
                     "error_type": "repetitive_tool_calls",
-                    "error_details": f"Detected repetitive pattern calling tool '{tool_name}' {LLM.REPETITIVE_PATTERN_THRESHOLD} times",
+                    "error_details": f"Detected repetitive pattern calling tool '{tool_name}' {LLM.REPETITIVE_PATTERN_THRESHOLD} times with identical arguments",
                 }
 
         return None

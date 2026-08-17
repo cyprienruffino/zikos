@@ -75,7 +75,7 @@ Track 1:
 """
                         midi_text_to_file(midi_text, midi_path)
 
-                        result = await tools.midi_to_notation(midi_file_id, "both")
+                        result = await tools.midi_to_notation(midi_file_id, "sheet_music")
 
                         assert "midi_file_id" in result
                         assert "format" in result

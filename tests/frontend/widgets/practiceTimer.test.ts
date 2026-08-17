@@ -6,7 +6,7 @@ describe("Practice Timer Widget", () => {
     beforeEach(() => {
         document.body.innerHTML = `<div id="messages"></div>`;
         vi.useFakeTimers();
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
     });
 
     afterEach(() => {
@@ -300,6 +300,25 @@ describe("Practice Timer Widget", () => {
 
             expect(ui.addMessage).toHaveBeenCalledWith(
                 expect.stringContaining("Break reminder"),
+                "assistant"
+            );
+        });
+
+        it("should report cumulative practice minutes in reminders", () => {
+            addPracticeTimerWidget("timer_123", 30, "Practice scales", 1);
+            const widget = document.getElementById("timer-timer_123");
+            const startBtn = widget?.querySelector(".start-btn") as HTMLButtonElement;
+
+            startBtn.click();
+            vi.advanceTimersByTime(60_000);
+            expect(ui.addMessage).toHaveBeenCalledWith(
+                expect.stringContaining("practicing for 1 minutes"),
+                "assistant"
+            );
+
+            vi.advanceTimersByTime(60_000);
+            expect(ui.addMessage).toHaveBeenCalledWith(
+                expect.stringContaining("practicing for 2 minutes"),
                 "assistant"
             );
         });

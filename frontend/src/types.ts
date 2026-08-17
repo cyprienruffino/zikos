@@ -1,3 +1,5 @@
+import type { BeatScheduler } from "./widgets/audioEngine.js";
+
 export interface WebSocketMessage {
     type: string;
     message?: string;
@@ -15,8 +17,7 @@ export interface MetronomeState {
     bpm: number;
     beats: number;
     widgetEl: HTMLElement | null;
-    intervalId: number | null;
-    audioContext: AudioContext | null;
+    scheduler: BeatScheduler | null;
     currentBeat: number;
     isPlaying: boolean;
 }
@@ -28,6 +29,8 @@ export interface TunerState {
     microphone: MediaStreamAudioSourceNode | null;
     audioContext: AudioContext | null;
     isRunning: boolean;
+    /** Synchronous guard set before getUserMedia resolves. */
+    starting: boolean;
     animationFrame: number | null;
 }
 
@@ -37,8 +40,7 @@ export interface ChordProgressionState {
     timeSignature: string;
     chordsPerBar: number;
     widgetEl: HTMLElement;
-    audioContext: AudioContext | null;
-    intervalId: number | null;
+    scheduler: BeatScheduler | null;
     currentChordIndex: number;
     isPlaying: boolean;
 }
@@ -50,13 +52,7 @@ export interface TempoTrainerState {
     timeSignature: string;
     rampType: string;
     widgetEl: HTMLElement;
-    metronome: {
-        bpm: number;
-        beats: number;
-        audioContext: AudioContext;
-        intervalId: number | null;
-        currentBeat: number;
-    } | null;
+    scheduler: BeatScheduler | null;
     startTime: number | null;
     pausedTime: number;
     isPlaying: boolean;
@@ -69,7 +65,6 @@ export interface EarTrainerState {
     intervals: string[];
     widgetEl: HTMLElement;
     currentAnswer: string | null;
-    audioContext: AudioContext | null;
 }
 
 export interface PracticeTimerState {

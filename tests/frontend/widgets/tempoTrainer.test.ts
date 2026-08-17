@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { addTempoTrainerWidget } from "../../../frontend/src/widgets/tempoTrainer.js";
+import { resetAudioEngine } from "../../../frontend/src/widgets/audioEngine.js";
 
 class MockAudioContext {
     state: string = "running";
@@ -52,6 +53,7 @@ describe("Tempo Trainer Widget", () => {
         originalClearInterval = globalThis.window.clearInterval;
 
         globalThis.AudioContext = vi.fn(() => new MockAudioContext()) as any;
+        resetAudioEngine();
         globalThis.window.setInterval = vi.fn((fn: Function, delay: number) => {
             return originalSetInterval(fn, delay);
         }) as any;
@@ -279,9 +281,10 @@ describe("Tempo Trainer Widget", () => {
             expect(tempoDisplay?.textContent).toBe("60 BPM");
         });
 
-        it("should close AudioContext when stopped", () => {
+        it("should keep the shared AudioContext open but stop the scheduler", () => {
             const mockAudioContext = new MockAudioContext();
             globalThis.AudioContext = vi.fn(() => mockAudioContext) as any;
+            resetAudioEngine();
 
             addTempoTrainerWidget("tempo_123", 60, 120, 5, "4/4", "linear");
             const widget = document.getElementById("tempo-tempo_123");
@@ -291,7 +294,9 @@ describe("Tempo Trainer Widget", () => {
             playBtn.click();
             stopBtn.click();
 
-            expect(mockAudioContext.state).toBe("closed");
+            // The app-wide context is shared; stopping a widget must not close it.
+            expect(mockAudioContext.state).toBe("running");
+            expect(vi.mocked(globalThis.window.clearInterval)).toHaveBeenCalled();
         });
     });
 

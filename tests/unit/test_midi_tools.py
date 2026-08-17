@@ -99,14 +99,52 @@ Track 1:
     async def test_midi_to_notation_file_not_found(self, midi_tools):
         """Test MIDI to notation with non-existent file"""
         with pytest.raises(FileNotFoundError):
-            await midi_tools.midi_to_notation("nonexistent_midi", "both")
+            await midi_tools.midi_to_notation("nonexistent_midi", "sheet_music")
 
     @pytest.mark.asyncio
-    async def test_midi_to_notation_default_format(self, midi_tools):
-        """Test MIDI to notation with default format via call_tool"""
-        result = await midi_tools.call_tool("midi_to_notation", midi_file_id="test_midi")
+    async def test_midi_to_notation_invalid_format(self, midi_tools):
+        """Unknown formats (including the removed 'tabs'/'both') return an error dict"""
+        for bad_format in ("tabs", "both", "sparkle"):
+            result = await midi_tools.midi_to_notation("whatever", bad_format)
+            assert result.get("error") is True
+            assert result["error_type"] == "INVALID_FORMAT"
 
-        assert result["format"] == "both"
+    @pytest.mark.asyncio
+    async def test_midi_to_audio_invalid_instrument(self, midi_tools):
+        """Unknown instruments (including the removed 'drums') return an error dict"""
+        for bad_instrument in ("drums", "kazoo"):
+            result = await midi_tools.midi_to_audio("whatever", bad_instrument)
+            assert result.get("error") is True
+            assert result["error_type"] == "INVALID_INSTRUMENT"
+
+    @pytest.mark.asyncio
+    async def test_midi_to_notation_default_format(self, midi_tools, temp_dir):
+        """Default format via call_tool is sheet_music"""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from zikos.config import settings
+        from zikos.mcp.tools.processing.midi.midi_parser import midi_text_to_file
+
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 velocity=60 duration=0.5
+[/MIDI]
+"""
+        with patch.object(settings, "notation_storage_path", temp_dir):
+            midi_tools.storage_path = temp_dir
+            midi_text_to_file(midi_text, temp_dir / "test_midi.mid")
+            try:
+                result = await midi_tools.call_tool("midi_to_notation", midi_file_id="test_midi")
+            except RuntimeError as e:
+                if "verovio" in str(e).lower():
+                    pytest.skip(f"verovio not available: {e}")
+                raise
+
+        assert result["format"] == "sheet_music"
+        assert "sheet_music_url" in result
 
     @pytest.mark.asyncio
     async def test_call_tool_validate_midi(self, midi_tools):

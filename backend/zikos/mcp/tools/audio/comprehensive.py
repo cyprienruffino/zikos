@@ -64,24 +64,24 @@ async def comprehensive_analysis(audio_path: str) -> dict[str, Any]:
         if "error" in rhythm_result and rhythm_result.get("error_type") == "TOO_SHORT":
             return dict(rhythm_result)
 
-        scores = []
-        if "tempo_stability_score" in tempo_result:
-            scores.append(tempo_result["tempo_stability_score"])
-        if "error" not in pitch_result:
-            if "intonation_accuracy" in pitch_result:
-                scores.append(pitch_result["intonation_accuracy"])
-            if "pitch_stability" in pitch_result:
-                scores.append(pitch_result["pitch_stability"])
-        if "timing_accuracy" in rhythm_result:
-            scores.append(rhythm_result["timing_accuracy"])
-        if "dynamic_consistency" in dynamics_result and "error" not in dynamics_result:
-            scores.append(dynamics_result["dynamic_consistency"])
-        if "articulation_consistency" in articulation_result and "error" not in articulation_result:
-            scores.append(articulation_result["articulation_consistency"])
-        if "timbre_consistency" in timbre_result and "error" not in timbre_result:
-            scores.append(timbre_result["timbre_consistency"])
+        def _add_score(scores_list: list[float], result: dict[str, Any], field: str) -> None:
+            """Append a score only if the sub-analysis succeeded and measured it."""
+            if "error" in result:
+                return
+            value = result.get(field)
+            if value is not None:
+                scores_list.append(float(value))
 
-        overall_score = float(sum(scores) / len(scores)) if scores else 0.0
+        scores: list[float] = []
+        _add_score(scores, tempo_result, "tempo_stability_score")
+        _add_score(scores, pitch_result, "intonation_accuracy")
+        _add_score(scores, pitch_result, "pitch_stability")
+        _add_score(scores, rhythm_result, "timing_accuracy")
+        _add_score(scores, dynamics_result, "dynamic_consistency")
+        _add_score(scores, articulation_result, "articulation_consistency")
+        _add_score(scores, timbre_result, "timbre_consistency")
+
+        overall_score = float(sum(scores) / len(scores)) if scores else None
 
         return {
             "timing": {

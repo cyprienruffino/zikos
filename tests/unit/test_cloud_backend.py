@@ -37,14 +37,6 @@ def test_not_initialized_before_initialize():
     assert not CloudBackend().is_initialized()
 
 
-def test_supports_tools(backend: CloudBackend):
-    assert backend.supports_tools()
-
-
-def test_supports_system_messages(backend: CloudBackend):
-    assert backend.supports_system_messages()
-
-
 def test_close_is_noop(backend: CloudBackend):
     backend.close()
     assert backend.is_initialized()
@@ -231,21 +223,164 @@ async def test_stream_chat_completion_no_tool_calls_in_final_when_none(backend: 
     assert "tool_calls" not in final
 
 
+@pytest.mark.asyncio
+async def test_stream_flushes_tool_calls_when_no_finish_reason(backend: CloudBackend):
+    """A stream ending without finish_reason must flush accumulated tool
+    calls instead of silently discarding them."""
+    stream = _fake_stream(
+        _make_chunk(
+            tool_calls=[
+                {
+                    "index": 0,
+                    "id": "call_x",
+                    "type": "function",
+                    "function": {"name": "detect_pitch", "arguments": "{}"},
+                }
+            ]
+        ),
+        # no finish_reason chunk — stream just ends
+    )
+
+    async def fake_acompletion(**kwargs):
+        return stream
+
+    with patch("zikos.services.llm_backends.cloud.litellm.acompletion", new=fake_acompletion):
+        chunks = []
+        async for chunk in backend.stream_chat_completion([{"role": "user", "content": "hi"}]):
+            chunks.append(chunk)
+
+    final = chunks[-1]["choices"][0]
+    assert final["finish_reason"] == "tool_calls"
+    assert final["delta"]["tool_calls"][0]["id"] == "call_x"
+
+
+@pytest.mark.asyncio
+async def test_stream_without_finish_reason_and_no_tools_yields_stop(backend: CloudBackend):
+    stream = _fake_stream(_make_chunk(content="hi"))
+
+    async def fake_acompletion(**kwargs):
+        return stream
+
+    with patch("zikos.services.llm_backends.cloud.litellm.acompletion", new=fake_acompletion):
+        chunks = []
+        async for chunk in backend.stream_chat_completion([{"role": "user", "content": "hi"}]):
+            chunks.append(chunk)
+
+    assert chunks[-1]["choices"][0]["finish_reason"] == "stop"
+
+
+@pytest.mark.asyncio
+async def test_stream_tool_call_deltas_missing_index_not_merged(backend: CloudBackend):
+    """Deltas without an index must become separate calls, not merge into slot 0."""
+    stream = _fake_stream(
+        _make_chunk(
+            tool_calls=[
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "analyze_tempo", "arguments": "{}"},
+                }
+            ]
+        ),
+        _make_chunk(
+            tool_calls=[
+                {
+                    "id": "c2",
+                    "type": "function",
+                    "function": {"name": "detect_pitch", "arguments": "{}"},
+                }
+            ]
+        ),
+        _make_chunk(finish_reason="tool_calls"),
+    )
+
+    async def fake_acompletion(**kwargs):
+        return stream
+
+    with patch("zikos.services.llm_backends.cloud.litellm.acompletion", new=fake_acompletion):
+        chunks = []
+        async for chunk in backend.stream_chat_completion([{"role": "user", "content": "hi"}]):
+            chunks.append(chunk)
+
+    tool_calls = chunks[-1]["choices"][0]["tool_calls"]
+    assert len(tool_calls) == 2
+    assert {tc["id"] for tc in tool_calls} == {"c1", "c2"}
+    assert {tc["function"]["name"] for tc in tool_calls} == {"analyze_tempo", "detect_pitch"}
+
+
+@pytest.mark.asyncio
+async def test_stream_skips_empty_choices_chunks(backend: CloudBackend):
+    empty_chunk = MagicMock()
+    empty_chunk.model_dump.return_value = {"choices": []}
+    stream = _fake_stream(
+        empty_chunk,
+        _make_chunk(content="ok"),
+        _make_chunk(finish_reason="stop"),
+    )
+
+    async def fake_acompletion(**kwargs):
+        return stream
+
+    with patch("zikos.services.llm_backends.cloud.litellm.acompletion", new=fake_acompletion):
+        chunks = []
+        async for chunk in backend.stream_chat_completion([{"role": "user", "content": "hi"}]):
+            chunks.append(chunk)
+
+    contents = [
+        c["choices"][0]["delta"].get("content")
+        for c in chunks
+        if c["choices"][0]["delta"].get("content")
+    ]
+    assert contents == ["ok"]
+
+
+def test_litellm_globals_set_at_initialize(monkeypatch):
+    """litellm global mutations happen in initialize(), not at import time."""
+    import zikos.services.llm_backends.cloud as cloud_mod
+
+    monkeypatch.setattr(cloud_mod.litellm, "drop_params", False, raising=False)
+    monkeypatch.setattr(cloud_mod.litellm, "suppress_debug_info", False, raising=False)
+
+    b = CloudBackend()
+    b.initialize(model_name="gpt-4o")
+
+    assert cloud_mod.litellm.drop_params is True
+    assert cloud_mod.litellm.suppress_debug_info is True
+
+
 # ---------------------------------------------------------------------------
 # create_backend factory
 # ---------------------------------------------------------------------------
 
 
-def test_create_backend_returns_cloud_for_openai_provider(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-    # Reload settings
+@pytest.fixture
+def cloud_provider_env(monkeypatch):
+    """Set LLM_PROVIDER and reload config/backends, restoring both afterwards.
+
+    Reloading zikos.config replaces the module-level settings object; without
+    the teardown reload, every later test in the session would see the
+    cloud-flavored settings (this polluted test_model_strategy in CI).
+    """
     import importlib
+    import os
 
     import zikos.config as cfg_mod
     import zikos.services.llm_backends as backends_mod
 
+    def _set(provider: str):
+        monkeypatch.setenv("LLM_PROVIDER", provider)
+        importlib.reload(cfg_mod)
+        importlib.reload(backends_mod)
+
+    yield _set
+
+    os.environ.pop("LLM_PROVIDER", None)
     importlib.reload(cfg_mod)
     importlib.reload(backends_mod)
+
+
+def test_create_backend_returns_cloud_for_openai_provider(cloud_provider_env):
+    cloud_provider_env("openai")
 
     from zikos.services.llm_backends import create_backend
     from zikos.services.llm_backends.cloud import CloudBackend
@@ -254,15 +389,8 @@ def test_create_backend_returns_cloud_for_openai_provider(monkeypatch):
     assert isinstance(backend, CloudBackend)
 
 
-def test_create_backend_returns_cloud_for_anthropic_provider(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    import importlib
-
-    import zikos.config as cfg_mod
-    import zikos.services.llm_backends as backends_mod
-
-    importlib.reload(cfg_mod)
-    importlib.reload(backends_mod)
+def test_create_backend_returns_cloud_for_anthropic_provider(cloud_provider_env):
+    cloud_provider_env("anthropic")
 
     from zikos.services.llm_backends import create_backend
     from zikos.services.llm_backends.cloud import CloudBackend

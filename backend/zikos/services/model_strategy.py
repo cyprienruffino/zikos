@@ -70,6 +70,10 @@ def _build_strategies() -> dict[str, ModelStrategy]:
             tool_provider=StructuredToolProvider(),
             tool_call_parser=NativeToolCallParser(),
         ),
+        "simplified": ModelStrategy(
+            tool_provider=SimplifiedToolProvider(),
+            tool_call_parser=SimplifiedToolCallParser(),
+        ),
         "default": ModelStrategy(
             tool_provider=SimplifiedToolProvider(),
             tool_call_parser=HybridToolCallParser(),
@@ -79,10 +83,42 @@ def _build_strategies() -> dict[str, ModelStrategy]:
 
 STRATEGIES = _build_strategies()
 
-# Ordered by specificity: more specific names first
-_MODEL_DETECTION_ORDER = ["qwen2.5", "qwen3", "mistral", "phi", "llama"]
+# Ordered by specificity: more specific names first. Generic "qwen" comes last
+# so e.g. qwen2/qwen1.5 models still get the Qwen strategy instead of the
+# Simplified default. Values map detection keys to strategy keys.
+_MODEL_DETECTION_ORDER: list[tuple[str, str]] = [
+    ("qwen2.5", "qwen2.5"),
+    ("qwen3", "qwen3"),
+    ("mistral", "mistral"),
+    ("phi", "phi"),
+    ("llama", "llama"),
+    ("qwen", "qwen2.5"),
+]
 
+# Bare cloud model names that don't carry a provider prefix
 _NATIVE_KEYWORDS = ["gpt", "claude", "openai"]
+
+
+def _is_cloud_model(model_path: str | None, provider: str) -> bool:
+    """Detect cloud models using the same provider table create_backend uses.
+
+    Cloud models are recognized via LLM_PROVIDER, a provider/model path prefix
+    (e.g. gemini/gemini-2.0-flash), or well-known bare model names.
+    """
+    from zikos.services.llm_backends import _CLOUD_PROVIDERS
+
+    if provider and provider.lower() in _CLOUD_PROVIDERS:
+        return True
+
+    if model_path:
+        name = model_path.lower()
+        prefix = name.split("/", 1)[0] if "/" in name else ""
+        if prefix in _CLOUD_PROVIDERS:
+            return True
+        if any(kw in name for kw in _NATIVE_KEYWORDS):
+            return True
+
+    return False
 
 
 def get_model_strategy(
@@ -109,20 +145,24 @@ def get_model_strategy(
         if tool_format == "qwen":
             return _copy_strategy(STRATEGIES["qwen2.5"])
         elif tool_format == "simplified":
-            return _copy_strategy(STRATEGIES["default"])
+            return _copy_strategy(STRATEGIES["simplified"])
         elif tool_format == "native":
             return _copy_strategy(STRATEGIES["native"])
+
+    # Cloud models always use native tool calling. Check BEFORE model-name
+    # detection so e.g. mistral/mistral-large-latest (cloud) isn't routed to
+    # the local Mistral strategy.
+    provider = settings.llm_provider if getattr(settings, "llm_provider", None) else ""
+    if _is_cloud_model(model_path, provider):
+        return _copy_strategy(STRATEGIES["native"])
 
     # Auto-detect from model path
     if model_path:
         name = model_path.lower()
 
-        for key in _MODEL_DETECTION_ORDER:
-            if key in name:
-                return _copy_strategy(STRATEGIES[key])
-
-        if any(kw in name for kw in _NATIVE_KEYWORDS):
-            return _copy_strategy(STRATEGIES["native"])
+        for detection_key, strategy_key in _MODEL_DETECTION_ORDER:
+            if detection_key in name:
+                return _copy_strategy(STRATEGIES[strategy_key])
 
     return _copy_strategy(STRATEGIES["default"])
 

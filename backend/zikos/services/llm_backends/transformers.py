@@ -1,5 +1,6 @@
 """Transformers backend implementation for HuggingFace models"""
 
+import asyncio
 import json
 import re
 import threading
@@ -244,23 +245,49 @@ class TransformersBackend(LLMBackend):
         )
         generation_kwargs["streamer"] = streamer
 
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        sentinel = object()
+        generation_error: list[BaseException] = []
+
         def generate():
             try:
                 with torch.no_grad():
                     self.model.generate(**inputs, **generation_kwargs)
-            except Exception as e:
-                import logging
+            except BaseException as e:
+                # Propagated to the caller after the stream drains — never swallowed.
+                generation_error.append(e)
+                try:
+                    streamer.end()  # unblock the pump thread
+                except Exception:
+                    pass
 
-                logging.error(f"Error in generation thread: {e}", exc_info=True)
+        def pump():
+            # TextIteratorStreamer iteration is blocking; run it in a worker
+            # thread and feed chunks to the event loop through a queue.
+            try:
+                for new_text in streamer:
+                    loop.call_soon_threadsafe(queue.put_nowait, new_text)
+            except BaseException as e:
+                loop.call_soon_threadsafe(queue.put_nowait, e)
+                return
+            loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
         generation_thread = threading.Thread(target=generate, daemon=True)
         generation_thread.start()
+        loop.run_in_executor(None, pump)
 
         accumulated_text = ""
         consecutive_garbage_count = 0
         max_garbage_chunks = 10
 
-        for new_text in streamer:
+        while True:
+            item = await queue.get()
+            if item is sentinel:
+                break
+            if isinstance(item, BaseException):
+                raise item
+            new_text = item
             if new_text is None:
                 break
             if not isinstance(new_text, str):
@@ -299,7 +326,9 @@ class TransformersBackend(LLMBackend):
                 ]
             }
 
-        generation_thread.join(timeout=30)
+        await asyncio.to_thread(generation_thread.join, 30)
+        if generation_error:
+            raise generation_error[0]
 
         tool_calls = self._extract_tool_calls(accumulated_text)
         finish_reason = "tool_calls" if tool_calls else "stop"
@@ -475,14 +504,6 @@ class TransformersBackend(LLMBackend):
                 continue
 
         return tool_calls
-
-    def supports_tools(self) -> bool:
-        """Transformers backend supports tools via XML parsing"""
-        return True
-
-    def supports_system_messages(self) -> bool:
-        """Transformers models (like Qwen) properly handle system messages via chat template"""
-        return True
 
     def get_context_window(self) -> int:
         """Get configured context window"""

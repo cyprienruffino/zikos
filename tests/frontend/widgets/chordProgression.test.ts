@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { addChordProgressionWidget } from "../../../frontend/src/widgets/chordProgression.js";
+import {
+    addChordProgressionWidget,
+    parseChordName,
+} from "../../../frontend/src/widgets/chordProgression.js";
+import { resetAudioEngine } from "../../../frontend/src/widgets/audioEngine.js";
 
 class MockAudioContext {
     state: string = "running";
@@ -48,6 +52,7 @@ describe("Chord Progression Widget", () => {
         originalClearInterval = globalThis.window.clearInterval;
 
         globalThis.AudioContext = vi.fn(() => new MockAudioContext()) as any;
+        resetAudioEngine();
         globalThis.window.setInterval = vi.fn((fn: Function, delay: number) => {
             return originalSetInterval(fn, delay);
         }) as any;
@@ -155,12 +160,14 @@ describe("Chord Progression Widget", () => {
             expect(AudioContext).toHaveBeenCalled();
         });
 
-        it("should highlight active chord", () => {
+        it("should highlight active chord", async () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
             const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
+            // Visual updates fire near the scheduled audio time (lookahead scheduler)
+            await new Promise((resolve) => setTimeout(resolve, 20));
 
             const chordBoxes = widget.querySelectorAll(".chord-box");
             expect(chordBoxes[0].classList.contains("active")).toBe(true);
@@ -315,6 +322,60 @@ describe("Chord Progression Widget", () => {
             stopBtn.click();
 
             expect(playBtn.style.display).toBe("inline-block");
+        });
+    });
+
+    describe("parseChordName()", () => {
+        // Equal temperament around A4=440: C4, E4, Eb4, G4, Gb4
+        const C4 = 261.626;
+        const Eb4 = 311.127;
+        const E4 = 329.628;
+        const Gb4 = 369.994;
+        const G4 = 391.995;
+        const B4 = 493.883;
+
+        function expectFrequencies(actual: number[], expected: number[]): void {
+            expect(actual.length).toBe(expected.length);
+            actual.forEach((freq, i) => {
+                expect(freq).toBeCloseTo(expected[i], 2);
+            });
+        }
+
+        it("C should be a major triad (C, E, G)", () => {
+            expectFrequencies(parseChordName("C"), [C4, E4, G4]);
+        });
+
+        it("Cm should be a minor triad (C, Eb, G)", () => {
+            expectFrequencies(parseChordName("Cm"), [C4, Eb4, G4]);
+        });
+
+        it("Cmaj7 should have a MAJOR third (was parsed as minor)", () => {
+            const freqs = parseChordName("Cmaj7");
+            expect(freqs[1]).toBeCloseTo(E4, 2);
+            expect(freqs[1]).not.toBeCloseTo(Eb4, 0);
+        });
+
+        it("Cdim should be a diminished triad (C, Eb, Gb)", () => {
+            expectFrequencies(parseChordName("Cdim"), [C4, Eb4, Gb4]);
+        });
+
+        it("Cmin should be a minor triad", () => {
+            expectFrequencies(parseChordName("Cmin"), [C4, Eb4, G4]);
+        });
+
+        it("Caug should be an augmented triad (C, E, G#)", () => {
+            const freqs = parseChordName("Caug");
+            expect(freqs[1]).toBeCloseTo(E4, 2);
+            expect(freqs[2]).toBeCloseTo(415.305, 2);
+        });
+
+        it("Csus2 and Csus4 should not contain a third", () => {
+            expectFrequencies(parseChordName("Csus2"), [C4, 293.665, G4]);
+            expectFrequencies(parseChordName("Csus4"), [C4, 349.228, G4]);
+        });
+
+        it("Em should use the E root with a minor third", () => {
+            expectFrequencies(parseChordName("Em"), [E4, G4, B4]);
         });
     });
 

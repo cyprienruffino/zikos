@@ -76,7 +76,7 @@ describe("WebSocket Module", () => {
 
         // Mock UI functions
         vi.spyOn(ui, "updateStatus").mockImplementation(() => {});
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
         vi.spyOn(ui, "addTypingIndicator").mockImplementation(() => {});
         vi.spyOn(ui, "removeTypingIndicator").mockImplementation(() => {});
         vi.spyOn(ui, "startStreamingMessage").mockImplementation(() => {});
@@ -411,6 +411,68 @@ describe("WebSocket Module", () => {
             consoleErrorSpy.mockRestore();
         });
 
+        it("should not tear down streaming state on mid-stream audio_result", () => {
+            sendMessage("test", true);
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "Hel" }),
+                })
+            );
+
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "audio_result", audio_file_id: "audio_1" }),
+                })
+            );
+
+            // Stream must stay open and processing must continue
+            expect(ui.finishStreamingMessage).not.toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(true);
+            // The audio result is still rendered
+            expect(ui.addMessage).toHaveBeenCalledWith(
+                "",
+                "assistant",
+                expect.objectContaining({ type: "audio_result" })
+            );
+
+            // Later tokens continue the SAME stream (no new bubble)
+            const startCalls = vi.mocked(ui.startStreamingMessage).mock.calls.length;
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "lo" }),
+                })
+            );
+            expect(vi.mocked(ui.startStreamingMessage).mock.calls.length).toBe(startCalls);
+
+            // The final response finishes the stream
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "response", message: "Hello" }),
+                })
+            );
+            expect(ui.finishStreamingMessage).toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(false);
+        });
+
+        it("should not tear down streaming state on mid-stream recording_cancelled", () => {
+            sendMessage("test", true);
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "Hel" }),
+                })
+            );
+
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "recording_cancelled", tool_id: "rec_1" }),
+                })
+            );
+
+            expect(recording.removeRecordingWidget).toHaveBeenCalledWith("rec_1");
+            expect(ui.finishStreamingMessage).not.toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(true);
+        });
+
         it("should set isProcessing to false after receiving message", () => {
             const message = {
                 type: "response",
@@ -461,7 +523,8 @@ describe("WebSocket Module", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             const reconnectCall = setTimeoutSpy.mock.calls.find(
-                (call) => typeof call[0] === "function" && typeof call[1] === "number" && call[1] > 0
+                (call) =>
+                    typeof call[0] === "function" && typeof call[1] === "number" && call[1] > 0
             );
             expect(reconnectCall).toBeDefined();
             expect(reconnectCall?.[1]).toBeGreaterThanOrEqual(3000);
@@ -488,7 +551,8 @@ describe("WebSocket Module", () => {
             }
 
             const reconnectCall = setTimeoutSpy.mock.calls.find(
-                (call) => typeof call[0] === "function" && typeof call[1] === "number" && call[1] > 0
+                (call) =>
+                    typeof call[0] === "function" && typeof call[1] === "number" && call[1] > 0
             );
             if (reconnectCall) {
                 expect(reconnectCall[1]).toBeLessThanOrEqual(30000);
@@ -512,6 +576,34 @@ describe("WebSocket Module", () => {
 
             expect(clearTimeoutSpy).toHaveBeenCalled();
             clearTimeoutSpy.mockRestore();
+        });
+
+        it("should reset processing state after mid-stream disconnect", async () => {
+            connect();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const ws = (global as any).lastWebSocket;
+            expect(ws).toBeDefined();
+
+            // Start a streamed message, then simulate mid-stream tokens
+            expect(sendMessage("test", true)).toBe(true);
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "Hel" }),
+                })
+            );
+            expect(getIsProcessing()).toBe(true);
+
+            // Disconnect mid-stream
+            ws.close();
+
+            expect(ui.finishStreamingMessage).toHaveBeenCalled();
+            expect(ui.removeTypingIndicator).toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(false);
+
+            // After reconnect, sending must work again (no permanent lockout)
+            connect();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(sendMessage("after reconnect")).toBe(true);
         });
 
         it("should handle multiple rapid close events", async () => {

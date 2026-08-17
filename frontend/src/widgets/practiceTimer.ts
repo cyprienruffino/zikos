@@ -1,13 +1,7 @@
 import { PracticeTimerState } from "../types.js";
 import { addMessage } from "../ui.js";
-
-function getMessagesEl(): HTMLElement {
-    const el = document.getElementById("messages");
-    if (!el) {
-        throw new Error("Messages element not found");
-    }
-    return el as HTMLElement;
-}
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { getMessagesEl } from "../dom.js";
 
 const practiceTimers = new Map<string, PracticeTimerState>();
 
@@ -18,16 +12,17 @@ export function addPracticeTimerWidget(
     breakIntervalMinutes?: number,
     description?: string
 ): void {
+    timerId = sanitizeToolId(timerId, "timer");
     const widgetEl = document.createElement("div");
     widgetEl.className = "practice-timer-widget";
     widgetEl.id = `timer-${timerId}`;
     widgetEl.innerHTML = `
         <h3>Practice Timer</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
-        ${goal ? `<div class="timer-goal">Goal: ${goal}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
+        ${goal ? `<div class="timer-goal">Goal: ${escapeHtml(goal)}</div>` : ""}
         <div class="practice-timer-display">
             <div class="timer-time" id="time-${timerId}">00:00</div>
-            ${durationMinutes ? `<div style="color: #c2185b;">Target: ${durationMinutes} minutes</div>` : ""}
+            ${durationMinutes ? `<div style="color: #c2185b;">Target: ${escapeHtml(durationMinutes)} minutes</div>` : ""}
         </div>
         <div class="practice-timer-controls">
             <button class="start-btn" data-timer-id="${timerId}">Start</button>
@@ -106,8 +101,15 @@ function startPracticeTimer(
     if (breakIntervalMinutes) {
         timer.breakIntervalId = window.setInterval(
             () => {
+                // Report cumulative practice time, not the interval length.
+                const currentTimer = practiceTimers.get(timerId);
+                const elapsedSeconds =
+                    currentTimer && currentTimer.startTime
+                        ? Math.floor((Date.now() - currentTimer.startTime) / 1000)
+                        : 0;
+                const totalMinutes = Math.round(elapsedSeconds / 60);
                 addMessage(
-                    `Break reminder: You've been practicing for ${breakIntervalMinutes} minutes. Consider taking a short break!`,
+                    `Break reminder: You've been practicing for ${totalMinutes} minutes. Consider taking a short break!`,
                     "assistant"
                 );
             },

@@ -1,18 +1,58 @@
 import { MetronomeState } from "../types.js";
 import { addMessage, addTypingIndicator } from "../ui.js";
-
-function getMessagesEl(): HTMLElement {
-    const el = document.getElementById("messages");
-    if (!el) {
-        throw new Error("Messages element not found");
-    }
-    return el as HTMLElement;
-}
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { clampBpm, validateTimeSignature } from "../utils/validate.js";
+import { createBeatScheduler } from "./audioEngine.js";
+import { pickRecordingType, extensionForMimeType } from "../utils/media.js";
+import { getMessagesEl } from "../dom.js";
 
 const metronomes = new Map<string, MetronomeState>();
 
-let mediaRecorder: MediaRecorder | null = null;
-let audioChunks: Blob[] = [];
+interface RecordingState {
+    mediaRecorder: MediaRecorder | null;
+    audioChunks: Blob[];
+    /** Synchronous guard so a double-click cannot acquire two streams. */
+    starting: boolean;
+    objectUrl: string | null;
+    mimeType: string;
+}
+
+const recordings = new Map<string, RecordingState>();
+
+function getRecordingState(metronomeId: string): RecordingState {
+    let state = recordings.get(metronomeId);
+    if (!state) {
+        state = {
+            mediaRecorder: null,
+            audioChunks: [],
+            starting: false,
+            objectUrl: null,
+            mimeType: "",
+        };
+        recordings.set(metronomeId, state);
+    }
+    return state;
+}
+
+/** Stop any active recorder/stream and release resources for this widget. */
+function teardownRecording(metronomeId: string): void {
+    const state = recordings.get(metronomeId);
+    if (!state) return;
+    if (state.mediaRecorder) {
+        if (state.mediaRecorder.state !== "inactive") {
+            state.mediaRecorder.stop();
+        }
+        state.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        state.mediaRecorder = null;
+    }
+    if (state.objectUrl) {
+        URL.revokeObjectURL(state.objectUrl);
+        state.objectUrl = null;
+    }
+    state.audioChunks = [];
+    state.starting = false;
+}
+
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 
@@ -30,6 +70,9 @@ export function addMetronomeWidget(
     timeSignature: string,
     description?: string
 ): void {
+    metronomeId = sanitizeToolId(metronomeId, "met");
+    bpm = clampBpm(bpm);
+    timeSignature = validateTimeSignature(timeSignature);
     const widgetEl = document.createElement("div");
     widgetEl.className = "metronome-widget";
     widgetEl.id = `metronome-${metronomeId}`;
@@ -40,10 +83,10 @@ export function addMetronomeWidget(
     ).join("");
     widgetEl.innerHTML = `
         <h3>Metronome</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
         <div class="metronome-info">
-            <span>BPM: <strong>${bpm}</strong></span>
-            <span>Time: <strong>${timeSignature}</strong></span>
+            <span>BPM: <strong>${escapeHtml(bpm)}</strong></span>
+            <span>Time: <strong>${escapeHtml(timeSignature)}</strong></span>
         </div>
         <div class="metronome-beat-indicator">
             ${beatDots}
@@ -97,8 +140,7 @@ export function addMetronomeWidget(
         bpm,
         beats,
         widgetEl,
-        intervalId: null,
-        audioContext: null,
+        scheduler: null,
         currentBeat: 0,
         isPlaying: false,
     });
@@ -110,6 +152,8 @@ export function removeMetronomeWidget(metronomeId: string): void {
         stopMetronome(metronomeId);
         metronomes.delete(metronomeId);
     }
+    teardownRecording(metronomeId);
+    recordings.delete(metronomeId);
     const widget = document.getElementById(`metronome-${metronomeId}`);
     if (widget) {
         widget.remove();
@@ -117,15 +161,9 @@ export function removeMetronomeWidget(metronomeId: string): void {
 }
 
 export function startMetronome(metronomeId: string, bpm: number, beats: number): void {
+    bpm = clampBpm(bpm);
     const metronome = metronomes.get(metronomeId);
     if (!metronome || metronome.isPlaying) return;
-    if (!metronome.audioContext) {
-        metronome.audioContext = new AudioContext();
-    }
-    const audioContext = metronome.audioContext;
-    if (audioContext.state === "suspended") {
-        audioContext.resume();
-    }
     metronome.isPlaying = true;
     const intervalMs = (60 / bpm) * 1000;
     const widgetEl = metronome.widgetEl;
@@ -139,41 +177,31 @@ export function startMetronome(metronomeId: string, bpm: number, beats: number):
         statusEl.textContent = "Playing";
         statusEl.className = "metronome-status playing";
     }
-    function playBeat(beatIndex: number): void {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        const isDownbeat = beatIndex === 0;
-        oscillator.frequency.value = isDownbeat ? 800 : 600;
-        oscillator.type = "sine";
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.1);
-        if (!widgetEl) return;
-        const beatDots = widgetEl.querySelectorAll(".beat-dot");
-        beatDots.forEach((dot, idx) => {
-            if (idx === beatIndex) {
-                dot.classList.add("active");
-                setTimeout(() => dot.classList.remove("active"), intervalMs * 0.2);
-            }
+    if (!metronome.scheduler) {
+        metronome.scheduler = createBeatScheduler({
+            bpm,
+            beats,
+            onBeat: (beatIndex: number): void => {
+                metronome.currentBeat = beatIndex;
+                if (!widgetEl) return;
+                const beatDots = widgetEl.querySelectorAll(".beat-dot");
+                beatDots.forEach((dot, idx) => {
+                    if (idx === beatIndex) {
+                        dot.classList.add("active");
+                        setTimeout(() => dot.classList.remove("active"), intervalMs * 0.2);
+                    }
+                });
+            },
         });
     }
-    playBeat(metronome.currentBeat);
-    metronome.intervalId = window.setInterval(() => {
-        metronome.currentBeat = (metronome.currentBeat + 1) % beats;
-        playBeat(metronome.currentBeat);
-    }, intervalMs);
+    metronome.scheduler.setBpm(bpm);
+    metronome.scheduler.start();
 }
 
 export function pauseMetronome(metronomeId: string): void {
     const metronome = metronomes.get(metronomeId);
     if (!metronome || !metronome.isPlaying) return;
-    if (metronome.intervalId) {
-        clearInterval(metronome.intervalId);
-        metronome.intervalId = null;
-    }
+    metronome.scheduler?.stop();
     metronome.isPlaying = false;
     const widgetEl = metronome.widgetEl;
     if (!widgetEl) return;
@@ -191,10 +219,8 @@ export function pauseMetronome(metronomeId: string): void {
 export function stopMetronome(metronomeId: string): void {
     const metronome = metronomes.get(metronomeId);
     if (!metronome) return;
-    if (metronome.intervalId) {
-        clearInterval(metronome.intervalId);
-        metronome.intervalId = null;
-    }
+    metronome.scheduler?.stop();
+    metronome.scheduler?.resetBeat();
     metronome.isPlaying = false;
     metronome.currentBeat = 0;
     const widgetEl = metronome.widgetEl;
@@ -225,6 +251,17 @@ async function startRecording(metronomeId: string): Promise<void> {
     const widgetEl = metronome?.widgetEl;
     if (!widgetEl) return;
 
+    const recState = getRecordingState(metronomeId);
+    // Synchronous guard: a second click before getUserMedia resolves must not
+    // acquire a second stream.
+    if (
+        recState.starting ||
+        (recState.mediaRecorder && recState.mediaRecorder.state !== "inactive")
+    ) {
+        return;
+    }
+    recState.starting = true;
+
     const keepPlaying = (widgetEl.querySelector(".keep-metronome-cb") as HTMLInputElement)?.checked;
     if (!keepPlaying && metronome?.isPlaying) {
         pauseMetronome(metronomeId);
@@ -238,8 +275,20 @@ async function startRecording(metronomeId: string): Promise<void> {
                 autoGainControl: false,
             },
         });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
+
+        if (!recordings.has(metronomeId)) {
+            // Widget was removed while waiting for permission.
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+        }
+
+        const recordingType = pickRecordingType();
+        const mediaRecorder = recordingType.mimeType
+            ? new MediaRecorder(stream, { mimeType: recordingType.mimeType })
+            : new MediaRecorder(stream);
+        recState.mediaRecorder = mediaRecorder;
+        recState.audioChunks = [];
+        recState.mimeType = mediaRecorder.mimeType || recordingType.mimeType || "audio/webm";
 
         const statusEl = document.getElementById(`rec-status-${metronomeId}`) as HTMLElement;
         const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
@@ -249,16 +298,24 @@ async function startRecording(metronomeId: string): Promise<void> {
 
         mediaRecorder.ondataavailable = (event: BlobEvent) => {
             if (event.data) {
-                audioChunks.push(event.data);
+                recState.audioChunks.push(event.data);
             }
         };
 
         mediaRecorder.onstop = () => {
-            const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+            const audioBlob = new Blob(recState.audioChunks, { type: recState.mimeType });
             const audioUrl = URL.createObjectURL(audioBlob);
+            if (recState.objectUrl) {
+                URL.revokeObjectURL(recState.objectUrl);
+            }
+            recState.objectUrl = audioUrl;
             const playerEl = document.getElementById(`rec-player-${metronomeId}`);
             if (playerEl) {
-                playerEl.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+                playerEl.innerHTML = "";
+                const audio = document.createElement("audio");
+                audio.controls = true;
+                audio.src = audioUrl;
+                playerEl.appendChild(audio);
             }
 
             const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
@@ -279,10 +336,14 @@ async function startRecording(metronomeId: string): Promise<void> {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         addMessage(`Error accessing microphone: ${errorMessage}`, "error");
+    } finally {
+        recState.starting = false;
     }
 }
 
 function stopRecording(metronomeId: string): void {
+    const recState = recordings.get(metronomeId);
+    const mediaRecorder = recState?.mediaRecorder;
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach((track) => track.stop());
@@ -302,7 +363,8 @@ function stopRecording(metronomeId: string): void {
 }
 
 async function sendRecording(metronomeId: string): Promise<void> {
-    if (audioChunks.length === 0) {
+    const recState = recordings.get(metronomeId);
+    if (!recState || recState.audioChunks.length === 0) {
         addMessage("No audio recorded", "error");
         return;
     }
@@ -323,9 +385,10 @@ async function sendRecording(metronomeId: string): Promise<void> {
         statusEl.className = "recording-status";
     }
 
-    const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+    const mimeType = recState.mimeType || "audio/webm";
+    const audioBlob = new Blob(recState.audioChunks, { type: mimeType });
     const formData = new FormData();
-    formData.append("file", audioBlob, "recording.wav");
+    formData.append("file", audioBlob, `recording.${extensionForMimeType(mimeType)}`);
     formData.append("recording_id", metronomeId);
 
     try {
@@ -355,8 +418,7 @@ async function sendRecording(metronomeId: string): Promise<void> {
             addMessage("Connection lost. Please reconnect and try again.", "error");
         }
 
-        audioChunks = [];
-        mediaRecorder = null;
+        teardownRecording(metronomeId);
 
         // Reset recording UI but keep the metronome widget
         if (sendBtn) {
@@ -387,12 +449,7 @@ async function sendRecording(metronomeId: string): Promise<void> {
 }
 
 function cancelRecording(metronomeId: string): void {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-    }
-    audioChunks = [];
-    mediaRecorder = null;
+    teardownRecording(metronomeId);
 
     const metronome = metronomes.get(metronomeId);
     const widgetEl = metronome?.widgetEl;

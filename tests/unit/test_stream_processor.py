@@ -131,6 +131,119 @@ class TestStreamProcessor:
         assert "visible" in visible
 
     @pytest.mark.asyncio
+    async def test_non_thinking_response_streams_fully_with_budget(self, processor):
+        """With max_thinking > 0, a response that does NOT start with <think>
+        must stream normally — never be swallowed as assumed-thinking."""
+        stream = make_stream(
+            [
+                make_chunk("Hello"),
+                make_chunk(" world"),
+                make_chunk(finish_reason="stop"),
+            ]
+        )
+        result = StreamResult()
+        tokens = []
+        async for chunk in processor.process(stream, result, max_thinking=50):
+            tokens.append(chunk["content"])
+
+        assert "".join(tokens) == "Hello world"
+        assert result.thinking_budget_exceeded is False
+        assert result.accumulated_content == "Hello world"
+
+    @pytest.mark.asyncio
+    async def test_think_tag_split_across_chunks(self, processor):
+        """Tags split across chunk boundaries are still recognized."""
+        stream = make_stream(
+            [
+                make_chunk("Sure! <th"),
+                make_chunk("ink>secret reasoning</th"),
+                make_chunk("ink> visible answer"),
+                make_chunk(finish_reason="stop"),
+            ]
+        )
+        result = StreamResult()
+        tokens = []
+        async for chunk in processor.process(stream, result, max_thinking=100):
+            tokens.append(chunk["content"])
+
+        visible = "".join(tokens)
+        assert "secret reasoning" not in visible
+        assert "Sure! " in visible
+        assert "visible answer" in visible
+        assert "<think>" in result.accumulated_content  # raw content preserved
+
+    @pytest.mark.asyncio
+    async def test_chunk_split_at_tag_boundary(self, processor):
+        """Visible text sharing a chunk with a <think> tag is not dropped."""
+        stream = make_stream(
+            [
+                make_chunk("before<think>hidden</think>after"),
+                make_chunk(finish_reason="stop"),
+            ]
+        )
+        result = StreamResult()
+        tokens = []
+        async for chunk in processor.process(stream, result, max_thinking=100):
+            tokens.append(chunk["content"])
+
+        visible = "".join(tokens)
+        assert visible == "beforeafter"
+
+    @pytest.mark.asyncio
+    async def test_partial_tag_lookalike_flushed(self, processor):
+        """A '<' that never becomes a think tag must still be emitted."""
+        stream = make_stream(
+            [
+                make_chunk("a < b and a <t"),
+                make_chunk(finish_reason="stop"),
+            ]
+        )
+        result = StreamResult()
+        tokens = []
+        async for chunk in processor.process(stream, result, max_thinking=100):
+            tokens.append(chunk["content"])
+
+        assert "".join(tokens) == "a < b and a <t"
+
+    @pytest.mark.asyncio
+    async def test_thinking_budget_counts_characters_not_chunks(self, processor):
+        """Budget is measured on accumulated thinking characters (~4 chars per
+        token), not on the number of chunks."""
+        # 3-token budget = 12 chars; one big 100-char thinking chunk must trip it
+        stream = make_stream(
+            [
+                make_chunk("<think>"),
+                make_chunk("x" * 100),
+                make_chunk("never reached"),
+            ]
+        )
+        result = StreamResult()
+        tokens = []
+        async for chunk in processor.process(stream, result, max_thinking=3):
+            tokens.append(chunk)
+
+        assert tokens == []
+        assert result.thinking_budget_exceeded is True
+
+    @pytest.mark.asyncio
+    async def test_empty_choices_chunk_skipped(self, processor):
+        """Chunks with empty choices (e.g. usage-only) must not raise IndexError."""
+        chunks = [
+            {"choices": []},
+            make_chunk("ok"),
+            {"choices": []},
+            make_chunk(finish_reason="stop"),
+        ]
+        stream = make_stream(chunks)
+        result = StreamResult()
+        tokens = []
+        async for chunk in processor.process(stream, result):
+            tokens.append(chunk)
+
+        assert len(tokens) == 1
+        assert tokens[0]["content"] == "ok"
+
+    @pytest.mark.asyncio
     async def test_non_string_token_skipped(self, processor):
         chunks = [
             {"choices": [{"delta": {"content": 42}}]},

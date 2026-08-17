@@ -57,7 +57,7 @@ describe("Tuner Widget", () => {
         });
         globalThis.cancelAnimationFrame = vi.fn();
 
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
     });
 
     afterEach(() => {

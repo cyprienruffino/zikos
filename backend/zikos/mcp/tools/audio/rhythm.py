@@ -103,11 +103,12 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
 
         tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=_HOP_LENGTH)
 
-        timing_accuracy = 0.87
+        timing_accuracy: float | None = None
+        timing_note: str | None = None
         beat_deviations = []
         rushing_tendency = 0.0
         dragging_tendency = 0.0
-        average_deviation_ms = 0.0
+        average_deviation_ms: float | None = None
 
         if len(beats) > 0 and len(onsets) > 0:
             beat_times = librosa.frames_to_time(beats, sr=sr, hop_length=_HOP_LENGTH)
@@ -133,6 +134,11 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
                 dragging_count = sum(1 for d in deviations if d > 10)
                 rushing_tendency = rushing_count / len(deviations)
                 dragging_tendency = dragging_count / len(deviations)
+        else:
+            timing_note = (
+                "Beat tracking failed, so timing accuracy against the beat grid "
+                "could not be measured."
+            )
 
         inter_onset_interval_cv = 0.0
         if len(onset_times) >= 4:
@@ -141,15 +147,20 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
             if mean_ioi > 0:
                 inter_onset_interval_cv = float(np.std(inter_onset_intervals) / mean_ioi)
 
-        return {
+        result: dict[str, Any] = {
             "onsets": onsets_list,
-            "timing_accuracy": float(timing_accuracy),
+            "timing_accuracy": float(timing_accuracy) if timing_accuracy is not None else None,
             "inter_onset_interval_cv": inter_onset_interval_cv,
             "beat_deviations": beat_deviations,
-            "average_deviation_ms": float(average_deviation_ms),
+            "average_deviation_ms": (
+                float(average_deviation_ms) if average_deviation_ms is not None else None
+            ),
             "rushing_tendency": float(rushing_tendency),
             "dragging_tendency": float(dragging_tendency),
         }
+        if timing_note:
+            result["note"] = timing_note
+        return result
     except FileNotFoundError:
         return {
             "error": True,

@@ -80,3 +80,33 @@ class TestArticulationAnalysis:
         result = await analyze_articulation(str(legato_audio))
 
         assert result["legato_percentage"] > result["staccato_percentage"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_articulation_accent_detection(self, temp_dir):
+        """A note much louder than the others must be reported as an accent.
+        The old heuristic compared loudness to 1.2x the mean note DURATION
+        ratio (unrelated units), flagging nearly every note."""
+        import numpy as np
+        import soundfile as sf
+
+        sr = 22050
+        duration = 4.0
+        y = np.zeros(int(sr * duration), dtype=np.float32)
+        for i in range(8):
+            start = int(i * 0.5 * sr)
+            end = min(start + int(0.3 * sr), len(y))
+            t = np.linspace(0, (end - start) / sr, end - start)
+            amp = 0.9 if i == 4 else 0.25  # one accented note
+            y[start:end] = (amp * np.sin(2 * np.pi * 440 * t) * np.exp(-t * 3)).astype(np.float32)
+
+        path = temp_dir / "accents.wav"
+        sf.write(str(path), y, sr)
+
+        result = await analyze_articulation(str(path))
+
+        assert "accents" in result
+        assert 1 <= len(result["accents"]) <= 2, result["accents"]
+        # The accent should be at ~2.0s (the loud note)
+        assert any(abs(a["time"] - 2.0) < 0.3 for a in result["accents"]), result["accents"]
+        for accent in result["accents"]:
+            assert accent["relative_loudness"] > 1.5

@@ -11,11 +11,13 @@ from zikos.services.audio import AudioService
 @pytest.fixture
 def audio_service(temp_dir):
     """Create AudioService instance with temp directory"""
+    AudioService._analysis_cache.clear()
     with patch("zikos.config.settings") as mock_settings:
         mock_settings.audio_storage_path = temp_dir
         service = AudioService()
         service.storage_path = temp_dir
-        return service
+        yield service
+    AudioService._analysis_cache.clear()
 
 
 @pytest.fixture
@@ -110,6 +112,31 @@ class TestAudioService:
 
         # Rhythm should have onsets
         assert "onsets" in result["rhythm"] or "error" in result["rhythm"]
+
+    @pytest.mark.asyncio
+    async def test_run_baseline_analysis_is_cached_per_id(self, audio_service, temp_dir):
+        """Second baseline analysis for the same ID must not rerun the tools"""
+        from unittest.mock import AsyncMock
+
+        audio_service.analysis_tools.analyze_tempo = AsyncMock(return_value={"bpm": 120})
+        audio_service.analysis_tools.detect_pitch = AsyncMock(return_value={"notes": []})
+        audio_service.analysis_tools.analyze_rhythm = AsyncMock(return_value={"onsets": []})
+        audio_service.analysis_tools.detect_instrument = AsyncMock(return_value={"name": "piano"})
+
+        result1 = await audio_service.run_baseline_analysis("cached-id")
+        result2 = await audio_service.run_baseline_analysis("cached-id")
+
+        assert result1 == result2
+        audio_service.analysis_tools.analyze_tempo.assert_called_once()
+
+        # And the cache is shared across instances (upload API vs LLM service)
+        with patch("zikos.config.settings") as mock_settings:
+            mock_settings.audio_storage_path = temp_dir
+            other = AudioService()
+        other.analysis_tools.analyze_tempo = AsyncMock()
+        result3 = await other.run_baseline_analysis("cached-id")
+        assert result3 == result1
+        other.analysis_tools.analyze_tempo.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_audio_info(self, audio_service, temp_dir):

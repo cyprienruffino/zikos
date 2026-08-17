@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from zikos.api.midi import router
 from zikos.main import app
 
+MIDI_ID = "22222222-2222-4222-8222-222222222222"
+
 app.include_router(router, prefix="/api/midi")
 
 
@@ -53,7 +55,7 @@ class TestMidiAPI:
         """Test successful MIDI synthesis"""
         mock_midi_service.synthesize = AsyncMock(return_value="test_audio_id")
 
-        response = client.post("/api/midi/test_midi/synthesize?instrument=piano")
+        response = client.post(f"/api/midi/{MIDI_ID}/synthesize?instrument=piano")
 
         assert response.status_code == 200
         result = response.json()
@@ -63,7 +65,7 @@ class TestMidiAPI:
         """Test MIDI synthesis error handling"""
         mock_midi_service.synthesize = AsyncMock(side_effect=Exception("Synthesis failed"))
 
-        response = client.post("/api/midi/test_midi/synthesize?instrument=piano")
+        response = client.post(f"/api/midi/{MIDI_ID}/synthesize?instrument=piano")
 
         assert response.status_code == 500
         assert "detail" in response.json()
@@ -74,7 +76,7 @@ class TestMidiAPI:
             return_value={"midi_file_id": "test_midi", "format": "both", "file_path": "test.xml"}
         )
 
-        response = client.post("/api/midi/test_midi/render?format=both")
+        response = client.post(f"/api/midi/{MIDI_ID}/render?format=both")
 
         assert response.status_code == 200
         result = response.json()
@@ -85,7 +87,7 @@ class TestMidiAPI:
         """Test notation rendering error handling"""
         mock_midi_service.render_notation = AsyncMock(side_effect=Exception("Render failed"))
 
-        response = client.post("/api/midi/test_midi/render?format=both")
+        response = client.post(f"/api/midi/{MIDI_ID}/render?format=both")
 
         assert response.status_code == 500
         assert "detail" in response.json()
@@ -98,7 +100,7 @@ class TestMidiAPI:
         test_file.write_bytes(b"fake midi content")
         mock_midi_service.get_midi_path = AsyncMock(return_value=test_file)
 
-        response = client.get("/api/midi/test_midi")
+        response = client.get(f"/api/midi/{MIDI_ID}")
 
         assert response.status_code == 200
         assert "audio/midi" in response.headers["content-type"]
@@ -108,7 +110,53 @@ class TestMidiAPI:
         """Test getting non-existent MIDI file"""
         mock_midi_service.get_midi_path = AsyncMock(side_effect=FileNotFoundError("File not found"))
 
-        response = client.get("/api/midi/nonexistent")
+        response = client.get(f"/api/midi/{MIDI_ID}")
 
         assert response.status_code == 404
         assert "detail" in response.json()
+
+
+class TestMidiIdValidation:
+    """Path IDs must be UUIDs before touching the filesystem"""
+
+    def test_get_midi_rejects_traversal_id(self, client, mock_midi_service):
+        response = client.get("/api/midi/..%5C..%5Cwindows")
+        assert response.status_code == 400
+        mock_midi_service.get_midi_path.assert_not_called()
+
+    def test_get_midi_rejects_non_uuid_id(self, client, mock_midi_service):
+        response = client.get("/api/midi/not-a-uuid")
+        assert response.status_code == 400
+        mock_midi_service.get_midi_path.assert_not_called()
+
+    def test_synthesize_rejects_non_uuid_id(self, client, mock_midi_service):
+        response = client.post("/api/midi/evil.mid/synthesize?instrument=piano")
+        assert response.status_code == 400
+        mock_midi_service.synthesize.assert_not_called()
+
+    def test_render_rejects_non_uuid_id(self, client, mock_midi_service):
+        response = client.post("/api/midi/evil/render?format=both")
+        assert response.status_code == 400
+        mock_midi_service.render_notation.assert_not_called()
+
+
+class TestMidiErrorHandling:
+    """Error mapping: 404 for missing files, 400 for bad input, generic 500"""
+
+    def test_unexpected_error_does_not_leak_details(self, client, mock_midi_service):
+        mock_midi_service.synthesize = AsyncMock(
+            side_effect=Exception("secret internal path /srv/keys")
+        )
+        response = client.post(f"/api/midi/{MIDI_ID}/synthesize?instrument=piano")
+        assert response.status_code == 500
+        assert "secret internal path" not in response.json()["detail"]
+
+    def test_missing_midi_file_maps_to_404(self, client, mock_midi_service):
+        mock_midi_service.synthesize = AsyncMock(side_effect=FileNotFoundError("no such MIDI"))
+        response = client.post(f"/api/midi/{MIDI_ID}/synthesize?instrument=piano")
+        assert response.status_code == 404
+
+    def test_value_error_maps_to_400(self, client, mock_midi_service):
+        mock_midi_service.render_notation = AsyncMock(side_effect=ValueError("bad format"))
+        response = client.post(f"/api/midi/{MIDI_ID}/render?format=bogus")
+        assert response.status_code == 400

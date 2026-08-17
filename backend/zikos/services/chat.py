@@ -1,22 +1,27 @@
 """Chat service"""
 
+import logging
+import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
-
-from fastapi import WebSocket
 
 from zikos.mcp.server import MCPServer
 from zikos.services.llm import LLMService
 
+_logger = logging.getLogger(__name__)
+
 
 class ChatService:
-    """Service for chat interactions"""
+    """Service for chat interactions
+
+    Session state (conversation history) lives in the LLM service's
+    conversation manager; this service holds no per-session state itself.
+    """
 
     def __init__(self):
         self.llm_service = LLMService()
         # Share the same UserSettingsService so tool writes are visible to the prompt builder
         self.mcp_server = MCPServer(user_settings_service=self.llm_service.user_settings_service)
-        self.sessions: dict[str, dict[str, Any]] = {}
 
     async def process_message(
         self,
@@ -88,6 +93,7 @@ class ChatService:
                     "audio_file_id": audio_file_id,
                 }
         except Exception as e:
+            _logger.exception("Error handling audio ready for %s", audio_file_id)
             return {
                 "type": "error",
                 "message": f"Error processing audio: {str(e)}",
@@ -113,13 +119,5 @@ class ChatService:
             yield chunk
 
     def _create_session(self) -> str:
-        """Create new session"""
-        import uuid
-
-        session_id = str(uuid.uuid4())
-        self.sessions[session_id] = {"messages": []}
-        return session_id
-
-    async def disconnect(self, websocket: WebSocket):
-        """Handle WebSocket disconnect"""
-        pass
+        """Create new session ID (history is tracked by the conversation manager)"""
+        return str(uuid.uuid4())

@@ -125,9 +125,17 @@ class TestAudioAPI:
         assert "duration" in data
         assert "sample_rate" in data
 
+    def test_get_audio_info_rejects_non_uuid_id(self, client):
+        """Non-UUID IDs are rejected before touching the filesystem"""
+        response = client.get("/api/audio/nonexistent_audio_id_12345/info")
+
+        assert response.status_code == 400
+
     def test_get_audio_info_not_found(self, client):
         """Test getting audio info for non-existent file"""
-        response = client.get("/api/audio/nonexistent_audio_id_12345/info")
+        import uuid
+
+        response = client.get(f"/api/audio/{uuid.uuid4()}/info")
 
         assert response.status_code == 200
         data = response.json()
@@ -171,8 +179,16 @@ class TestAudioAPI:
         )
         assert len(response.content) > 0
 
+    def test_get_audio_file_rejects_non_uuid_id(self, client):
+        """Non-UUID IDs are rejected before touching the filesystem"""
+        response = client.get("/api/audio/nonexistent_audio_id")
+
+        assert response.status_code == 400
+
     def test_get_audio_file_not_found(self, client):
         """Test getting non-existent audio file"""
-        response = client.get("/api/audio/nonexistent_audio_id")
+        import uuid
+
+        response = client.get(f"/api/audio/{uuid.uuid4()}")
 
         assert response.status_code == 404

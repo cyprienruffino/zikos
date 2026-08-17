@@ -7,7 +7,7 @@ from typing import Any
 from zikos.config import settings
 from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.base import ToolCollection
-from zikos.mcp.tools.processing.midi.midi_parser import MidiParseError, midi_text_to_file
+from zikos.mcp.tools.processing.midi.midi_parser import MidiParseError
 
 
 class MidiTools(ToolCollection):
@@ -97,7 +97,7 @@ Returns: dict with audio_file_id (str), midi_file_id (str), instrument (str), du
 
 Interpretation Guidelines:
 - audio_file_id: Use this ID to play the audio or use with other audio analysis tools
-- instrument: One of "piano", "guitar", "violin", "bass", "drums" - choose based on the musical context
+- instrument: One of "piano", "guitar", "violin", "bass" - choose based on the musical context
 - duration: Length of generated audio in seconds - verify it matches expected length
 - synthesis_method: "fluidsynth" - indicates the synthesis engine used
 - Must call validate_midi first to get a valid midi_file_id
@@ -117,7 +117,7 @@ Returns: dict with:
 - duration (float): Duration of generated audio in seconds
 - synthesis_method (str): Method used ("fluidsynth")
 
-Available instruments: "piano", "guitar", "violin", "bass", "drums"
+Available instruments: "piano", "guitar", "violin", "bass"
 
 Error Handling:
 - If MIDI file not found: You must call validate_midi first to create the MIDI file
@@ -129,8 +129,8 @@ Error Handling:
                                 "instrument": {
                                     "type": "string",
                                     "default": "piano",
-                                    "enum": ["piano", "guitar", "violin", "bass", "drums"],
-                                    "description": "Instrument to use for synthesis. Available: piano, guitar, violin, bass, drums",
+                                    "enum": ["piano", "guitar", "violin", "bass"],
+                                    "description": "Instrument to use for synthesis. Available: piano, guitar, violin, bass",
                                 },
                             },
                             "required": ["midi_file_id"],
@@ -140,44 +140,43 @@ Error Handling:
             ),
             Tool(
                 name="midi_to_notation",
-                description="Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.",
+                description="Render MIDI file to sheet music notation. Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.",
                 category=ToolCategory.MIDI,
-                detailed_description="""Render MIDI file to musical notation (sheet music and/or tabs).
+                detailed_description="""Render MIDI file to sheet music notation.
 
-Returns: dict with midi_file_id (str), format (str), sheet_music_url (str, optional), tabs_url (str, optional), sheet_music_error (str, optional), tabs_error (str, optional)
+Returns: dict with midi_file_id (str), format (str), sheet_music_url (str, optional), sheet_music_error (str, optional)
 
 Interpretation Guidelines:
-- format: "sheet_music", "tabs", or "both" - choose based on student's reading preference
-- sheet_music_url: URL to sheet music image - use "both" or "sheet_music" format
-- tabs_url: URL to tabs image - use "both" or "tabs" format
-- sheet_music_error/tabs_error: Error messages if rendering failed - check these if URLs are missing
+- format: "sheet_music" (the only supported format)
+- sheet_music_url: URL to the rendered sheet music image
+- sheet_music_error: Error message if rendering failed - check this if the URL is missing
 - Must call validate_midi first to get a valid midi_file_id
-- Use "both" to provide both notation types for maximum accessibility
-- Sheet music is better for traditional notation readers, tabs are better for guitar/bass players
 - Visual notation helps students understand the structure and practice reading music
 - Combine with midi_to_audio to provide both visual and audio examples""",
                 schema={
                     "type": "function",
                     "function": {
                         "name": "midi_to_notation",
-                        "description": """Render MIDI file to musical notation (sheet music and/or tabs). Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.
+                        "description": """Render MIDI file to sheet music notation. Generates visual notation that students can see and read. Use this after validate_midi to provide visual reference alongside audio examples.
 
 Returns: dict with:
 - midi_file_id (str): The MIDI file ID that was rendered
-- format (str): Requested format ("sheet_music", "tabs", or "both")
-- sheet_music_url (str, optional): URL to sheet music image (if format includes "sheet_music")
-- tabs_url (str, optional): URL to tabs image (if format includes "tabs")
+- format (str): Requested format ("sheet_music")
+- sheet_music_url (str, optional): URL to sheet music image
 - sheet_music_error (str, optional): Error message if sheet music generation failed
-- tabs_error (str, optional): Error message if tabs generation failed
 
 Error Handling:
 - If MIDI file not found: You must call validate_midi first to create the MIDI file
-- If rendering fails: Check sheet_music_error or tabs_error fields for details""",
+- If rendering fails: Check the sheet_music_error field for details""",
                         "parameters": {
                             "type": "object",
                             "properties": {
                                 "midi_file_id": {"type": "string"},
-                                "format": {"type": "string", "default": "both"},
+                                "format": {
+                                    "type": "string",
+                                    "default": "sheet_music",
+                                    "enum": ["sheet_music"],
+                                },
                             },
                             "required": ["midi_file_id"],
                         },
@@ -195,7 +194,9 @@ Error Handling:
                 kwargs["midi_file_id"], kwargs.get("instrument", "piano")
             )
         elif tool_name == "midi_to_notation":
-            return await self.midi_to_notation(kwargs["midi_file_id"], kwargs.get("format", "both"))
+            return await self.midi_to_notation(
+                kwargs["midi_file_id"], kwargs.get("format", "sheet_music")
+            )
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
 
@@ -206,15 +207,38 @@ Error Handling:
         metadata: dict[str, Any] = {}
 
         try:
-            from zikos.mcp.tools.processing.midi.midi_parser import parse_midi_text
+            from zikos.mcp.tools.processing.midi.midi_parser import (
+                create_music21_stream,
+                parse_midi_text,
+            )
 
             parsed_data = parse_midi_text(midi_text)
-            metadata = parsed_data.get("metadata", {})
+            metadata = dict(parsed_data.get("metadata", {}))
+            warnings.extend(parsed_data.get("warnings", []))
+
+            # Enrich metadata with note/track counts and estimated duration
+            tracks = parsed_data.get("tracks", [])
+            note_count = sum(
+                1
+                for track in tracks
+                for note_data in track.get("notes", [])
+                if str(note_data.get("note", "")).lower() != "rest"
+            )
+            metadata["track_count"] = len(tracks)
+            metadata["note_count"] = note_count
+            tempo_bpm = float(metadata.get("tempo", 120) or 120)
+            track_quarters = [
+                sum(float(note_data.get("duration", 0)) for note_data in track.get("notes", []))
+                for track in tracks
+            ]
+            longest_quarters = max(track_quarters) if track_quarters else 0.0
+            metadata["estimated_duration_seconds"] = round(longest_quarters * 60.0 / tempo_bpm, 2)
 
             midi_file_id = str(uuid.uuid4())
             midi_path = self.storage_path / f"{midi_file_id}.mid"
 
-            midi_text_to_file(midi_text, midi_path)
+            score = create_music21_stream(parsed_data)
+            score.write("midi", fp=str(midi_path))
 
             if not midi_path.exists() or midi_path.stat().st_size == 0:
                 errors.append("Failed to create MIDI file")
@@ -253,8 +277,20 @@ Error Handling:
                 "metadata": metadata,
             }
 
+    VALID_INSTRUMENTS = ("piano", "guitar", "violin", "bass")
+
     async def midi_to_audio(self, midi_file_id: str, instrument: str) -> dict[str, Any]:
         """Synthesize MIDI to audio using FluidSynth"""
+        if instrument not in self.VALID_INSTRUMENTS:
+            return {
+                "error": True,
+                "error_type": "INVALID_INSTRUMENT",
+                "message": (
+                    f"Unknown instrument: '{instrument}'. "
+                    f"Valid instruments: {', '.join(self.VALID_INSTRUMENTS)}."
+                ),
+            }
+
         midi_path = self.storage_path / f"{midi_file_id}.mid"
 
         if not midi_path.exists():
@@ -273,13 +309,54 @@ Error Handling:
                 "or symlink it to ~/.fluidsynth/default_sound_font.sf2"
             )
 
+        # Bake the requested instrument into the MIDI as a program change so
+        # both synthesis paths honor it (the CLI path previously rendered
+        # everything with the SoundFont default, i.e. piano).
+        synth_midi_path = self._write_midi_with_instrument(midi_path, instrument)
         try:
-            return await self._synthesize_with_cli(midi_path, soundfont_path, instrument)
-        except (FileNotFoundError, ImportError):
-            return await self._synthesize_with_pyfluidsynth(midi_path, soundfont_path, instrument)
+            try:
+                return await self._synthesize_with_cli(
+                    synth_midi_path, soundfont_path, instrument, midi_file_id
+                )
+            except (FileNotFoundError, ImportError):
+                return await self._synthesize_with_pyfluidsynth(
+                    synth_midi_path, soundfont_path, instrument, midi_file_id
+                )
+        finally:
+            if synth_midi_path != midi_path and synth_midi_path.exists():
+                synth_midi_path.unlink()
+
+    def _write_midi_with_instrument(self, midi_path: Path, instrument: str) -> Path:
+        """Write a temporary copy of the MIDI with the instrument's program
+        change inserted into every part. Returns the original path unchanged
+        if the rewrite fails (synthesis then falls back to the default
+        program rather than erroring)."""
+        import tempfile
+
+        try:
+            from music21 import instrument as m21_instrument
+            from music21 import midi as m21_midi
+
+            score = m21_midi.translate.midiFilePathToStream(str(midi_path))
+            if score is None:
+                return midi_path
+
+            program = self._instrument_to_program(instrument)
+            parts = list(score.parts) if hasattr(score, "parts") else []
+            targets = parts if parts else [score]
+            for target in targets:
+                inst = m21_instrument.instrumentFromMidiProgram(program)
+                target.insert(0, inst)
+
+            with tempfile.NamedTemporaryFile(suffix=".mid", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            score.write("midi", fp=str(tmp_path))
+            return tmp_path
+        except Exception:
+            return midi_path
 
     async def _synthesize_with_cli(
-        self, midi_path: Path, soundfont_path: Path, instrument: str
+        self, midi_path: Path, soundfont_path: Path, instrument: str, midi_file_id: str
     ) -> dict[str, Any]:
         """Synthesize using fluidsynth CLI (preferred method)"""
         import shutil
@@ -332,7 +409,7 @@ Error Handling:
 
             return {
                 "audio_file_id": audio_file_id,
-                "midi_file_id": midi_path.stem,
+                "midi_file_id": midi_file_id,
                 "instrument": instrument,
                 "duration": duration,
                 "synthesis_method": "fluidsynth",
@@ -343,9 +420,9 @@ Error Handling:
                 Path(tmp_wav_path).unlink()
 
     async def _synthesize_with_pyfluidsynth(
-        self, midi_path: Path, soundfont_path: Path, instrument: str
+        self, midi_path: Path, soundfont_path: Path, instrument: str, midi_file_id: str
     ) -> dict[str, Any]:
-        """Synthesize using pyfluidsynth Python bindings"""
+        """Synthesize using pyfluidsynth Python bindings (fallback path)"""
         try:
             import fluidsynth
             import numpy as np
@@ -354,10 +431,21 @@ Error Handling:
             raise ImportError(f"pyfluidsynth not available: {e}") from e
 
         from music21 import midi
+        from music21 import tempo as m21_tempo
 
         midi_stream = midi.translate.midiFilePathToStream(str(midi_path))
         if midi_stream is None:
             raise ValueError("Failed to parse MIDI file")
+
+        # Note durations are in quarter notes; convert to seconds via tempo.
+        bpm = 120.0
+        try:
+            marks = list(midi_stream.flatten().getElementsByClass(m21_tempo.MetronomeMark))
+            if marks and marks[0].number:
+                bpm = float(marks[0].number)
+        except Exception:
+            pass
+        seconds_per_quarter = 60.0 / bpm
 
         fs = fluidsynth.Synth()
         fs.start()
@@ -372,19 +460,21 @@ Error Handling:
             sample_rate = 44100
             audio_chunks = []
 
-            for element in midi_stream.flat.notes:
-                if hasattr(element, "pitch"):
-                    pitch_midi = element.pitch.midi
-                    duration = float(element.duration.quarterLength)
-                    velocity = 60
+            for element in midi_stream.flatten().notes:
+                pitches = [p.midi for p in element.pitches]
+                if not pitches:
+                    continue
+                duration_seconds = float(element.duration.quarterLength) * seconds_per_quarter
+                velocity = getattr(getattr(element, "volume", None), "velocity", None)
+                velocity = int(velocity) if velocity else 60
+                velocity = max(0, min(127, velocity))
 
-                    if hasattr(element, "volume") and hasattr(element.volume, "velocity"):
-                        velocity = element.volume.velocity
-
+                for pitch_midi in pitches:
                     fs.noteon(0, pitch_midi, velocity)
-                    samples = int(duration * sample_rate)
-                    audio_chunk = fs.get_samples(samples)
-                    audio_chunks.append(audio_chunk)
+                frames = int(duration_seconds * sample_rate)
+                if frames > 0:
+                    audio_chunks.append(fs.get_samples(frames))
+                for pitch_midi in pitches:
                     fs.noteoff(0, pitch_midi)
 
             if not audio_chunks:
@@ -392,6 +482,9 @@ Error Handling:
 
             audio_array = np.concatenate(audio_chunks)
             audio_array = audio_array.astype(np.float32) / 32768.0
+            # fs.get_samples returns interleaved stereo; reshape to (n, 2)
+            # so the file isn't written as double-speed mono.
+            audio_array = audio_array.reshape(-1, 2)
 
             audio_file_id = str(uuid.uuid4())
             from zikos.config import settings
@@ -402,14 +495,14 @@ Error Handling:
 
             sf.write(str(audio_path), audio_array, sample_rate)
 
-            duration = len(audio_array) / sample_rate
+            duration = audio_array.shape[0] / sample_rate
 
             return {
                 "audio_file_id": audio_file_id,
-                "midi_file_id": midi_path.stem,
+                "midi_file_id": midi_file_id,
                 "instrument": instrument,
                 "duration": duration,
-                "synthesis_method": "fluidsynth",
+                "synthesis_method": "pyfluidsynth",
             }
 
         finally:
@@ -417,6 +510,16 @@ Error Handling:
 
     async def midi_to_notation(self, midi_file_id: str, format: str) -> dict[str, Any]:
         """Render MIDI to notation SVG using music21 + verovio (no MuseScore required)"""
+        if format != "sheet_music":
+            return {
+                "error": True,
+                "error_type": "INVALID_FORMAT",
+                "message": (
+                    f"Unknown notation format: '{format}'. "
+                    "Only 'sheet_music' is supported (tab rendering is not implemented)."
+                ),
+            }
+
         midi_path = self.storage_path / f"{midi_file_id}.mid"
 
         if not midi_path.exists():
@@ -453,17 +556,9 @@ Error Handling:
 
             result: dict[str, Any] = {"midi_file_id": midi_file_id, "format": format}
 
-            if format in ("sheet_music", "both"):
-                sheet_path = notation_path / f"sheet_{midi_file_id}.svg"
-                sheet_path.write_text(tk.renderToSVG(1), encoding="utf-8")
-                result["sheet_music_url"] = f"/notation/sheet_{midi_file_id}.svg"
-
-            if format in ("tabs", "both"):
-                # verovio doesn't do guitar tabs — note this limitation clearly
-                result["tabs_error"] = (
-                    "Tab rendering is not supported with the current notation engine (verovio). "
-                    "Use format='sheet_music' for standard notation."
-                )
+            sheet_path = notation_path / f"sheet_{midi_file_id}.svg"
+            sheet_path.write_text(tk.renderToSVG(1), encoding="utf-8")
+            result["sheet_music_url"] = f"/notation/sheet_{midi_file_id}.svg"
 
             return result
 
@@ -544,6 +639,5 @@ Error Handling:
             "guitar": 24,
             "violin": 40,
             "bass": 32,
-            "drums": 128,
         }
         return instrument_map.get(instrument.lower(), 0)

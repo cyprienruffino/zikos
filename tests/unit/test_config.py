@@ -10,17 +10,34 @@ from zikos.config import Settings
 @pytest.mark.lightweight
 def test_settings_defaults():
     """Test default settings"""
-    # Temporarily remove API_RELOAD from environment to test defaults
-    api_reload_value = os.environ.pop("API_RELOAD", None)
+    # Temporarily remove relevant vars from environment to test defaults
+    saved = {var: os.environ.pop(var, None) for var in ("API_RELOAD", "API_HOST", "CORS_ORIGINS")}
     try:
         settings = Settings.from_env()
-        assert settings.api_host == "0.0.0.0"
+        # Default bind is loopback, not 0.0.0.0 (docker-compose overrides via API_HOST)
+        assert settings.api_host == "127.0.0.1"
         assert settings.api_port == 8000
         assert settings.api_reload is False
+        assert settings.cors_origins == [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
     finally:
-        # Restore original value if it existed
-        if api_reload_value is not None:
-            os.environ["API_RELOAD"] = api_reload_value
+        # Restore original values if they existed
+        for var, value in saved.items():
+            if value is not None:
+                os.environ[var] = value
+
+
+@pytest.mark.lightweight
+def test_cors_origins_from_env():
+    """CORS origins are parsed from a comma-separated env var"""
+    os.environ["CORS_ORIGINS"] = "http://example.com, https://app.example.com"
+    try:
+        settings = Settings.from_env()
+        assert settings.cors_origins == ["http://example.com", "https://app.example.com"]
+    finally:
+        del os.environ["CORS_ORIGINS"]
 
 
 @pytest.mark.lightweight
@@ -36,3 +53,21 @@ def test_settings_from_env():
     # Cleanup
     del os.environ["API_PORT"]
     del os.environ["LLM_TEMPERATURE"]
+
+
+@pytest.mark.lightweight
+def test_malformed_numeric_env_vars_fall_back_to_defaults():
+    """Malformed int/float env values must not crash settings loading"""
+    os.environ["API_PORT"] = "not-a-port"
+    os.environ["LLM_TEMPERATURE"] = "warm"
+    os.environ["LLM_N_GPU_LAYERS"] = "many"
+    try:
+        settings = Settings.from_env()
+        defaults = Settings()
+        assert settings.api_port == defaults.api_port
+        assert settings.llm_temperature == defaults.llm_temperature
+        assert settings.llm_n_gpu_layers == defaults.llm_n_gpu_layers
+    finally:
+        del os.environ["API_PORT"]
+        del os.environ["LLM_TEMPERATURE"]
+        del os.environ["LLM_N_GPU_LAYERS"]

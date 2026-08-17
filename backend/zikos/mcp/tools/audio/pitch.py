@@ -57,26 +57,30 @@ def frequency_to_cents(freq: float, reference_freq: float) -> float:
     return float(1200 * np.log2(freq / reference_freq))
 
 
-def calculate_intonation_accuracy(frequencies: np.ndarray, reference_freq: float) -> float:
-    """Calculate intonation accuracy score (0.0-1.0)"""
-    if len(frequencies) == 0 or reference_freq <= 0:
-        return 0.0
+def cents_from_nearest_semitone(frequencies: np.ndarray) -> np.ndarray:
+    """Signed cents deviation of each frequency from its NEAREST equal-tempered semitone.
 
-    cents_deviations = [abs(frequency_to_cents(f, reference_freq)) for f in frequencies if f > 0]
+    Always in [-50, +50]; octave-invariant, so it works for melodies, not just
+    a single sustained note.
+    """
+    frequencies = np.asarray(frequencies, dtype=float)
+    frequencies = frequencies[frequencies > 0]
+    if len(frequencies) == 0:
+        return np.array([])
+    midi = 69.0 + 12.0 * np.log2(frequencies / 440.0)
+    return np.asarray((midi - np.round(midi)) * 100.0)
 
-    if len(cents_deviations) == 0:
-        return 0.0
 
-    avg_cents = float(np.mean(cents_deviations))
-
-    if avg_cents < 5:
+def intonation_score_from_cents(avg_abs_cents: float) -> float:
+    """Map mean absolute cents deviation to a 0.0-1.0 accuracy score"""
+    if avg_abs_cents < 5:
         return 1.0
-    elif avg_cents < 15:
+    elif avg_abs_cents < 15:
         return 0.9
-    elif avg_cents < 30:
-        return float(0.8 - (avg_cents - 15) / 150)
+    elif avg_abs_cents < 30:
+        return float(0.8 - (avg_abs_cents - 15) / 150)
     else:
-        return float(max(0.0, 0.7 - (avg_cents - 30) / 200))
+        return float(max(0.0, 0.7 - (avg_abs_cents - 30) / 200))
 
 
 async def detect_pitch(audio_path: str) -> dict[str, Any]:
@@ -91,11 +95,14 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
                 "message": "Audio is too short (minimum 0.5 seconds required)",
             }
 
+        hop_length = 512
         f0, voiced_flag, voiced_prob = librosa.pyin(
             y,
+            sr=sr,
             fmin=float(librosa.note_to_hz("C1")),
             fmax=float(librosa.note_to_hz("C7")),
             frame_length=4096,
+            hop_length=hop_length,
         )
 
         valid_f0 = f0[voiced_flag & (voiced_prob > 0.5)]
@@ -107,18 +114,18 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
                 "message": "Could not detect pitch in audio",
             }
 
-        onsets = librosa.onset.onset_detect(y=y, sr=sr)
-        onset_times = librosa.frames_to_time(onsets, sr=sr)
+        onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length)
+        onset_times = librosa.frames_to_time(onsets, sr=sr, hop_length=hop_length)
 
-        notes = []
+        notes: list[dict[str, Any]] = []
         for i, onset_time in enumerate(onset_times):
             if i < len(onset_times) - 1:
                 end_time = onset_times[i + 1]
             else:
                 end_time = len(y) / sr
 
-            onset_frame = librosa.time_to_frames(onset_time, sr=sr)
-            end_frame = librosa.time_to_frames(end_time, sr=sr)
+            onset_frame = librosa.time_to_frames(onset_time, sr=sr, hop_length=hop_length)
+            end_frame = librosa.time_to_frames(end_time, sr=sr, hop_length=hop_length)
 
             segment_f0 = f0[onset_frame:end_frame]
             segment_voiced = voiced_flag[onset_frame:end_frame]
@@ -144,52 +151,57 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
                     }
                 )
 
-        all_frequencies = valid_f0
-        if len(all_frequencies) > 0:
-            mean_freq = float(np.mean(all_frequencies))
-            reference_freq = float(librosa.note_to_hz(frequency_to_note(mean_freq)[0] + str(4)))
+        # Intonation: per-frame signed cents deviation from the NEAREST
+        # equal-tempered semitone (octave-invariant, melody-safe).
+        frame_cents = cents_from_nearest_semitone(valid_f0)
+        average_cents_deviation = float(np.mean(np.abs(frame_cents)))
+        intonation_accuracy = intonation_score_from_cents(average_cents_deviation)
 
-            intonation_accuracy = calculate_intonation_accuracy(all_frequencies, reference_freq)
+        # Sharp/flat tendency: fraction of frames noticeably above/below
+        # the nearest semitone (signed deviations).
+        sharp_tendency = float(np.mean(frame_cents > 10.0))
+        flat_tendency = float(np.mean(frame_cents < -10.0))
 
-            pitch_variance = np.var(all_frequencies)
-            pitch_stability = 1.0 / (1.0 + pitch_variance / (mean_freq**2))
-            pitch_stability = max(0.0, min(1.0, pitch_stability))
+        # Pitch stability: variance of f0 WITHIN each note segment (in cents,
+        # relative to the note's median), aggregated across notes. Whole-take
+        # variance would penalize melodies for simply containing different notes.
+        within_note_stds = []
+        for n in notes:
+            start_frame = librosa.time_to_frames(
+                float(n["start_time"]), sr=sr, hop_length=hop_length
+            )
+            end_frame = librosa.time_to_frames(float(n["end_time"]), sr=sr, hop_length=hop_length)
+            seg = f0[start_frame:end_frame]
+            seg = seg[np.isfinite(seg)]
+            seg = seg[seg > 0]
+            if len(seg) >= 3:
+                median_f = float(np.median(seg))
+                cents = 1200.0 * np.log2(seg / median_f)
+                within_note_stds.append(float(np.std(cents)))
 
-            sharp_tendency = 0.0
-            flat_tendency = 0.0
-            if len(notes) > 0:
-                sharp_count = 0
-                flat_count = 0
-                for n in notes:
-                    freq = n.get("frequency")
-                    if isinstance(freq, int | float):
-                        cents = frequency_to_cents(float(freq), reference_freq)
-                        if cents > 10:
-                            sharp_count += 1
-                        elif cents < -10:
-                            flat_count += 1
-                sharp_tendency = float(sharp_count / len(notes))
-                flat_tendency = float(flat_count / len(notes))
+        if within_note_stds:
+            mean_within_note_std = float(np.mean(within_note_stds))
         else:
-            intonation_accuracy = 0.0
-            pitch_stability = 0.0
-            sharp_tendency = 0.0
-            flat_tendency = 0.0
+            # No usable note segments: fall back to frame-level deviation spread
+            mean_within_note_std = float(np.std(frame_cents)) if len(frame_cents) else 0.0
+
+        pitch_stability = float(max(0.0, min(1.0, 1.0 / (1.0 + mean_within_note_std / 50.0))))
 
         detected_key = "unknown"
-        if len(notes) > 0 and mean_freq > 0:
+        if len(notes) > 0:
             try:
+                from zikos.mcp.tools.audio.key import estimate_key_from_chroma
+
                 chroma = librosa.feature.chroma_stft(y=y, sr=sr)
                 chroma_mean = np.mean(chroma, axis=1)
-                key_idx = np.argmax(chroma_mean)
-                note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-                detected_key = f"{note_names[key_idx]} major"
+                detected_key, _, _, _ = estimate_key_from_chroma(chroma_mean)
             except Exception:
                 detected_key = "unknown"
 
         return {
             "notes": notes,
             "intonation_accuracy": float(intonation_accuracy),
+            "average_cents_deviation": average_cents_deviation,
             "pitch_stability": float(pitch_stability),
             "detected_key": detected_key,
             "sharp_tendency": float(sharp_tendency),

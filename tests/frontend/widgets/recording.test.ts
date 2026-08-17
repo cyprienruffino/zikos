@@ -21,14 +21,20 @@ class MockBlobEvent {
 globalThis.BlobEvent = MockBlobEvent as any;
 
 class MockMediaRecorder {
+    static isTypeSupported(type: string): boolean {
+        return type.startsWith("audio/webm");
+    }
+
     state: string = "inactive";
     stream: MediaStream;
+    mimeType: string;
     ondataavailable: ((event: BlobEvent) => void) | null = null;
     onstop: (() => void) | null = null;
     private dataChunks: Blob[] = [];
 
-    constructor(stream: MediaStream) {
+    constructor(stream: MediaStream, options?: { mimeType?: string }) {
         this.stream = stream;
+        this.mimeType = options?.mimeType || "audio/webm";
     }
 
     start(): void {
@@ -84,12 +90,13 @@ describe("Recording Widget", () => {
             configurable: true,
         });
         globalThis.URL.createObjectURL = vi.fn(() => "blob:test-url");
+        globalThis.URL.revokeObjectURL = vi.fn();
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
             json: vi.fn().mockResolvedValue({ audio_file_id: "audio_123" }),
         });
 
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
         vi.spyOn(ui, "addTypingIndicator").mockImplementation(() => {});
 
         setWebSocket(mockWs);
@@ -284,6 +291,28 @@ describe("Recording Widget", () => {
             expect(fetchCall[1].method).toBe("POST");
         });
 
+        it("should upload with the real recorder mime type and matching extension", async () => {
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+            const sendBtn = widget?.querySelector(".send-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
+            stopBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            sendBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            const fetchCall = (globalThis.fetch as any).mock.calls[0];
+            const formData = fetchCall[1].body as FormData;
+            const file = formData.get("file") as File;
+            expect(file.name).toBe("recording.webm");
+            expect(file.type).toContain("audio/webm");
+        });
+
         it("should show error when no audio recorded", async () => {
             addRecordingWidget("rec_123", "Test", 60);
             const widget = document.getElementById("recording-rec_123");
@@ -368,6 +397,100 @@ describe("Recording Widget", () => {
                 "Connection lost. Please reconnect and try again.",
                 "error"
             );
+        });
+    });
+
+    describe("Microphone Lifecycle", () => {
+        it("should not acquire two streams on rapid double-click", async () => {
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            recordBtn.click(); // second click before getUserMedia resolves
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+        });
+
+        it("should not acquire another stream while already recording", async () => {
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+        });
+
+        it("should stop active recorder and media tracks when widget is removed", async () => {
+            const mockTrack = { stop: vi.fn() };
+            vi.mocked(navigator.mediaDevices.getUserMedia).mockResolvedValueOnce({
+                getTracks: () => [mockTrack],
+            } as any);
+
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            removeRecordingWidget("rec_123");
+
+            expect(mockTrack.stop).toHaveBeenCalled();
+            expect(document.getElementById("recording-rec_123")).toBeFalsy();
+        });
+
+        it("should auto-stop recording after max_duration seconds", async () => {
+            addRecordingWidget("rec_123", "Test", 0.05);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const statusEl = document.getElementById("status-rec_123");
+            expect(statusEl?.textContent).toBe("Recording...");
+
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            expect(statusEl?.textContent).toBe("Recording complete");
+        });
+
+        it("should revoke the previous object URL when re-recording", async () => {
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+            const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            stopBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            stopBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith("blob:test-url");
+        });
+
+        it("should revoke object URL when widget is removed", async () => {
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+            const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            stopBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            removeRecordingWidget("rec_123");
+            expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith("blob:test-url");
         });
     });
 

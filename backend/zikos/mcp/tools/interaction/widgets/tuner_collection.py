@@ -84,6 +84,15 @@ Interpretation Guidelines:
         description: str | None,
     ) -> dict[str, Any]:
         """Create tuner widget"""
+        if not isinstance(reference_frequency, int | float) or reference_frequency <= 0:
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": (
+                    f"reference_frequency must be a positive number of Hz, got: {reference_frequency}"
+                ),
+            }
+
         tuner_id = str(uuid.uuid4())
 
         return {

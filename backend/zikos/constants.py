@@ -20,7 +20,6 @@ class LLMConstants:
     MAX_CONSECUTIVE_TOOL_CALLS: int = 5
     RECENT_TOOL_CALLS_WINDOW: int = 10
     REPETITIVE_PATTERN_THRESHOLD: int = 4
-    REPETITIVE_PATTERN_CHECK_WINDOW: int = 3
 
     # Response quality checks
     MAX_WORDS_RESPONSE: int = 500
@@ -108,6 +107,23 @@ class RecordingConstants:
     """Constants for audio recording"""
 
     DEFAULT_MAX_DURATION: float = 30.0
+
+
+class UploadConstants:
+    """Constants for file uploads"""
+
+    # Maximum upload size in bytes (50 MB)
+    MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024
+
+    # Allowed audio file extensions (lowercase, with leading dot)
+    ALLOWED_AUDIO_EXTENSIONS: frozenset[str] = frozenset(
+        {".wav", ".mp3", ".ogg", ".flac", ".webm", ".m4a"}
+    )
+
+    # Allowed content types for audio uploads. Browsers commonly report
+    # webm recordings as video/webm and generic uploads as octet-stream.
+    ALLOWED_CONTENT_TYPE_PREFIXES: tuple[str, ...] = ("audio/",)
+    ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset({"video/webm", "application/octet-stream"})
 
 
 # Convenience access

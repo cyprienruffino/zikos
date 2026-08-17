@@ -1,5 +1,6 @@
 """Abstract base class for LLM backends"""
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -67,7 +68,10 @@ class LLMBackend(ABC):
         Default implementation falls back to non-streaming and yields final result.
         Backends should override this for true streaming.
         """
-        result = self.create_chat_completion(
+        # create_chat_completion is synchronous and may block for the whole
+        # generation — run it off the event loop.
+        result = await asyncio.to_thread(
+            self.create_chat_completion,
             messages=messages,
             tools=tools,
             temperature=temperature,
@@ -75,49 +79,33 @@ class LLMBackend(ABC):
             **kwargs,
         )
 
-        # Simulate streaming by yielding the full response as a single chunk
-        content = result["choices"][0]["message"].get("content", "")
+        # Yield the full content as ONE chunk: re-splitting on whitespace would
+        # destroy newlines/indentation (corrupting e.g. MIDI text).
+        message = result["choices"][0]["message"]
+        content = message.get("content", "")
         if content:
-            # Split content into words for simulation
-            words = content.split()
-            for i, word in enumerate(words):
-                yield {
-                    "choices": [
-                        {
-                            "delta": {
-                                "content": word + (" " if i < len(words) - 1 else ""),
-                                "role": "assistant",
-                            },
-                            "finish_reason": None,
-                        }
-                    ]
-                }
+            yield {
+                "choices": [
+                    {
+                        "delta": {"content": content, "role": "assistant"},
+                        "finish_reason": None,
+                    }
+                ]
+            }
 
-        # Final chunk with finish reason
+        # Final chunk with finish reason and any native tool calls
+        final_delta: dict[str, Any] = {}
+        tool_calls = message.get("tool_calls")
+        if tool_calls:
+            final_delta["tool_calls"] = tool_calls
         yield {
             "choices": [
                 {
-                    "delta": {},
+                    "delta": final_delta,
                     "finish_reason": result["choices"][0].get("finish_reason", "stop"),
                 }
             ]
         }
-
-    @abstractmethod
-    def supports_tools(self) -> bool:
-        """Whether this backend supports native tool calling"""
-        pass
-
-    @abstractmethod
-    def supports_system_messages(self) -> bool:
-        """Whether this backend properly handles system messages
-
-        All supported models (Phi-3, Qwen, Llama 3.x, Mistral) support system messages natively.
-
-        Returns:
-            True if system messages should be kept separate (always True for supported models)
-        """
-        pass
 
     @abstractmethod
     def get_context_window(self) -> int:
