@@ -66,6 +66,47 @@ class TestUserSettingsService:
         s = service.load()
         assert s.language == "auto"
 
+    def test_corrupt_file_backed_up_not_destroyed(self, tmp_path):
+        path = tmp_path / "s.json"
+        path.write_text("not valid json {{{")
+        service = UserSettingsService(path)
+        service.load()
+
+        backup = tmp_path / "s.json.corrupt"
+        assert backup.exists()
+        assert backup.read_text() == "not valid json {{{"
+        # A subsequent update must not silently overwrite the backup source
+        service.update("language", "French")
+        assert backup.read_text() == "not valid json {{{"
+
+    def test_persist_is_atomic_no_leftover_temp_files(self, tmp_path):
+        path = tmp_path / "s.json"
+        service = UserSettingsService(path)
+        service.update("language", "French")
+        leftovers = [p for p in tmp_path.iterdir() if p.name != "s.json"]
+        assert leftovers == []
+        assert json.loads(path.read_text())["language"] == "French"
+
+    def test_concurrent_updates_do_not_corrupt(self, tmp_path):
+        import threading
+
+        path = tmp_path / "s.json"
+        service = UserSettingsService(path)
+
+        def worker(i: int) -> None:
+            for _ in range(20):
+                service.update("notes", f"worker-{i}")
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # File must be valid JSON with one of the written values
+        data = json.loads(path.read_text())
+        assert data["notes"].startswith("worker-")
+
     def test_update_creates_parent_dirs(self, tmp_path):
         path = tmp_path / "nested" / "dir" / "settings.json"
         service = UserSettingsService(path)

@@ -1,15 +1,18 @@
 """Audio preprocessing service using FFmpeg"""
 
 import hashlib
+import shutil
 import subprocess
+import tempfile
+import uuid
 from pathlib import Path
-from typing import Any
 
 import librosa
 import soundfile as sf
 from fastapi import UploadFile
 
 from zikos.config import settings
+from zikos.constants import UploadConstants
 
 # Trim anything more than this many dB below the peak — balanced for instruments.
 _SILENCE_TOP_DB = 30
@@ -29,20 +32,37 @@ class AudioPreprocessingService:
         key_data = f"{file_path}_{file_stat.st_mtime}_{file_stat.st_size}_{target_format}_{target_sample_rate}"
         return hashlib.md5(key_data.encode()).hexdigest()
 
+    @staticmethod
+    def _get_content_cache_key(
+        content: bytes, target_format: str, target_sample_rate: int, channels: int
+    ) -> str:
+        """Generate cache key from uploaded content and preprocessing parameters.
+
+        Keying on content (not temp-file mtime, which is unique per request)
+        lets repeated uploads of the same audio actually hit the cache.
+        """
+        content_digest = hashlib.md5(content).hexdigest()
+        key_data = f"{content_digest}_{target_format}_{target_sample_rate}_{channels}"
+        return hashlib.md5(key_data.encode()).hexdigest()
+
     def _get_cache_path(self, cache_key: str, target_format: str) -> Path:
         """Get cache file path"""
         return self.cache_dir / f"{cache_key}.{target_format}"
 
-    async def _save_upload_file(self, upload_file: UploadFile, temp_dir: Path) -> Path:
-        """Save UploadFile to temporary location"""
-        filename = upload_file.filename
+    @staticmethod
+    def _validated_extension(filename: str | None) -> str:
+        """Return the (lowercased) extension of an uploaded filename.
+
+        The client-supplied filename is never used for pathing — only its
+        extension is extracted, and only if it is on the allowlist.
+        """
         if not filename:
             raise ValueError("UploadFile must have a filename")
-        temp_path: Path = temp_dir / filename
-        content = await upload_file.read()
-        temp_path.write_bytes(content)
-        await upload_file.seek(0)
-        return temp_path
+        extension = Path(filename).suffix.lower()
+        if extension not in UploadConstants.ALLOWED_AUDIO_EXTENSIONS:
+            allowed = ", ".join(sorted(UploadConstants.ALLOWED_AUDIO_EXTENSIONS))
+            raise ValueError(f"Unsupported file extension {extension!r}. Allowed: {allowed}")
+        return extension
 
     async def preprocess_audio(
         self,
@@ -50,6 +70,7 @@ class AudioPreprocessingService:
         target_format: str = "wav",
         target_sample_rate: int = 44100,
         channels: int = 1,
+        cache_key: str | None = None,
     ) -> Path:
         """Preprocess audio file using FFmpeg
 
@@ -58,6 +79,8 @@ class AudioPreprocessingService:
             target_format: Target format (wav, flac, etc.)
             target_sample_rate: Target sample rate in Hz
             channels: Number of channels (1=mono, 2=stereo)
+            cache_key: Precomputed cache key (e.g. content-based for uploads);
+                defaults to a path/mtime-based key
 
         Returns:
             Path to preprocessed audio file
@@ -69,7 +92,8 @@ class AudioPreprocessingService:
         if not input_path.exists():
             raise FileNotFoundError(f"Audio file not found: {input_path}")
 
-        cache_key = self._get_cache_key(input_path, target_format, target_sample_rate)
+        if cache_key is None:
+            cache_key = self._get_cache_key(input_path, target_format, target_sample_rate)
         cache_path = self._get_cache_path(cache_key, target_format)
 
         if cache_path.exists():
@@ -136,23 +160,35 @@ class AudioPreprocessingService:
         Returns:
             Path to preprocessed audio file
         """
-        filename = upload_file.filename
-        if not filename:
-            raise ValueError("UploadFile must have a filename")
-        temp_input = self.storage_path / "temp" / filename
-        temp_input.parent.mkdir(parents=True, exist_ok=True)
+        extension = self._validated_extension(upload_file.filename)
+        content = await upload_file.read()
+        await upload_file.seek(0)
+
+        cache_key = self._get_content_cache_key(
+            content, target_format, target_sample_rate, channels
+        )
+        cache_path = self._get_cache_path(cache_key, target_format)
+        if cache_path.exists():
+            return cache_path
+
+        temp_root = self.storage_path / "temp"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        # Per-request temp dir: no collisions between concurrent uploads of
+        # the same filename, and cleanup never touches attacker-chosen paths.
+        temp_dir = Path(tempfile.mkdtemp(dir=temp_root))
 
         try:
-            await self._save_upload_file(upload_file, temp_input.parent)
+            temp_input = temp_dir / f"{uuid.uuid4().hex}{extension}"
+            temp_input.write_bytes(content)
             return await self.preprocess_audio(
                 temp_input,
                 target_format=target_format,
                 target_sample_rate=target_sample_rate,
                 channels=channels,
+                cache_key=cache_key,
             )
         finally:
-            if temp_input.exists():
-                temp_input.unlink()
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     def clear_cache(self) -> None:
         """Clear preprocessing cache"""

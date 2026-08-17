@@ -18,9 +18,13 @@ class Settings(BaseModel):
     """Application settings"""
 
     # API
-    api_host: str = "0.0.0.0"
+    api_host: str = "127.0.0.1"
     api_port: int = 8000
     api_reload: bool = False
+    cors_origins: list[str] = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
     # LLM — local backends
     llm_model_path: str = ""
@@ -53,6 +57,17 @@ class Settings(BaseModel):
 
     # Debug
     debug_tool_calls: bool = False
+    # Token required to access /api/debug endpoints; when unset they return 404
+    debug_api_token: str = ""
+
+    @staticmethod
+    def _parse_origins(env_var: str, default: list[str]) -> list[str]:
+        """Parse a comma-separated list of CORS origins from the environment."""
+        raw = os.getenv(env_var)
+        if raw is None:
+            return default
+        origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return origins if origins else default
 
     @staticmethod
     def _parse_optional_int(env_var: str) -> int | None:
@@ -65,6 +80,30 @@ class Settings(BaseModel):
             _logger.warning(f"Invalid value for {env_var}: {raw!r}, ignoring")
             return None
 
+    @staticmethod
+    def _parse_int(env_var: str, default: int) -> int:
+        """Parse an int env var, falling back to default on malformed values."""
+        raw = os.getenv(env_var)
+        if raw is None:
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            _logger.warning(f"Invalid value for {env_var}: {raw!r}, using default {default}")
+            return default
+
+    @staticmethod
+    def _parse_float(env_var: str, default: float) -> float:
+        """Parse a float env var, falling back to default on malformed values."""
+        raw = os.getenv(env_var)
+        if raw is None:
+            return default
+        try:
+            return float(raw)
+        except ValueError:
+            _logger.warning(f"Invalid value for {env_var}: {raw!r}, using default {default}")
+            return default
+
     @classmethod
     def from_env(cls) -> "Settings":
         """Load settings from environment variables
@@ -74,18 +113,19 @@ class Settings(BaseModel):
         defaults = cls()
         return cls(
             api_host=os.getenv("API_HOST", defaults.api_host),
-            api_port=int(os.getenv("API_PORT", str(defaults.api_port))),
+            cors_origins=cls._parse_origins("CORS_ORIGINS", defaults.cors_origins),
+            api_port=cls._parse_int("API_PORT", defaults.api_port),
             api_reload=os.getenv("API_RELOAD", str(defaults.api_reload).lower()).lower() == "true",
             llm_model_path=os.getenv("LLM_MODEL_PATH", defaults.llm_model_path),
             llm_backend=os.getenv("LLM_BACKEND", defaults.llm_backend),
             llm_tool_format=os.getenv("LLM_TOOL_FORMAT", defaults.llm_tool_format),
             llm_n_ctx=cls._parse_optional_int("LLM_N_CTX"),
-            llm_n_gpu_layers=int(os.getenv("LLM_N_GPU_LAYERS", str(defaults.llm_n_gpu_layers))),
-            llm_temperature=float(os.getenv("LLM_TEMPERATURE", str(defaults.llm_temperature))),
-            llm_top_p=float(os.getenv("LLM_TOP_P", str(defaults.llm_top_p))),
-            llm_top_k=int(os.getenv("LLM_TOP_K", str(defaults.llm_top_k))),
-            llm_max_thinking_tokens=int(
-                os.getenv("LLM_MAX_THINKING_TOKENS", str(defaults.llm_max_thinking_tokens))
+            llm_n_gpu_layers=cls._parse_int("LLM_N_GPU_LAYERS", defaults.llm_n_gpu_layers),
+            llm_temperature=cls._parse_float("LLM_TEMPERATURE", defaults.llm_temperature),
+            llm_top_p=cls._parse_float("LLM_TOP_P", defaults.llm_top_p),
+            llm_top_k=cls._parse_int("LLM_TOP_K", defaults.llm_top_k),
+            llm_max_thinking_tokens=cls._parse_int(
+                "LLM_MAX_THINKING_TOKENS", defaults.llm_max_thinking_tokens
             ),
             audio_storage_path=Path(
                 os.getenv("AUDIO_STORAGE_PATH", str(defaults.audio_storage_path))
@@ -95,7 +135,7 @@ class Settings(BaseModel):
                 os.getenv("NOTATION_STORAGE_PATH", str(defaults.notation_storage_path))
             ),
             mcp_server_host=os.getenv("MCP_SERVER_HOST", defaults.mcp_server_host),
-            mcp_server_port=int(os.getenv("MCP_SERVER_PORT", str(defaults.mcp_server_port))),
+            mcp_server_port=cls._parse_int("MCP_SERVER_PORT", defaults.mcp_server_port),
             user_settings_path=Path(
                 os.getenv("USER_SETTINGS_PATH", str(defaults.user_settings_path))
             ),
@@ -103,6 +143,7 @@ class Settings(BaseModel):
                 "DEBUG_TOOL_CALLS", str(defaults.debug_tool_calls).lower()
             ).lower()
             == "true",
+            debug_api_token=os.getenv("DEBUG_API_TOKEN", defaults.debug_api_token),
             soundfont_path=os.getenv("SOUNDFONT_PATH", defaults.soundfont_path),
             llm_provider=os.getenv("LLM_PROVIDER", defaults.llm_provider),
             llm_api_key=os.getenv("LLM_API_KEY", defaults.llm_api_key),
