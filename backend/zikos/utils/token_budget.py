@@ -71,10 +71,11 @@ def get_max_tokens_for_preparation(context_window: int) -> int:
         context_window: The actual context window size in tokens
 
     Returns:
-        Maximum tokens to use for message preparation (context window minus small safety margin)
+        Maximum tokens to use for message preparation (context window minus reserve)
     """
-    # Use 95% of context window to leave small safety margin
-    return int(context_window * 0.95)
+    # Aligned with get_max_tokens_for_validation so prepared messages can never
+    # exceed what the validator allows (was 95% vs the validator's 90%).
+    return get_max_tokens_for_validation(context_window)
 
 
 def get_max_tokens_for_validation(context_window: int) -> int:

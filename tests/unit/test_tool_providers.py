@@ -116,6 +116,34 @@ class TestSimplifiedToolProvider:
         """Test should_pass_tools_as_parameter returns False"""
         assert provider.should_pass_tools_as_parameter() is False
 
+    def test_summary_is_compact_not_schema_duplicate(self, provider):
+        """generate_tool_summary must be a compact category summary — not a
+        second copy of format_tool_schemas (which caused double injection)."""
+        tools = [
+            Tool(
+                name="test_tool",
+                description="A test tool with a fairly long description",
+                category=ToolCategory.MIDI,
+                schema={"type": "function", "function": {"name": "test_tool"}},
+            ),
+            Tool(
+                name="other_tool",
+                description="Another tool description",
+                category=ToolCategory.AUDIO_ANALYSIS,
+                schema={"type": "function", "function": {"name": "other_tool"}},
+            ),
+        ]
+
+        summary = provider.generate_tool_summary(tools)
+        schemas = provider.format_tool_schemas(tools)
+
+        assert summary != schemas
+        assert "test_tool" in summary
+        assert "other_tool" in summary
+        # Names only — descriptions live in the schemas section
+        assert "A test tool with a fairly long description" not in summary
+        assert "A test tool with a fairly long description" in schemas
+
 
 class TestQwenToolProvider:
     """Tests for QwenToolProvider"""

@@ -26,6 +26,8 @@ class TestGetModelStrategy:
     def test_explicit_simplified_format(self):
         s = get_model_strategy(tool_format="simplified")
         assert isinstance(s.tool_provider, SimplifiedToolProvider)
+        # Explicit 'simplified' must yield the simplified parser, not hybrid
+        assert isinstance(s.tool_call_parser, SimplifiedToolCallParser)
 
     def test_explicit_native_format(self):
         s = get_model_strategy(tool_format="native")
@@ -66,6 +68,48 @@ class TestGetModelStrategy:
         s = get_model_strategy(model_path="/models/unknown.gguf", tool_format="auto")
         assert isinstance(s.tool_provider, SimplifiedToolProvider)
         assert isinstance(s.tool_call_parser, HybridToolCallParser)
+
+    def test_generic_qwen_gets_qwen_strategy(self):
+        """qwen2 / generic qwen models must not fall through to the
+        Simplified default."""
+        s = get_model_strategy(model_path="/models/qwen2-7b-instruct.gguf", tool_format="auto")
+        assert isinstance(s.tool_provider, QwenToolProvider)
+        assert isinstance(s.tool_call_parser, QwenToolCallParser)
+
+    def test_cloud_provider_setting_forces_native(self, monkeypatch):
+        """Any provider in the create_backend cloud table must get the native
+        strategy, even for models whose names match local families."""
+        from zikos.config import settings
+
+        for provider in ("gemini", "mistral", "groq", "together", "cohere"):
+            monkeypatch.setattr(settings, "llm_provider", provider)
+            s = get_model_strategy(model_path="whatever-model", tool_format="auto")
+            assert isinstance(s.tool_provider, StructuredToolProvider), provider
+            assert isinstance(s.tool_call_parser, NativeToolCallParser), provider
+
+    def test_cloud_provider_prefix_path_forces_native(self, monkeypatch):
+        """provider/model paths route to native — notably mistral/... must not
+        be captured by the local Mistral detection."""
+        from zikos.config import settings
+
+        monkeypatch.setattr(settings, "llm_provider", "")
+        for path in (
+            "gemini/gemini-2.0-flash",
+            "mistral/mistral-large-latest",
+            "groq/llama-3.3-70b",
+            "together/qwen2.5-72b",
+            "cohere/command-r-plus",
+        ):
+            s = get_model_strategy(model_path=path, tool_format="auto")
+            assert isinstance(s.tool_provider, StructuredToolProvider), path
+            assert isinstance(s.tool_call_parser, NativeToolCallParser), path
+
+    def test_local_mistral_path_still_simplified(self, monkeypatch):
+        from zikos.config import settings
+
+        monkeypatch.setattr(settings, "llm_provider", "")
+        s = get_model_strategy(model_path="/models/mistral-7b.gguf", tool_format="auto")
+        assert isinstance(s.tool_provider, SimplifiedToolProvider)
 
     def test_returns_copy(self):
         s1 = get_model_strategy(tool_format="qwen")

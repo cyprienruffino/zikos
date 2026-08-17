@@ -1,6 +1,5 @@
 """Tests for LLMOrchestrator"""
 
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,7 +10,6 @@ from zikos.services.llm_orchestration.conversation_manager import ConversationMa
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.orchestrator import IterationState, LLMOrchestrator
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
-from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
 from zikos.services.llm_orchestration.tool_call_parser import get_tool_call_parser
 from zikos.services.llm_orchestration.tool_executor import ToolExecutor
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
@@ -27,7 +25,6 @@ def make_orchestrator():
         tool_call_parser=get_tool_call_parser(),
         tool_executor=ToolExecutor(),
         response_validator=ResponseValidator(),
-        thinking_extractor=ThinkingExtractor(),
         system_prompt_getter=lambda: SYSTEM_PROMPT,
     )
 
@@ -61,6 +58,15 @@ class TestPrepareConversation:
         user_msgs = [m for m in history if m["role"] == "user"]
         assert len(user_msgs) == 1
         assert "C major scale" in user_msgs[0]["content"]
+
+    def test_empty_message_becomes_session_start_sentinel(self, orchestrator, mcp_server):
+        """An empty greeting message must never produce content:'' (rejected by
+        Anthropic) — it becomes the '[session start]' sentinel."""
+        history, *_ = orchestrator.prepare_conversation("", "session_greet", mcp_server)
+
+        user_msgs = [m for m in history if m["role"] == "user"]
+        assert len(user_msgs) == 1
+        assert user_msgs[0]["content"] == "[session start]"
 
     def test_initializes_history_with_system_prompt(self, orchestrator, mcp_server):
         history, *_ = orchestrator.prepare_conversation("hello", "new_session", mcp_server)
@@ -118,44 +124,6 @@ class TestPrepareIterationMessages:
 
         assert token_error is None
         assert len(messages) < len(history)
-
-
-class TestProcessLLMResponse:
-    @pytest.fixture
-    def orchestrator(self):
-        return make_orchestrator()
-
-    def test_extracts_clean_content(self, orchestrator):
-        msg = {"content": "Here is my feedback on your performance.", "role": "assistant"}
-        history: list[dict[str, Any]] = []
-
-        raw, cleaned, thinking = orchestrator.process_llm_response(msg, history, "s1")
-
-        assert cleaned == "Here is my feedback on your performance."
-        assert thinking == ""
-        assert len(history) == 1
-
-    def test_extracts_thinking_content(self, orchestrator):
-        msg = {
-            "content": "<thinking>Let me analyze this...</thinking>Great job on the tempo!",
-            "role": "assistant",
-        }
-        history: list[dict[str, Any]] = []
-
-        raw, cleaned, thinking = orchestrator.process_llm_response(msg, history, "s1")
-
-        assert "Great job" in cleaned
-        assert "analyze this" in thinking
-        assert any(m["role"] == "thinking" for m in history)
-
-    def test_detects_gibberish(self, orchestrator):
-        gibberish = " ".join(["x"] * 600)
-        msg = {"content": gibberish, "role": "assistant"}
-        history: list[dict[str, Any]] = []
-
-        _, cleaned, _ = orchestrator.process_llm_response(msg, history, "s1")
-
-        assert cleaned == ""
 
 
 class TestProcessToolCalls:
@@ -239,6 +207,58 @@ class TestProcessToolCalls:
         assert tool_results == []
 
     @pytest.mark.asyncio
+    async def test_mixed_analysis_and_widget_keeps_executed_results(self, orchestrator, mcp_server):
+        """A batch of [analysis_call, widget_call] must return the widget response
+        AND the executed analysis results so the caller can commit them."""
+        tool_calls = [
+            {
+                "id": "call_analysis",
+                "function": {"name": "analyze_tempo", "arguments": '{"audio_file_id": "f1"}'},
+            },
+            {
+                "id": "call_widget",
+                "function": {"name": "create_metronome", "arguments": '{"bpm": 100}'},
+            },
+        ]
+        state = IterationState()
+        registry = mcp_server.get_tool_registry()
+
+        should_continue, result, infos, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
+        )
+
+        assert should_continue is False
+        assert result is not None
+        assert result["type"] == "tool_call"
+        assert result["tool_name"] == "create_metronome"
+        assert len(tool_results) == 1
+        assert tool_results[0]["role"] == "tool"
+        assert tool_results[0]["tool_call_id"] == "call_analysis"
+        assert "120" in tool_results[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_multiple_widgets_extra_calls_get_synthetic_results(self, orchestrator):
+        """Only the first widget is returned; extra widget calls are closed with
+        synthetic tool results so nothing dangles."""
+        server = MCPServer()
+        tool_calls = [
+            {"id": "w1", "function": {"name": "create_metronome", "arguments": '{"bpm": 90}'}},
+            {"id": "w2", "function": {"name": "create_metronome", "arguments": '{"bpm": 120}'}},
+        ]
+        state = IterationState()
+        registry = server.get_tool_registry()
+
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, server, "s1", ""
+        )
+
+        assert should_continue is False
+        assert result["arguments"]["bpm"] == 90
+        assert len(tool_results) == 1
+        assert tool_results[0]["tool_call_id"] == "w2"
+        assert "Skipped" in tool_results[0]["content"]
+
+    @pytest.mark.asyncio
     async def test_loop_detection_triggers(self, orchestrator, mcp_server):
         state = IterationState()
         state.consecutive_tool_calls = LLM.MAX_CONSECUTIVE_TOOL_CALLS
@@ -271,26 +291,55 @@ class TestProcessToolCalls:
 
         await orchestrator.process_tool_calls(tool_calls, state, registry, mcp_server, "s1", "")
 
-        assert state.recent_tool_calls == ["analyze_tempo", "detect_pitch"]
+        assert state.recent_tool_calls == [
+            "analyze_tempo({})",
+            "detect_pitch({})",
+        ]
 
-
-class TestFinalizeResponse:
-    def test_resets_state(self):
-        orchestrator = make_orchestrator()
+    @pytest.mark.asyncio
+    async def test_loop_detected_within_single_batch(self, orchestrator, mcp_server):
+        """The identical call repeated within ONE response must trip the loop
+        detector before execution."""
+        tool_calls = [
+            {
+                "id": f"c{i}",
+                "function": {"name": "analyze_tempo", "arguments": '{"audio_file_id": "a.wav"}'},
+            }
+            for i in range(LLM.REPETITIVE_PATTERN_THRESHOLD)
+        ]
         state = IterationState()
-        state.consecutive_tool_calls = 5
-        state.recent_tool_calls = ["t1", "t2"]
+        registry = mcp_server.get_tool_registry()
 
-        result = orchestrator.finalize_response("Good work!", "thinking", state)
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
+        )
 
-        assert result == "Good work!"
-        assert state.consecutive_tool_calls == 0
-        assert state.recent_tool_calls == []
+        assert should_continue is False
+        assert result is not None and result["error_type"] == "repetitive_tool_calls"
+        assert tool_results == []
+        mcp_server.call_tool.assert_not_awaited()
 
-    def test_fallback_on_empty_content(self):
-        orchestrator = make_orchestrator()
+    @pytest.mark.asyncio
+    async def test_same_tool_different_args_is_not_a_loop(self, orchestrator, mcp_server):
+        """Repeating a tool with DIFFERENT arguments (e.g. different segments)
+        is legitimate — the loop signature includes canonical args."""
+        tool_calls = [
+            {
+                "id": f"c{i}",
+                "function": {
+                    "name": "analyze_tempo",
+                    "arguments": f'{{"audio_file_id": "seg_{i}.wav"}}',
+                },
+            }
+            for i in range(LLM.REPETITIVE_PATTERN_THRESHOLD)
+        ]
         state = IterationState()
+        registry = mcp_server.get_tool_registry()
 
-        result = orchestrator.finalize_response("", "", state)
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
+        )
 
-        assert "not sure how to help" in result.lower()
+        assert should_continue is True
+        assert result is None
+        assert len(tool_results) == LLM.REPETITIVE_PATTERN_THRESHOLD

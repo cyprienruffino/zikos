@@ -274,8 +274,28 @@ class SimplifiedToolCallParser(ToolCallParser):
 
         for line in lines:
             key_match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(.*)$", line)
+            line_indent = len(line) - len(line.lstrip())
 
-            if key_match and not is_multiline:
+            if is_multiline and current_key:
+                # A key:value line LESS indented than the multiline body ends
+                # the multiline block and starts a new parameter.
+                exits_multiline = key_match is not None and (
+                    multiline_indent is None or line_indent < multiline_indent
+                )
+                if not exits_multiline:
+                    if line.strip():
+                        if multiline_indent is None:
+                            multiline_indent = line_indent
+                        # Strip at most the established indent, measured on
+                        # LEADING WHITESPACE — dedented lines are kept intact
+                        # (never sliced mid-word, e.g. "MFile" -> "ile").
+                        current_value_lines.append(line[min(line_indent, multiline_indent) :])
+                    elif current_value_lines:
+                        current_value_lines.append("")
+                    continue
+                # fall through: save the multiline value, start the new key
+
+            if key_match:
                 save_current()
                 current_key = key_match.group(1)
                 value_part = key_match.group(2).strip()
@@ -284,17 +304,6 @@ class SimplifiedToolCallParser(ToolCallParser):
                     is_multiline = True
                 elif value_part:
                     current_value_lines.append(value_part)
-
-            elif is_multiline and current_key:
-                if line.strip():
-                    if multiline_indent is None:
-                        multiline_indent = len(line) - len(line.lstrip())
-                    if len(line) >= multiline_indent:
-                        current_value_lines.append(line[multiline_indent:])
-                    else:
-                        current_value_lines.append(line.strip())
-                elif current_value_lines:
-                    current_value_lines.append("")
 
             elif current_key and line.strip():
                 current_value_lines.append(line.strip())
@@ -407,6 +416,12 @@ def get_tool_call_parser(tool_format: str | None = None) -> ToolCallParser:
         "native": NativeToolCallParser,
         "auto": HybridToolCallParser,
     }
+
+    if tool_format not in parsers:
+        _logger.warning(
+            f"Unknown LLM_TOOL_FORMAT value '{tool_format}'; "
+            f"expected one of {sorted(parsers)}. Falling back to 'auto' (hybrid parser)."
+        )
 
     parser_class = parsers.get(tool_format, HybridToolCallParser)
     return parser_class()

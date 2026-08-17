@@ -229,6 +229,21 @@ class TestHandleAudioReady:
         assert "CRITICAL INSTRUCTIONS FOR PROVIDING FEEDBACK" in last_msg
 
     @pytest.mark.asyncio
+    async def test_missing_session_id_does_not_use_shared_default(self, mcp_server):
+        """A missing session_id must generate a fresh session, never a shared
+        'default' session that would leak state across clients."""
+        service = make_llm_service("OK")
+        with patch.object(
+            service.audio_service, "run_baseline_analysis", return_value={"tempo": 100}
+        ):
+            await service.handle_audio_ready("audio_1", None, None, mcp_server)
+            await service.handle_audio_ready("audio_2", None, None, mcp_server)
+
+        assert "default" not in service.conversations
+        # Two calls without session ids → two isolated sessions
+        assert len(service.conversations) == 2
+
+    @pytest.mark.asyncio
     async def test_error_handling(self, mcp_server):
         service = make_llm_service("I encountered an error analyzing the audio file.")
 
@@ -240,6 +255,29 @@ class TestHandleAudioReady:
             result = await service.handle_audio_ready("audio_1", "rec_1", "s1", mcp_server)
 
         assert result["type"] == "response"
+
+
+class TestErrorInjection:
+    def test_injected_error_is_user_role(self, llm_service):
+        """Recoverable errors must be injected as marked user messages so they
+        can never displace the real system prompt."""
+        history = llm_service._get_conversation_history("s1")
+        llm_service._inject_error_system_message(history, "streaming_error", "boom")
+
+        assert history[-1]["role"] == "user"
+        assert history[-1]["content"].startswith("[system note]")
+        assert "streaming_error" in history[-1]["content"]
+
+    def test_prepared_messages_keep_real_prompt_after_error(self, llm_service):
+        history = llm_service._get_conversation_history("s1")
+        real_prompt = history[0]["content"]
+        history.append({"role": "user", "content": "Hello"})
+        llm_service._inject_error_system_message(history, "streaming_error", "boom")
+
+        messages = llm_service._prepare_messages(history)
+
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"] == real_prompt
 
 
 class TestThinking:

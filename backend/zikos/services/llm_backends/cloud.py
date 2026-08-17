@@ -1,17 +1,19 @@
 """Cloud LLM backend using litellm (OpenAI, Anthropic, Gemini, Mistral, ...)"""
 
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
 try:
     import litellm
-
-    litellm.drop_params = True  # ignore unsupported params per-provider silently
-    litellm.suppress_debug_info = True  # suppress "Give Feedback / Get Help" console output
 except ImportError:
     litellm = None  # type: ignore[assignment]
 
 from zikos.services.llm_backends.base import LLMBackend
+
+_logger = logging.getLogger("zikos.services.llm_backends.cloud")
+
+_DEFAULT_CONTEXT_WINDOW = 128000
 
 
 class CloudBackend(LLMBackend):
@@ -39,6 +41,11 @@ class CloudBackend(LLMBackend):
         """
         if litellm is None:
             raise ImportError("litellm is not installed. Install with: pip install litellm")
+
+        # Configure litellm globals at initialization time rather than import
+        # time, so merely importing this module has no side effects.
+        litellm.drop_params = True  # ignore unsupported params per-provider silently
+        litellm.suppress_debug_info = True  # suppress "Give Feedback / Get Help" console output
 
         self._model = kwargs["model_name"]
         self._api_key = kwargs.get("api_key") or None
@@ -114,11 +121,25 @@ class CloudBackend(LLMBackend):
 
         # Accumulate tool_call deltas so the final chunk carries complete tool calls,
         # matching what stream_processor and NativeToolCallParser expect.
-        tool_call_accumulator: dict[int, dict[str, Any]] = {}
+        tool_call_accumulator: dict[Any, dict[str, Any]] = {}
+        no_index_counter = 0
+        finished = False
+
+        def _final_chunk(finish_reason: str) -> dict[str, Any]:
+            final_choice: dict[str, Any] = {"delta": {}, "finish_reason": finish_reason}
+            if tool_call_accumulator:
+                tool_calls = list(tool_call_accumulator.values())
+                final_choice["delta"]["tool_calls"] = tool_calls
+                final_choice["tool_calls"] = tool_calls
+            return {"choices": [final_choice]}
 
         async for chunk in response:
             chunk_dict = chunk.model_dump()
-            choice = chunk_dict.get("choices", [{}])[0]
+            choices = chunk_dict.get("choices") or []
+            if not choices:
+                # e.g. final usage-only chunks have empty choices
+                continue
+            choice = choices[0]
             delta = choice.get("delta", {})
             finish_reason = choice.get("finish_reason")
 
@@ -133,7 +154,12 @@ class CloudBackend(LLMBackend):
                 }
 
             for tc_delta in delta.get("tool_calls") or []:
-                idx = tc_delta.get("index", 0)
+                idx = tc_delta.get("index")
+                if idx is None:
+                    # Provider omitted the index: treat each such delta as its
+                    # own complete call rather than merging everything into slot 0.
+                    idx = f"_noindex_{no_index_counter}"
+                    no_index_counter += 1
                 if idx not in tool_call_accumulator:
                     tool_call_accumulator[idx] = {
                         "id": "",
@@ -150,26 +176,39 @@ class CloudBackend(LLMBackend):
                     tc["function"]["arguments"] += fn["arguments"]
 
             if finish_reason:
-                final_choice: dict[str, Any] = {"delta": {}, "finish_reason": finish_reason}
-                if tool_call_accumulator:
-                    tool_calls = list(tool_call_accumulator.values())
-                    final_choice["delta"]["tool_calls"] = tool_calls
-                    final_choice["tool_calls"] = tool_calls
-                yield {"choices": [final_choice]}
+                finished = True
+                yield _final_chunk(finish_reason)
                 break
 
-    def supports_tools(self) -> bool:
-        return True
-
-    def supports_system_messages(self) -> bool:
-        return True
+        if not finished:
+            # Stream ended without a finish_reason: flush anything accumulated
+            # instead of silently discarding the tool calls.
+            if tool_call_accumulator:
+                _logger.warning(
+                    "Stream ended without finish_reason; flushing "
+                    f"{len(tool_call_accumulator)} accumulated tool call(s)"
+                )
+                yield _final_chunk("tool_calls")
+            else:
+                yield _final_chunk("stop")
 
     def get_context_window(self) -> int:
         try:
             info = litellm.get_model_info(self._model)
-            return int(info.get("max_input_tokens") or info.get("max_tokens") or 128000)
-        except Exception:
-            return 128000
+            window = info.get("max_input_tokens") or info.get("max_tokens")
+            if window:
+                return int(window)
+            _logger.warning(
+                f"litellm has no context window info for model '{self._model}'; "
+                f"falling back to {_DEFAULT_CONTEXT_WINDOW}"
+            )
+            return _DEFAULT_CONTEXT_WINDOW
+        except Exception as e:
+            _logger.warning(
+                f"Could not determine context window for model '{self._model}' ({e}); "
+                f"falling back to {_DEFAULT_CONTEXT_WINDOW}"
+            )
+            return _DEFAULT_CONTEXT_WINDOW
 
     def close(self) -> None:
         pass
