@@ -380,6 +380,21 @@ class LLMService:
             yield self._yield_error(error_msg)
             return
 
+        # Serialize the whole generation turn per session so concurrent turns
+        # can't interleave history mutations.
+        async with self.conversation_manager.lock(session_id):
+            async for chunk in self._generate_response_stream_locked(
+                message, session_id, mcp_server
+            ):
+                yield chunk
+
+    async def _generate_response_stream_locked(
+        self,
+        message: str,
+        session_id: str,
+        mcp_server: MCPServer,
+    ):
+        """Generation turn body; caller must hold the session lock."""
         history, original_message, tool_registry, tools, tool_schemas, state = (
             self.orchestrator.prepare_conversation(message, session_id, mcp_server)
         )
@@ -631,43 +646,56 @@ class LLMService:
         mcp_server: MCPServer,
     ) -> dict[str, Any]:
         """Handle audio ready and generate response"""
+        if not session_id:
+            # Never fall back to a shared "default" session — that would leak
+            # conversation state across unrelated clients.
+            session_id = str(uuid.uuid4())
+            _logger.warning(
+                f"handle_audio_ready called without session_id; generated {session_id}"
+            )
+
         try:
             analysis = await self.audio_service.run_baseline_analysis(audio_file_id)
         except Exception as e:
-            session_id = session_id or "default"
-            history = self._get_conversation_history(session_id)
-            self._inject_error_system_message(
-                history,
-                "audio_analysis_error",
-                f"Error analyzing audio file {audio_file_id}: {str(e)}. The file may be corrupted or in an unsupported format.",
-            )
+            async with self.conversation_manager.lock(session_id):
+                history = self._get_conversation_history(session_id)
+                self._inject_error_system_message(
+                    history,
+                    "audio_analysis_error",
+                    f"Error analyzing audio file {audio_file_id}: {str(e)}. The file may be corrupted or in an unsupported format.",
+                )
             return await self.generate_response("", session_id, mcp_server)
 
         analysis_str = (
             json.dumps(analysis, indent=2) if isinstance(analysis, dict) else str(analysis)
         )
-        effective_session = session_id or "default"
         analysis_content = AudioAnalysisContextFormatter.format_analysis_results(
             audio_file_id, analysis_str
         )
 
-        pending = self.conversation_manager.pop_pending_interaction(effective_session)
+        # Mutate history under the session lock; the generation turn itself is
+        # serialized by generate_response_stream (the lock is not reentrant, so
+        # it must be released before generating).
+        async with self.conversation_manager.lock(session_id):
+            pending = self.conversation_manager.pop_pending_interaction(session_id)
+            if pending:
+                # Close the pending tool_use/tool_result pair, then let the LLM continue
+                # from the tool_result without adding a new user message.
+                history = self._get_conversation_history(session_id)
+                history.append(
+                    {
+                        "role": "tool",
+                        "name": pending["tool_name"],
+                        "content": analysis_content,
+                        "tool_call_id": pending["tool_call_id"],
+                    }
+                )
+
         if pending:
-            # Close the pending tool_use/tool_result pair, then let the LLM continue
-            # from the tool_result without adding a new user message.
-            history = self._get_conversation_history(effective_session)
-            history.append(
-                {
-                    "role": "tool",
-                    "name": pending["tool_name"],
-                    "content": analysis_content,
-                    "tool_call_id": pending["tool_call_id"],
-                }
-            )
-            return await self.generate_response("", effective_session, mcp_server)
+            return await self.generate_response("", session_id, mcp_server)
 
         # No pending interaction — inject as a plain user message (backwards compatibility).
-        return await self.generate_response(analysis_content, effective_session, mcp_server)
+        return await self.generate_response(analysis_content, session_id, mcp_server)
 
     # --- System prompt ---
 

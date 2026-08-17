@@ -1,5 +1,7 @@
 """Tests for ConversationManager"""
 
+import asyncio
+
 import pytest
 
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
@@ -45,6 +47,70 @@ class TestConversationManager:
         assert history1 is not history2
         assert len(history1) == 1
         assert len(history2) == 1
+
+    def test_lock_returns_same_lock_per_session(self, manager):
+        lock1 = manager.lock("s1")
+        lock2 = manager.lock("s1")
+        lock_other = manager.lock("s2")
+
+        assert lock1 is lock2
+        assert lock1 is not lock_other
+        assert isinstance(lock1, asyncio.Lock)
+
+    @pytest.mark.asyncio
+    async def test_lock_serializes_turns(self, manager):
+        """Concurrent turns on the same session must not interleave."""
+        events: list[str] = []
+
+        async def turn(name: str):
+            async with manager.lock("s1"):
+                events.append(f"{name}:start")
+                await asyncio.sleep(0.01)
+                events.append(f"{name}:end")
+
+        await asyncio.gather(turn("a"), turn("b"))
+
+        assert events in (
+            ["a:start", "a:end", "b:start", "b:end"],
+            ["b:start", "b:end", "a:start", "a:end"],
+        )
+
+    def test_lru_eviction_over_max_sessions(self, system_prompt_getter):
+        manager = ConversationManager(system_prompt_getter, max_sessions=3)
+
+        for i in range(3):
+            manager.get_history(f"s{i}")
+        # Refresh s0 so s1 becomes the oldest
+        manager.get_history("s0")
+        manager.get_history("s3")  # over the cap → evict s1
+
+        assert len(manager.conversations) == 3
+        assert "s1" not in manager.conversations
+        assert {"s0", "s2", "s3"} == set(manager.conversations)
+
+    def test_eviction_cleans_all_session_state(self, system_prompt_getter):
+        manager = ConversationManager(system_prompt_getter, max_sessions=1)
+        manager.get_history("old")
+        manager.set_pending_interaction("old", "tc1", "request_audio_recording")
+        manager.lock("old")
+
+        manager.get_history("new")
+
+        assert "old" not in manager.conversations
+        assert manager.pop_pending_interaction("old") is None
+        assert "old" not in manager._locks
+
+    def test_locked_sessions_not_evicted(self, system_prompt_getter):
+        """A session mid-generation (lock held) must not be evicted."""
+
+        async def run():
+            manager = ConversationManager(system_prompt_getter, max_sessions=1)
+            manager.get_history("busy")
+            async with manager.lock("busy"):
+                manager.get_history("other")
+                assert "busy" in manager.conversations
+
+        asyncio.run(run())
 
     def test_get_thinking_for_session_no_session(self, manager):
         """Test getting thinking for non-existent session"""
