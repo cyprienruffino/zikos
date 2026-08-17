@@ -104,3 +104,73 @@ class TestMessagePreparer:
             msg for msg in messages if "[Audio Analysis" in str(msg.get("content", ""))
         ]
         assert len(audio_messages) > 0
+
+    def test_order_preserved_when_untruncated(self, preparer):
+        """Without truncation pressure, prepare() must return history verbatim:
+        no relocation of pinned audio-analysis messages."""
+        history = [
+            {"role": "system", "content": "System prompt"},
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello!"},
+            {"role": "user", "content": "[Audio Analysis Results]\nTempo: 120 BPM"},
+            {"role": "assistant", "content": "Nice tempo."},
+            {"role": "user", "content": "Thanks"},
+        ]
+
+        messages = preparer.prepare(history, max_tokens=10000, for_user=False)
+
+        assert messages == history
+
+    def test_system_prompt_always_first(self, preparer):
+        """System prompt must be emitted at index 0 even when the surviving
+        window would otherwise start with an assistant or tool message."""
+        history = [
+            {"role": "system", "content": "System prompt"},
+            {"role": "assistant", "content": "I'll analyze that."},
+            {"role": "user", "content": "OK"},
+        ]
+
+        messages = preparer.prepare(history, max_tokens=10000, for_user=False)
+
+        assert messages[0] == {"role": "system", "content": "System prompt"}
+        assert messages[1]["role"] == "assistant"
+
+    def test_truncation_does_not_split_tool_pairs(self, preparer):
+        """Truncation must drop an assistant(tool_calls) message together with
+        its tool results — never leave an orphan on either side."""
+        tool_calls = [{"id": "call_1", "function": {"name": "analyze_tempo", "arguments": "{}"}}]
+        history = [
+            {"role": "system", "content": "System prompt"},
+            {"role": "user", "content": "old " * 300},
+            {"role": "assistant", "content": None, "tool_calls": tool_calls},
+            {"role": "tool", "name": "analyze_tempo", "content": "x " * 300, "tool_call_id": "call_1"},
+            {"role": "user", "content": "recent question"},
+        ]
+
+        # Budget small enough that the tool group cannot fully fit
+        messages = preparer.prepare(history, max_tokens=100, for_user=False)
+
+        assistant_ids = {
+            tc["id"] for m in messages for tc in (m.get("tool_calls") or []) if isinstance(tc, dict)
+        }
+        result_ids = {m["tool_call_id"] for m in messages if m.get("role") == "tool"}
+        assert assistant_ids == result_ids  # no orphans in either direction
+        # The newest user message always survives
+        assert any(m.get("content") == "recent question" for m in messages)
+
+    def test_truncation_keeps_pinned_in_position(self, preparer):
+        """Pinned audio-analysis messages survive truncation at their original
+        position relative to surviving messages."""
+        history = [{"role": "system", "content": "System prompt"}]
+        history.append({"role": "user", "content": "before " * 200})
+        history.append({"role": "user", "content": "[Audio Analysis Results]\nTempo: 100 BPM"})
+        history.append({"role": "user", "content": "after " * 200})
+        history.append({"role": "user", "content": "latest"})
+
+        messages = preparer.prepare(history, max_tokens=120, for_user=False)
+
+        contents = [str(m.get("content", "")) for m in messages]
+        audio_idx = next(i for i, c in enumerate(contents) if "[Audio Analysis" in c)
+        latest_idx = contents.index("latest")
+        assert messages[0]["role"] == "system"
+        assert audio_idx < latest_idx
