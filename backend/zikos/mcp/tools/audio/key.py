@@ -108,30 +108,35 @@ async def detect_key(audio_path: str) -> dict[str, Any]:
         if max_major_corr > max_minor_corr:
             key_name = f"{note_names[max_major_idx]} major"
             mode = "major"
-            confidence = float(max_major_corr)
+            best_corr = float(max_major_corr)
             tonic = note_names[max_major_idx]
         else:
             key_name = f"{note_names[max_minor_idx]} minor"
             mode = "minor"
-            confidence = float(max_minor_corr)
+            best_corr = float(max_minor_corr)
             tonic = note_names[max_minor_idx]
 
-        confidence = max(0.0, min(1.0, (confidence + 1.0) / 2.0))
-
-        alternative_keys = []
         all_correlations = [(correlations_major[i], note_names[i], "major") for i in range(12)]
         all_correlations.extend(
             [(correlations_minor[i], note_names[i], "minor") for i in range(12)]
         )
         all_correlations.sort(reverse=True, key=lambda x: x[0])
 
+        # Margin-based confidence: how far the winner stands above the
+        # runner-up, scaled by how good the winning correlation is. The old
+        # (corr+1)/2 remap reported ~0.75+ even for near-ties.
+        runner_up_corr = all_correlations[1][0] if len(all_correlations) > 1 else 0.0
+        margin = max(0.0, best_corr - runner_up_corr)
+        confidence = max(0.0, min(1.0, best_corr)) * min(1.0, 0.5 + margin * 2.5)
+        confidence = float(max(0.0, min(1.0, confidence)))
+
+        alternative_keys = []
         for corr, note, m in all_correlations[1:4]:
             if f"{note} {m}" != key_name:
-                alt_confidence = max(0.0, min(1.0, (corr + 1.0) / 2.0))
                 alternative_keys.append(
                     {
                         "key": f"{note} {m}",
-                        "confidence": float(alt_confidence),
+                        "confidence": float(max(0.0, min(1.0, corr))),
                     }
                 )
 
