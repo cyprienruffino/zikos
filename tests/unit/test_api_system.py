@@ -154,13 +154,15 @@ class TestStatusEndpoint:
         mock_chat_service = MagicMock()
         mock_chat_service.llm_service = mock_llm_service
 
-        mock_settings = MagicMock()
-        mock_settings.llm_model_path = "/path/to/model.gguf"
 
         with patch("zikos.api.system.detect_hardware", return_value=mock_hardware_profile):
             with patch("zikos.api.system.get_hardware_tier", return_value="medium"):
                 with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
-                    with patch("zikos.config.Settings", return_value=mock_settings):
+                    # Endpoint must use the module-level settings (real config),
+                    # not a freshly-constructed Settings() with defaults
+                    with patch(
+                        "zikos.config.settings", MagicMock(llm_model_path="/path/to/model.gguf")
+                    ):
                         response = client.get("/api/system/status")
 
         assert response.status_code == 200
@@ -178,13 +180,11 @@ class TestStatusEndpoint:
         mock_chat_service = MagicMock()
         mock_chat_service.llm_service = mock_llm_service
 
-        mock_settings = MagicMock()
-        mock_settings.llm_model_path = ""
 
         with patch("zikos.api.system.detect_hardware", return_value=mock_hardware_profile):
             with patch("zikos.api.system.get_hardware_tier", return_value="medium"):
                 with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
-                    with patch("zikos.config.Settings", return_value=mock_settings):
+                    with patch("zikos.config.settings", MagicMock(llm_model_path="")):
                         response = client.get("/api/system/status")
 
         assert response.status_code == 200

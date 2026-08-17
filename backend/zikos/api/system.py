@@ -99,9 +99,8 @@ async def get_model_recommendations():
 async def get_status():
     """Get system status including model state and hardware info"""
     from zikos.api.chat import get_chat_service
-    from zikos.config import Settings
+    from zikos.config import settings
 
-    settings = Settings()
     profile = detect_hardware()
     tier = get_hardware_tier(profile)
 
