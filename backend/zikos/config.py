@@ -57,6 +57,8 @@ class Settings(BaseModel):
 
     # Debug
     debug_tool_calls: bool = False
+    # Token required to access /api/debug endpoints; when unset they return 404
+    debug_api_token: str = ""
 
     @staticmethod
     def _parse_origins(env_var: str, default: list[str]) -> list[str]:
@@ -141,6 +143,7 @@ class Settings(BaseModel):
                 "DEBUG_TOOL_CALLS", str(defaults.debug_tool_calls).lower()
             ).lower()
             == "true",
+            debug_api_token=os.getenv("DEBUG_API_TOKEN", defaults.debug_api_token),
             soundfont_path=os.getenv("SOUNDFONT_PATH", defaults.soundfont_path),
             llm_provider=os.getenv("LLM_PROVIDER", defaults.llm_provider),
             llm_api_key=os.getenv("LLM_API_KEY", defaults.llm_api_key),

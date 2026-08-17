@@ -1,10 +1,31 @@
-"""Debug endpoints — only active when DEBUG_TOOL_CALLS=true"""
+"""Debug endpoints — only active when DEBUG_API_TOKEN is configured
 
-from fastapi import APIRouter, HTTPException
+These endpoints expose full conversation content, so they are hidden
+(404) unless a token is configured, and require it via X-Debug-Token.
+"""
+
+import secrets
+from typing import Annotated
+
+from fastapi import APIRouter, Header, HTTPException
 
 from zikos.config import settings
 
 router = APIRouter()
+
+
+def _require_debug_access(x_debug_token: str | None) -> None:
+    """Gate debug endpoints behind DEBUG_API_TOKEN.
+
+    - Token not configured: endpoints do not exist (404).
+    - Token configured: header must match (constant-time compare), else 403.
+    """
+    if not settings.debug_api_token:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not x_debug_token or not secrets.compare_digest(
+        x_debug_token, settings.debug_api_token
+    ):
+        raise HTTPException(status_code=403, detail="Invalid or missing X-Debug-Token header")
 
 
 def _check_history_integrity(history: list[dict]) -> list[dict]:
@@ -72,13 +93,12 @@ def _summarise_history(history: list[dict]) -> list[dict]:
 
 
 @router.get("/session/{session_id}")
-async def get_session_debug(session_id: str):
-    """Dump history and integrity check for a session. Requires DEBUG_TOOL_CALLS=true."""
-    if not settings.debug_tool_calls:
-        raise HTTPException(
-            status_code=403,
-            detail="Debug mode not enabled. Set DEBUG_TOOL_CALLS=true to activate.",
-        )
+async def get_session_debug(
+    session_id: str,
+    x_debug_token: Annotated[str | None, Header()] = None,
+):
+    """Dump history and integrity check for a session. Requires DEBUG_API_TOKEN."""
+    _require_debug_access(x_debug_token)
 
     from zikos.api.chat import get_chat_service
 
@@ -98,13 +118,9 @@ async def get_session_debug(session_id: str):
 
 
 @router.get("/sessions")
-async def list_sessions():
-    """List all active session IDs. Requires DEBUG_TOOL_CALLS=true."""
-    if not settings.debug_tool_calls:
-        raise HTTPException(
-            status_code=403,
-            detail="Debug mode not enabled. Set DEBUG_TOOL_CALLS=true to activate.",
-        )
+async def list_sessions(x_debug_token: Annotated[str | None, Header()] = None):
+    """List all active session IDs. Requires DEBUG_API_TOKEN."""
+    _require_debug_access(x_debug_token)
 
     from zikos.api.chat import get_chat_service
 
