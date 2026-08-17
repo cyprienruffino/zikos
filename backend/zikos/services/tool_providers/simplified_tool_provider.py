@@ -83,4 +83,33 @@ time_signature: 4/4
         return False
 
     def generate_tool_summary(self, tools: list[Tool]) -> str:
-        return self.format_tool_schemas(tools)
+        """Compact category summary (names only).
+
+        The full name+description list is rendered by format_tool_schemas;
+        returning it here too would inject the whole tool list twice.
+        """
+        by_category: dict[ToolCategory, list[Tool]] = defaultdict(list)
+        for tool in tools:
+            by_category[tool.category].append(tool)
+
+        cat_labels = {
+            ToolCategory.INTERACTION_REQUEST: "Recording",
+            ToolCategory.DISPLAY_WIDGET: "Widgets",
+            ToolCategory.AUDIO_ANALYSIS: "Analysis",
+            ToolCategory.MIDI: "MIDI",
+            ToolCategory.OTHER: "Utility",
+        }
+
+        lines = ["# Tool Summary"]
+        for category in [
+            ToolCategory.INTERACTION_REQUEST,
+            ToolCategory.DISPLAY_WIDGET,
+            ToolCategory.AUDIO_ANALYSIS,
+            ToolCategory.MIDI,
+            ToolCategory.OTHER,
+        ]:
+            if category in by_category:
+                names = sorted(t.name for t in by_category[category])
+                lines.append(f"**{cat_labels[category]}**: {', '.join(names)}")
+
+        return "\n".join(lines)
