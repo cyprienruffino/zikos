@@ -134,7 +134,7 @@ async def analyze_groove(audio_path: str) -> dict[str, Any]:
                 "so swing ratio could not be measured."
             )
 
-        result = {
+        result: dict[str, Any] = {
             "swing_ratio": swing_ratio,
             "feel_score": feel_score,
             "groove_consistency": groove_consistency,

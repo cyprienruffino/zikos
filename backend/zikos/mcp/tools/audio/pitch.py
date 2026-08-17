@@ -68,7 +68,7 @@ def cents_from_nearest_semitone(frequencies: np.ndarray) -> np.ndarray:
     if len(frequencies) == 0:
         return np.array([])
     midi = 69.0 + 12.0 * np.log2(frequencies / 440.0)
-    return (midi - np.round(midi)) * 100.0
+    return np.asarray((midi - np.round(midi)) * 100.0)
 
 
 def intonation_score_from_cents(avg_abs_cents: float) -> float:
@@ -117,7 +117,7 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
         onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length)
         onset_times = librosa.frames_to_time(onsets, sr=sr, hop_length=hop_length)
 
-        notes = []
+        notes: list[dict[str, Any]] = []
         for i, onset_time in enumerate(onset_times):
             if i < len(onset_times) - 1:
                 end_time = onset_times[i + 1]
@@ -167,8 +167,10 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
         # variance would penalize melodies for simply containing different notes.
         within_note_stds = []
         for n in notes:
-            start_frame = librosa.time_to_frames(n["start_time"], sr=sr, hop_length=hop_length)
-            end_frame = librosa.time_to_frames(n["end_time"], sr=sr, hop_length=hop_length)
+            start_frame = librosa.time_to_frames(
+                float(n["start_time"]), sr=sr, hop_length=hop_length
+            )
+            end_frame = librosa.time_to_frames(float(n["end_time"]), sr=sr, hop_length=hop_length)
             seg = f0[start_frame:end_frame]
             seg = seg[np.isfinite(seg)]
             seg = seg[seg > 0]

@@ -119,7 +119,7 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
         except Exception as e:
             notes.append(f"Harmonic/percussive separation failed ({e}), harmonic_ratio unknown.")
 
-        result = {
+        result: dict[str, Any] = {
             "brightness": brightness,
             "warmth": warmth,
             "sharpness": sharpness,

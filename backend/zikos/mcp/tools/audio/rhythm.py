@@ -147,7 +147,7 @@ async def analyze_rhythm(audio_path: str) -> dict[str, Any]:
             if mean_ioi > 0:
                 inter_onset_interval_cv = float(np.std(inter_onset_intervals) / mean_ioi)
 
-        result = {
+        result: dict[str, Any] = {
             "onsets": onsets_list,
             "timing_accuracy": float(timing_accuracy) if timing_accuracy is not None else None,
             "inter_onset_interval_cv": inter_onset_interval_cv,
