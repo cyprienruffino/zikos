@@ -1,4 +1,5 @@
 import { TempoTrainerState } from "../types.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -19,19 +20,20 @@ export function addTempoTrainerWidget(
     rampType: string,
     description?: string
 ): void {
+    trainerId = sanitizeToolId(trainerId, "tempo");
     const widgetEl = document.createElement("div");
     widgetEl.className = "tempo-trainer-widget";
     widgetEl.id = `tempo-${trainerId}`;
     widgetEl.innerHTML = `
         <h3>Tempo Trainer</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
-        <div class="tempo-display" id="tempo-display-${trainerId}">${startBpm} BPM</div>
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
+        <div class="tempo-display" id="tempo-display-${trainerId}">${escapeHtml(startBpm)} BPM</div>
         <div class="tempo-trainer-progress">
             <div class="progress-bar">
                 <div class="progress-fill" id="progress-${trainerId}" style="width: 0%;"></div>
             </div>
             <div style="margin-top: 0.5rem; color: #e65100; text-align: center;">
-                ${startBpm} → ${endBpm} BPM over ${durationMinutes} minutes
+                ${escapeHtml(startBpm)} → ${escapeHtml(endBpm)} BPM over ${escapeHtml(durationMinutes)} minutes
             </div>
         </div>
         <div class="tempo-trainer-controls">

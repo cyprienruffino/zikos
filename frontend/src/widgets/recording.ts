@@ -1,4 +1,5 @@
 import { addMessage, addTypingIndicator } from "../ui.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
@@ -23,13 +24,14 @@ export function addRecordingWidget(
     prompt: string,
     _maxDuration: number
 ): void {
+    recordingId = sanitizeToolId(recordingId, "rec");
     const messagesEl = document.getElementById("messages") as HTMLElement;
     const widgetEl = document.createElement("div");
     widgetEl.className = "recording-widget";
     widgetEl.id = `recording-${recordingId}`;
     widgetEl.innerHTML = `
         <h3>Recording Request</h3>
-        <div class="prompt">${prompt}</div>
+        <div class="prompt">${escapeHtml(prompt)}</div>
         <div class="recording-controls">
             <button class="record-btn" data-recording-id="${recordingId}">Record</button>
             <button class="stop-btn" data-recording-id="${recordingId}" style="display:none;">Stop</button>

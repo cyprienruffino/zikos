@@ -1,5 +1,6 @@
 import { MetronomeState } from "../types.js";
 import { addMessage, addTypingIndicator } from "../ui.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -30,6 +31,7 @@ export function addMetronomeWidget(
     timeSignature: string,
     description?: string
 ): void {
+    metronomeId = sanitizeToolId(metronomeId, "met");
     const widgetEl = document.createElement("div");
     widgetEl.className = "metronome-widget";
     widgetEl.id = `metronome-${metronomeId}`;
@@ -40,10 +42,10 @@ export function addMetronomeWidget(
     ).join("");
     widgetEl.innerHTML = `
         <h3>Metronome</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
         <div class="metronome-info">
-            <span>BPM: <strong>${bpm}</strong></span>
-            <span>Time: <strong>${timeSignature}</strong></span>
+            <span>BPM: <strong>${escapeHtml(bpm)}</strong></span>
+            <span>Time: <strong>${escapeHtml(timeSignature)}</strong></span>
         </div>
         <div class="metronome-beat-indicator">
             ${beatDots}

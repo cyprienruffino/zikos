@@ -1,4 +1,5 @@
 import { API_URL } from "../config.js";
+import { escapeHtml, isSafeHttpUrl } from "../utils/sanitize.js";
 import {
     SystemStatusResponse,
     ModelRecommendationsResponse,
@@ -7,6 +8,28 @@ import {
 } from "../types.js";
 
 let setupOverlayEl: HTMLElement | null = null;
+
+// Server-supplied URLs are never interpolated into markup. Render functions
+// register them here and emit a data-link-idx placeholder; applySafeLinks()
+// then assigns validated http(s) URLs via the element.href property.
+let pendingLinkUrls: string[] = [];
+
+function safeLinkPlaceholder(url: string): string {
+    pendingLinkUrls.push(url);
+    return `data-link-idx="${pendingLinkUrls.length - 1}"`;
+}
+
+function applySafeLinks(root: HTMLElement): void {
+    root.querySelectorAll<HTMLAnchorElement>("a[data-link-idx]").forEach((anchor) => {
+        const idx = Number(anchor.getAttribute("data-link-idx"));
+        anchor.removeAttribute("data-link-idx");
+        const url = pendingLinkUrls[idx];
+        if (typeof url === "string" && isSafeHttpUrl(url)) {
+            anchor.href = url;
+        }
+    });
+    pendingLinkUrls = [];
+}
 
 export async function checkSystemStatus(): Promise<SystemStatusResponse | null> {
     try {
@@ -58,8 +81,8 @@ function renderHardwareInfo(hardware: HardwareInfo): string {
     const gpuSection = hardware.gpu.available
         ? `<div class="hardware-item">
             <span class="label">GPU:</span>
-            <span class="value">${hardware.gpu.name}</span>
-            <span class="detail">${formatSize(hardware.gpu.memory_total_gb || 0)} VRAM (${formatSize(hardware.gpu.memory_free_gb || 0)} free)</span>
+            <span class="value">${escapeHtml(hardware.gpu.name ?? "Unknown")}</span>
+            <span class="detail">${escapeHtml(formatSize(hardware.gpu.memory_total_gb || 0))} VRAM (${escapeHtml(formatSize(hardware.gpu.memory_free_gb || 0))} free)</span>
            </div>`
         : `<div class="hardware-item no-gpu">
             <span class="label">GPU:</span>
@@ -68,20 +91,20 @@ function renderHardwareInfo(hardware: HardwareInfo): string {
 
     const ramSection = `<div class="hardware-item">
         <span class="label">RAM:</span>
-        <span class="value">${formatSize(hardware.ram.total_gb)}</span>
-        <span class="detail">(${formatSize(hardware.ram.available_gb)} available)</span>
+        <span class="value">${escapeHtml(formatSize(hardware.ram.total_gb))}</span>
+        <span class="detail">(${escapeHtml(formatSize(hardware.ram.available_gb))} available)</span>
     </div>`;
 
     const tierSection = `<div class="hardware-item">
         <span class="label">Hardware Tier:</span>
-        <span class="value tier-${hardware.tier}">${getTierLabel(hardware.tier)}</span>
+        <span class="value tier-${escapeHtml(hardware.tier)}">${escapeHtml(getTierLabel(hardware.tier))}</span>
     </div>`;
 
     let hintSection = "";
     if (hardware.gpu_hint) {
         hintSection = `<div class="gpu-hint">
-            <p>${hardware.gpu_hint.message}</p>
-            <a href="${hardware.gpu_hint.docs_url}" target="_blank" rel="noopener">View installation guide</a>
+            <p>${escapeHtml(hardware.gpu_hint.message)}</p>
+            <a ${safeLinkPlaceholder(hardware.gpu_hint.docs_url)} target="_blank" rel="noopener">View installation guide</a>
         </div>`;
     }
 
@@ -100,26 +123,26 @@ function renderModelCard(
     isPrimary: boolean
 ): string {
     const primaryBadge = isPrimary ? '<span class="badge primary">Recommended</span>' : "";
-    const tierBadge = `<span class="badge tier-${model.tier}">${getTierLabel(model.tier)}</span>`;
+    const tierBadge = `<span class="badge tier-${escapeHtml(model.tier)}">${escapeHtml(getTierLabel(model.tier))}</span>`;
 
     return `<div class="model-card ${isPrimary ? "primary" : ""}">
         <div class="model-header">
-            <h4>${model.name}</h4>
+            <h4>${escapeHtml(model.name)}</h4>
             <div class="badges">${primaryBadge}${tierBadge}</div>
         </div>
-        <p class="model-description">${model.description}</p>
+        <p class="model-description">${escapeHtml(model.description)}</p>
         <div class="model-specs">
-            <span>Size: ${formatSize(model.size_gb)}</span>
-            <span>VRAM: ${formatSize(model.vram_required_gb)}</span>
-            <span>Context: ${model.context_window.toLocaleString()} tokens</span>
+            <span>Size: ${escapeHtml(formatSize(model.size_gb))}</span>
+            <span>VRAM: ${escapeHtml(formatSize(model.vram_required_gb))}</span>
+            <span>Context: ${escapeHtml(model.context_window.toLocaleString())} tokens</span>
         </div>
         <div class="model-actions">
-            <a href="${model.download_url}" target="_blank" rel="noopener" class="download-btn">
+            <a ${safeLinkPlaceholder(model.download_url)} target="_blank" rel="noopener" class="download-btn">
                 Download from HuggingFace
             </a>
         </div>
         <div class="model-path">
-            <code>Save to: ${defaultPath}/${model.filename}</code>
+            <code>Save to: ${escapeHtml(defaultPath)}/${escapeHtml(model.filename)}</code>
         </div>
     </div>`;
 }
@@ -145,11 +168,11 @@ function renderCurrentModelInfo(status: SystemStatusResponse): string {
         </div>
         <div class="model-path-display">
             <span class="label">Path:</span>
-            <code>${status.model_path}</code>
+            <code>${escapeHtml(status.model_path)}</code>
         </div>
         <div class="model-filename">
             <span class="label">File:</span>
-            <span class="value">${filename}</span>
+            <span class="value">${escapeHtml(filename)}</span>
         </div>
     </div>`;
 }
@@ -197,7 +220,7 @@ export async function showSetupOverlay(status: SystemStatusResponse): Promise<vo
         envInstructions = `<div class="env-instructions">
             <h3>After Downloading</h3>
             <p>Set the model path in your environment:</p>
-            <code>export LLM_MODEL_PATH="${recommendations.default_model_path}/[model-filename].gguf"</code>
+            <code>export LLM_MODEL_PATH="${escapeHtml(recommendations.default_model_path)}/[model-filename].gguf"</code>
             <p>Then restart the server.</p>
         </div>`;
     }
@@ -212,13 +235,15 @@ export async function showSetupOverlay(status: SystemStatusResponse): Promise<vo
 
     setupOverlayEl.innerHTML = `<div class="setup-content">
         <h2>${title}</h2>
-        <p class="${introClass}">${introMessage}</p>
+        <p class="${introClass}">${escapeHtml(introMessage)}</p>
         ${renderCurrentModelInfo(status)}
         ${renderHardwareInfo(status.hardware)}
         ${modelsSection}
         ${envInstructions}
         <button class="dismiss-btn" id="dismissSetup">${dismissText}</button>
     </div>`;
+
+    applySafeLinks(setupOverlayEl);
 
     document.body.appendChild(setupOverlayEl);
 

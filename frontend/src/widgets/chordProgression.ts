@@ -1,4 +1,5 @@
 import { ChordProgressionState } from "../types.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -19,18 +20,19 @@ export function addChordProgressionWidget(
     _instrument: string,
     description?: string
 ): void {
+    progressionId = sanitizeToolId(progressionId, "chord");
     const widgetEl = document.createElement("div");
     widgetEl.className = "chord-progression-widget";
     widgetEl.id = `chord-${progressionId}`;
     widgetEl.innerHTML = `
         <h3>Chord Progression</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
         <div class="chord-progression-display" id="chords-${progressionId}">
-            ${chords.map((chord, i) => `<div class="chord-box" data-chord-index="${i}">${chord}</div>`).join("")}
+            ${chords.map((chord, i) => `<div class="chord-box" data-chord-index="${i}">${escapeHtml(chord)}</div>`).join("")}
         </div>
         <div style="margin: 0.5rem 0; color: #2e7d32;">
-            <span>Tempo: <strong>${tempo} BPM</strong></span>
-            <span style="margin-left: 1rem;">Time: <strong>${timeSignature}</strong></span>
+            <span>Tempo: <strong>${escapeHtml(tempo)} BPM</strong></span>
+            <span style="margin-left: 1rem;">Time: <strong>${escapeHtml(timeSignature)}</strong></span>
         </div>
         <div class="chord-progression-controls">
             <button class="play-btn" data-progression-id="${progressionId}">Play</button>

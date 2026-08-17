@@ -1,5 +1,6 @@
 import { PracticeTimerState } from "../types.js";
 import { addMessage } from "../ui.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -18,16 +19,17 @@ export function addPracticeTimerWidget(
     breakIntervalMinutes?: number,
     description?: string
 ): void {
+    timerId = sanitizeToolId(timerId, "timer");
     const widgetEl = document.createElement("div");
     widgetEl.className = "practice-timer-widget";
     widgetEl.id = `timer-${timerId}`;
     widgetEl.innerHTML = `
         <h3>Practice Timer</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
-        ${goal ? `<div class="timer-goal">Goal: ${goal}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
+        ${goal ? `<div class="timer-goal">Goal: ${escapeHtml(goal)}</div>` : ""}
         <div class="practice-timer-display">
             <div class="timer-time" id="time-${timerId}">00:00</div>
-            ${durationMinutes ? `<div style="color: #c2185b;">Target: ${durationMinutes} minutes</div>` : ""}
+            ${durationMinutes ? `<div style="color: #c2185b;">Target: ${escapeHtml(durationMinutes)} minutes</div>` : ""}
         </div>
         <div class="practice-timer-controls">
             <button class="start-btn" data-timer-id="${timerId}">Start</button>

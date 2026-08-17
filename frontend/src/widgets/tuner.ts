@@ -1,5 +1,6 @@
 import { TunerState } from "../types.js";
 import { addMessage } from "../ui.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -18,20 +19,21 @@ export function addTunerWidget(
     octave?: number,
     description?: string
 ): void {
+    tunerId = sanitizeToolId(tunerId, "tuner");
     const widgetEl = document.createElement("div");
     widgetEl.className = "tuner-widget";
     widgetEl.id = `tuner-${tunerId}`;
-    const noteDisplay = note && octave ? `${note}${octave}` : note || "Any";
+    const noteDisplay = note && octave !== undefined ? `${note}${octave}` : note || "Any";
     widgetEl.innerHTML = `
         <h3>Tuner</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
         <div class="tuner-display">
             <div class="tuner-frequency" id="freq-${tunerId}">-- Hz</div>
             <div class="tuner-needle">
                 <div class="tuner-needle-indicator" id="needle-${tunerId}" style="left: 50%;"></div>
             </div>
             <div class="tuner-cents" id="cents-${tunerId}">0 cents</div>
-            <div style="margin-top: 0.5rem; color: #7b1fa2;">Target: ${noteDisplay} (${referenceFreq} Hz)</div>
+            <div style="margin-top: 0.5rem; color: #7b1fa2;">Target: ${escapeHtml(noteDisplay)} (${escapeHtml(referenceFreq)} Hz)</div>
         </div>
         <div class="tuner-controls">
             <button class="start-btn" data-tuner-id="${tunerId}">Start</button>

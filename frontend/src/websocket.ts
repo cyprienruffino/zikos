@@ -1,4 +1,5 @@
 import { WebSocketMessage } from "./types.js";
+import { sanitizeToolId } from "./utils/sanitize.js";
 import { WS_URL } from "./config.js";
 import {
     addMessage,
@@ -116,7 +117,7 @@ export function connect(): void {
                     max_duration?: number;
                 };
                 addRecordingWidget(
-                    data.tool_id || `rec_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "rec"),
                     args.prompt || "Please record audio",
                     args.max_duration || 60.0
                 );
@@ -130,7 +131,7 @@ export function connect(): void {
                     description?: string;
                 };
                 addMetronomeWidget(
-                    data.tool_id || `met_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "met"),
                     args.bpm || 120,
                     args.time_signature || "4/4",
                     args.description
@@ -146,7 +147,7 @@ export function connect(): void {
                     description?: string;
                 };
                 addTunerWidget(
-                    data.tool_id || `tuner_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "tuner"),
                     args.reference_frequency || 440,
                     args.note,
                     args.octave,
@@ -165,7 +166,7 @@ export function connect(): void {
                     description?: string;
                 };
                 addChordProgressionWidget(
-                    data.tool_id || `chord_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "chord"),
                     args.chords || [],
                     args.tempo || 120,
                     args.time_signature || "4/4",
@@ -186,7 +187,7 @@ export function connect(): void {
                     description?: string;
                 };
                 addTempoTrainerWidget(
-                    data.tool_id || `tempo_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "tempo"),
                     args.start_bpm || 60,
                     args.end_bpm || 120,
                     args.duration_minutes || 5,
@@ -205,7 +206,7 @@ export function connect(): void {
                     description?: string;
                 };
                 addEarTrainerWidget(
-                    data.tool_id || `ear_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "ear"),
                     args.mode || "intervals",
                     args.difficulty || "medium",
                     args.root_note || "C",
@@ -222,7 +223,7 @@ export function connect(): void {
                     description?: string;
                 };
                 addPracticeTimerWidget(
-                    data.tool_id || `timer_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "timer"),
                     args.duration_minutes,
                     args.goal,
                     args.break_interval_minutes,

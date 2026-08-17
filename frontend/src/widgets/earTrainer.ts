@@ -1,4 +1,5 @@
 import { EarTrainerState } from "../types.js";
+import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -17,6 +18,7 @@ export function addEarTrainerWidget(
     rootNote: string,
     description?: string
 ): void {
+    trainerId = sanitizeToolId(trainerId, "ear");
     const widgetEl = document.createElement("div");
     widgetEl.className = "ear-trainer-widget";
     widgetEl.id = `ear-${trainerId}`;
@@ -43,7 +45,7 @@ export function addEarTrainerWidget(
                 ];
     widgetEl.innerHTML = `
         <h3>Ear Trainer - ${mode === "intervals" ? "Intervals" : "Chords"}</h3>
-        ${description ? `<div class="description">${description}</div>` : ""}
+        ${description ? `<div class="description">${escapeHtml(description)}</div>` : ""}
         <div class="ear-trainer-question" id="question-${trainerId}">
             <p>Listen to the ${mode === "intervals" ? "interval" : "chord"} and identify it:</p>
         </div>
