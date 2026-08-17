@@ -76,7 +76,6 @@ async def analyze_tempo(audio_path: str) -> dict[str, Any]:
                     {
                         "time": float(beat_times[i]),
                         "bpm": float(window_tempo),
-                        "confidence": AUDIO.TEMPO_CONFIDENCE,
                     }
                 )
 
@@ -84,7 +83,6 @@ async def analyze_tempo(audio_path: str) -> dict[str, Any]:
 
         return {
             "bpm": tempo,
-            "confidence": AUDIO.TEMPO_CONFIDENCE,
             "tempo_stability_score": float(tempo_stability),
             "tempo_changes": tempo_changes,
             "mean_inter_beat_interval_ms": mean_inter_beat_interval_ms,

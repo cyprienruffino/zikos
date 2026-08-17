@@ -34,7 +34,8 @@ async def test_analyze_tempo(temp_dir, sample_audio_path):
 
             assert "bpm" in result
             assert result["bpm"] == 120.0
-            assert "confidence" in result
+            # confidence was removed: it was a hardcoded constant, not a measurement
+            assert "confidence" not in result
 
 
 @pytest.mark.asyncio

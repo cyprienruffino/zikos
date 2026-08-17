@@ -264,7 +264,10 @@ async def compare_to_reference(
                 tempo_match = 1.0 - min(1.0, abs(actual_tempo - expected_tempo) / 20.0)
                 comparison["tempo_match"] = float(tempo_match)
             else:
-                comparison["tempo_match"] = 1.0
+                comparison["tempo_match"] = None
+                comparison["tempo_match_note"] = (
+                    "No reference tempo provided, so tempo match was not measured."
+                )
 
             notes = audio_pitch.get("notes", [])
             if notes:
@@ -336,7 +339,10 @@ async def compare_to_reference(
                     tempo_match = 1.0 - min(1.0, abs(actual_tempo - midi_tempo) / 20.0)
                     comparison["tempo_match"] = float(tempo_match)
                 else:
-                    comparison["tempo_match"] = 1.0
+                    comparison["tempo_match"] = None
+                    comparison["tempo_match_note"] = (
+                        "MIDI reference has no tempo marking, so tempo match was not measured."
+                    )
 
                 comparison["pitch_accuracy"] = audio_pitch.get("intonation_accuracy", 0)
                 comparison["rhythm_accuracy"] = audio_rhythm.get("timing_accuracy", 0)

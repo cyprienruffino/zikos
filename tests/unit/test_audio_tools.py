@@ -45,8 +45,8 @@ class TestTempoAnalysis:
 
         assert "bpm" in result
         assert result["bpm"] > 0
-        assert "confidence" in result
-        assert 0.0 <= result["confidence"] <= 1.0
+        # confidence was removed: it was a hardcoded constant, not a measurement
+        assert "confidence" not in result
         assert "tempo_stability_score" in result
         assert 0.0 <= result["tempo_stability_score"] <= 1.0
         assert "mean_inter_beat_interval_ms" in result
@@ -1360,7 +1360,9 @@ class TestComparisonTools:
             assert "reference_type" in result
             assert result["reference_type"] == "scale"
             assert "comparison" in result
-            assert result["comparison"]["tempo_match"] == 1.0
+            # No reference tempo -> tempo_match is honestly null with a note
+            assert result["comparison"]["tempo_match"] is None
+            assert "tempo_match_note" in result["comparison"]
 
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_no_tempo(self, audio_tools, temp_dir):
@@ -1410,7 +1412,9 @@ class TestComparisonTools:
                 assert "reference_type" in result
                 assert result["reference_type"] == "midi_file"
                 assert "comparison" in result
-                assert result["comparison"]["tempo_match"] == 1.0
+                # MIDI without a tempo marking -> tempo_match is honestly null
+                assert result["comparison"]["tempo_match"] is None
+                assert "tempo_match_note" in result["comparison"]
 
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_tempo_exception(self, audio_tools, temp_dir):
@@ -1460,7 +1464,9 @@ class TestComparisonTools:
                 assert "reference_type" in result
                 assert result["reference_type"] == "midi_file"
                 assert "comparison" in result
-                assert result["comparison"]["tempo_match"] == 1.0
+                # MIDI without a tempo marking -> tempo_match is honestly null
+                assert result["comparison"]["tempo_match"] is None
+                assert "tempo_match_note" in result["comparison"]
 
     @pytest.mark.asyncio
     async def test_compare_to_reference_file_not_found(self, audio_tools, temp_dir):

@@ -98,11 +98,15 @@ async def analyze_groove(audio_path: str) -> dict[str, Any]:
 
         if len(microtiming_deviations) == 0:
             return {
-                "swing_ratio": 1.0,
-                "feel_score": 0.85,
-                "groove_consistency": 0.90,
-                "average_microtiming_deviation_ms": 0.0,
-                "microtiming_std_ms": 0.0,
+                "swing_ratio": None,
+                "feel_score": None,
+                "groove_consistency": None,
+                "average_microtiming_deviation_ms": None,
+                "microtiming_std_ms": None,
+                "note": (
+                    "Could not derive microtiming deviations from the detected onsets, "
+                    "so groove metrics could not be measured."
+                ),
             }
 
         microtiming_std = float(np.std(microtiming_deviations))
