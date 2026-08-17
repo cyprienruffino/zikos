@@ -252,6 +252,12 @@ export function connect(): void {
     };
 
     ws.onclose = () => {
+        // A disconnect mid-stream would otherwise leave isProcessing stuck at
+        // true forever, permanently blocking sendMessage after reconnect.
+        finishStreamingMessage();
+        removeTypingIndicator();
+        isProcessing = false;
+
         updateStatus("Disconnected", "disconnected");
         const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
         if (sendButton) {

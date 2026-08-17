@@ -514,6 +514,34 @@ describe("WebSocket Module", () => {
             clearTimeoutSpy.mockRestore();
         });
 
+        it("should reset processing state after mid-stream disconnect", async () => {
+            connect();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const ws = (global as any).lastWebSocket;
+            expect(ws).toBeDefined();
+
+            // Start a streamed message, then simulate mid-stream tokens
+            expect(sendMessage("test", true)).toBe(true);
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "Hel" }),
+                })
+            );
+            expect(getIsProcessing()).toBe(true);
+
+            // Disconnect mid-stream
+            ws.close();
+
+            expect(ui.finishStreamingMessage).toHaveBeenCalled();
+            expect(ui.removeTypingIndicator).toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(false);
+
+            // After reconnect, sending must work again (no permanent lockout)
+            connect();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(sendMessage("after reconnect")).toBe(true);
+        });
+
         it("should handle multiple rapid close events", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
