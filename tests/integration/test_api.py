@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from zikos.main import app
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def client():
