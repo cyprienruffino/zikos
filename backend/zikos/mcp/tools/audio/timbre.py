@@ -49,19 +49,19 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
                 "message": f"Audio is too short (minimum {AUDIO.MIN_AUDIO_DURATION} seconds required)",
             }
 
-        spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-        spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
-        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
+        # One STFT shared by all spectral features
+        magnitude = np.abs(librosa.stft(y, n_fft=AUDIO.STFT_N_FFT))
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=AUDIO.STFT_N_FFT)
+
+        spectral_centroids = librosa.feature.spectral_centroid(S=magnitude, sr=sr)[0]
+        spectral_rolloff = librosa.feature.spectral_rolloff(S=magnitude, sr=sr)[0]
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(S=magnitude, sr=sr)[0]
 
         mean_centroid = float(np.mean(spectral_centroids))
         mean_rolloff = float(np.mean(spectral_rolloff))
         mean_bandwidth = float(np.mean(spectral_bandwidth))
 
         brightness = float(min(1.0, mean_centroid / AUDIO.BRIGHTNESS_DIVISOR))
-
-        stft = librosa.stft(y, n_fft=AUDIO.STFT_N_FFT)
-        magnitude = np.abs(stft)
-        freqs = librosa.fft_frequencies(sr=sr, n_fft=AUDIO.STFT_N_FFT)
 
         low_freq_mask = freqs < AUDIO.LOW_FREQ_THRESHOLD
         high_freq_mask = freqs >= AUDIO.HIGH_FREQ_THRESHOLD

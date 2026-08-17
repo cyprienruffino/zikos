@@ -321,3 +321,27 @@ async def test_segment_phrases_empty_phrases_after_processing(temp_dir, sample_a
     assert "error" not in result
     assert "phrases" in result
     assert len(result["phrases"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_segment_phrases_trailing_silence_excluded(temp_dir, sample_audio_path):
+    """A phrase followed by long trailing silence must end where the silence
+    starts, not at the end of the file."""
+    sr = 22050
+    tone_duration = 3.0
+    silence_duration = 4.0
+    t = np.linspace(0, tone_duration, int(sr * tone_duration), endpoint=False)
+    tone = (0.6 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    silence = np.zeros(int(sr * silence_duration), dtype=np.float32)
+    y = np.concatenate([tone, silence])
+
+    sf.write(str(sample_audio_path), y, sr)
+
+    result = await segment_phrases(str(sample_audio_path))
+
+    assert "error" not in result, result
+    assert result["phrase_count"] >= 1
+    last_phrase = result["phrases"][-1]
+    assert last_phrase["end"] < tone_duration + 1.0, (
+        f"phrase end {last_phrase['end']} extends into the trailing silence"
+    )
