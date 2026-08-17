@@ -1,9 +1,12 @@
 """Audio API endpoints"""
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+
+_logger = logging.getLogger(__name__)
 
 from zikos.api.validation import validate_uuid
 from zikos.constants import UploadConstants
@@ -72,8 +75,11 @@ async def upload_audio(
                 "analysis": analysis,
             }
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        _logger.exception("Unexpected error handling audio upload")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{audio_file_id}/info")
@@ -83,8 +89,13 @@ async def get_audio_info(audio_file_id: str):
     try:
         info = await audio_service.get_audio_info(audio_file_id)
         return info
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Audio file {audio_file_id} not found") from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        _logger.exception("Unexpected error getting audio info for %s", audio_file_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/{audio_file_id}")
@@ -96,5 +107,10 @@ async def get_audio_file(audio_file_id: str):
         from fastapi.responses import FileResponse
 
         return FileResponse(file_path)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Audio file {audio_file_id} not found") from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        _logger.exception("Unexpected error getting audio file %s", audio_file_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from e

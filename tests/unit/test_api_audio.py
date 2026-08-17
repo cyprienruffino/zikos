@@ -90,3 +90,34 @@ class TestAudioIdValidation:
         mock_audio_service.get_audio_path = AsyncMock(return_value=test_file)
         response = client.get("/api/audio/33333333-3333-4333-8333-333333333333")
         assert response.status_code == 200
+
+
+class TestAudioErrorHandling:
+    """Error mapping: 404 for missing files, 400 for bad input, generic 500"""
+
+    AUDIO_ID = "44444444-4444-4444-8444-444444444444"
+
+    def test_missing_audio_maps_to_404(self, client, mock_audio_service):
+        mock_audio_service.get_audio_path = AsyncMock(side_effect=FileNotFoundError("gone"))
+        response = client.get(f"/api/audio/{self.AUDIO_ID}")
+        assert response.status_code == 404
+
+    def test_missing_audio_info_maps_to_404(self, client, mock_audio_service):
+        mock_audio_service.get_audio_info = AsyncMock(side_effect=FileNotFoundError("gone"))
+        response = client.get(f"/api/audio/{self.AUDIO_ID}/info")
+        assert response.status_code == 404
+
+    def test_unexpected_error_does_not_leak_details(self, client, mock_audio_service):
+        mock_audio_service.get_audio_info = AsyncMock(
+            side_effect=Exception("secret internal detail")
+        )
+        response = client.get(f"/api/audio/{self.AUDIO_ID}/info")
+        assert response.status_code == 500
+        assert "secret internal detail" not in response.json()["detail"]
+
+    def test_upload_value_error_maps_to_400(self, client, mock_audio_service):
+        mock_audio_service.store_audio = AsyncMock(side_effect=ValueError("bad file"))
+        response = client.post(
+            "/api/audio/upload", files={"file": ("song.wav", b"RIFF", "audio/wav")}
+        )
+        assert response.status_code == 400

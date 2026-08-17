@@ -1,8 +1,11 @@
 """Audio service"""
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 from fastapi import UploadFile
 
@@ -35,10 +38,11 @@ class AudioService:
             import shutil
 
             shutil.copy2(preprocessed_path, file_path)
+        except ValueError:
+            # Validation errors (bad filename/extension) — let callers map to 400
+            raise
         except Exception as e:
-            import traceback
-
-            traceback.print_exc()
+            _logger.exception("Failed to preprocess and store audio")
             raise RuntimeError(f"Failed to preprocess and store audio: {e}") from e
 
         return audio_file_id
