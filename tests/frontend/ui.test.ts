@@ -28,11 +28,12 @@ describe("UI Module", () => {
             expect(messageEl?.className).toBe("message assistant");
         });
 
-        it("should replace newlines with <br> tags", () => {
+        it("should preserve newlines as text (rendered via pre-wrap CSS)", () => {
             addMessage("Line 1\nLine 2\nLine 3");
             const messageEl = document.getElementById("messages")?.firstElementChild;
             const textEl = messageEl?.querySelector(".message-text");
-            expect(textEl?.innerHTML).toBe("Line 1<br>Line 2<br>Line 3");
+            expect(textEl?.textContent).toBe("Line 1\nLine 2\nLine 3");
+            expect(textEl?.querySelector("br")).toBeNull();
         });
 
         it("should add audio player when audio_file_id is provided", () => {
@@ -82,18 +83,39 @@ describe("UI Module", () => {
             expect(messageEl?.querySelector(".notation")).toBeFalsy();
         });
 
-        it("should render HTML in message text (current behavior)", () => {
+        it("should escape HTML in message text (no XSS)", () => {
             addMessage("<script>alert('xss')</script>");
             const messageEl = document.getElementById("messages")?.firstElementChild;
             const textEl = messageEl?.querySelector(".message-text");
-            expect(textEl?.innerHTML).toBe("<script>alert('xss')</script>");
+            expect(textEl?.querySelector("script")).toBeNull();
+            expect(textEl?.textContent).toBe("<script>alert('xss')</script>");
+            expect(textEl?.innerHTML).toContain("&lt;script&gt;");
         });
 
-        it("should handle messages with HTML tags", () => {
+        it("should render HTML tags as literal text", () => {
             addMessage("Test <strong>bold</strong> text");
             const messageEl = document.getElementById("messages")?.firstElementChild;
             const textEl = messageEl?.querySelector(".message-text");
-            expect(textEl?.innerHTML).toContain("<strong>bold</strong>");
+            expect(textEl?.querySelector("strong")).toBeNull();
+            expect(textEl?.textContent).toBe("Test <strong>bold</strong> text");
+        });
+
+        it("should not create elements from img/onerror payloads", () => {
+            addMessage('<img src=x onerror="window.__pwned = true">');
+            const messageEl = document.getElementById("messages")?.firstElementChild;
+            const textEl = messageEl?.querySelector(".message-text");
+            expect(textEl?.querySelector("img")).toBeNull();
+            expect((window as unknown as Record<string, unknown>).__pwned).toBeUndefined();
+        });
+
+        it("should not allow attribute breakout via audio_file_id", () => {
+            addMessage("Audio", "assistant", {
+                audio_file_id: '"><img src=x onerror=alert(1)>',
+            });
+            const messageEl = document.getElementById("messages")?.firstElementChild;
+            expect(messageEl?.querySelector("img")).toBeNull();
+            const audio = messageEl?.querySelector("audio");
+            expect(audio).toBeTruthy();
         });
 
         it("should handle very long messages", () => {

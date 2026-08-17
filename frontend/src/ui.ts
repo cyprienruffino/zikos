@@ -9,43 +9,62 @@ function getMessagesEl(): HTMLElement {
     return el as HTMLElement;
 }
 
+/** Build media attachments (audio player, notation images) via DOM APIs so
+ *  server-supplied ids/urls are never parsed as HTML. */
+function appendMediaElements(container: HTMLElement, data: Partial<WebSocketMessage>): void {
+    if (data.audio_file_id) {
+        const audioWrap = document.createElement("div");
+        audioWrap.className = "audio-player";
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.src = `${API_URL}/api/audio/${encodeURIComponent(data.audio_file_id)}`;
+        audioWrap.appendChild(audio);
+        container.appendChild(audioWrap);
+    }
+
+    if (data.notation_url) {
+        const notationEl = document.createElement("div");
+        notationEl.className = "notation";
+        const img = document.createElement("img");
+        img.src = data.notation_url;
+        img.alt = "Musical notation";
+        notationEl.appendChild(img);
+        container.appendChild(notationEl);
+    }
+
+    if (data.tabs_url) {
+        const tabsEl = document.createElement("div");
+        tabsEl.className = "notation";
+        const img = document.createElement("img");
+        img.src = data.tabs_url;
+        img.alt = "Tablature";
+        tabsEl.appendChild(img);
+        container.appendChild(tabsEl);
+    }
+}
+
 export function addMessage(
     text: string,
     type: string = "assistant",
     data: Partial<WebSocketMessage> | null = null
-): void {
+): HTMLElement {
     const messageEl = document.createElement("div");
     messageEl.className = `message ${type}`;
 
     const textEl = document.createElement("div");
     textEl.className = "message-text";
-    textEl.innerHTML = text.replace(/\n/g, "<br>");
+    // Rendered as plain text; newlines are preserved via CSS white-space: pre-wrap.
+    textEl.textContent = text;
     messageEl.appendChild(textEl);
 
-    if (data?.audio_file_id) {
-        const audioEl = document.createElement("div");
-        audioEl.className = "audio-player";
-        audioEl.innerHTML = `<audio controls src="${API_URL}/api/audio/${data.audio_file_id}"></audio>`;
-        messageEl.appendChild(audioEl);
-    }
-
-    if (data?.notation_url) {
-        const notationEl = document.createElement("div");
-        notationEl.className = "notation";
-        notationEl.innerHTML = `<img src="${data.notation_url}" alt="Musical notation" />`;
-        messageEl.appendChild(notationEl);
-    }
-
-    if (data?.tabs_url) {
-        const tabsEl = document.createElement("div");
-        tabsEl.className = "notation";
-        tabsEl.innerHTML = `<img src="${data.tabs_url}" alt="Tablature" />`;
-        messageEl.appendChild(tabsEl);
+    if (data) {
+        appendMediaElements(messageEl, data);
     }
 
     const messagesEl = getMessagesEl();
     messagesEl.appendChild(messageEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    return messageEl;
 }
 
 export function addTypingIndicator(): void {
@@ -100,7 +119,8 @@ export function startStreamingMessage(type: string = "assistant"): void {
 export function appendStreamingToken(token: string): void {
     if (streamingTextEl) {
         streamingContent += token;
-        streamingTextEl.innerHTML = streamingContent.replace(/\n/g, "<br>");
+        // Append as a text node; newlines are preserved via CSS white-space: pre-wrap.
+        streamingTextEl.appendChild(document.createTextNode(token));
         const messagesEl = getMessagesEl();
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -115,34 +135,15 @@ export function addThinkingToStreamingMessage(thinking: string): void {
         details.appendChild(summary);
         const content = document.createElement("div");
         content.className = "thinking-content";
-        content.innerHTML = thinking.replace(/\n/g, "<br>");
+        content.textContent = thinking;
         details.appendChild(content);
         streamingMessageEl.insertBefore(details, streamingTextEl);
     }
 }
 
 export function finishStreamingMessage(data: Partial<WebSocketMessage> | null = null): void {
-    if (streamingMessageEl && streamingTextEl) {
-        if (data?.audio_file_id) {
-            const audioEl = document.createElement("div");
-            audioEl.className = "audio-player";
-            audioEl.innerHTML = `<audio controls src="${API_URL}/api/audio/${data.audio_file_id}"></audio>`;
-            streamingMessageEl.appendChild(audioEl);
-        }
-
-        if (data?.notation_url) {
-            const notationEl = document.createElement("div");
-            notationEl.className = "notation";
-            notationEl.innerHTML = `<img src="${data.notation_url}" alt="Musical notation" />`;
-            streamingMessageEl.appendChild(notationEl);
-        }
-
-        if (data?.tabs_url) {
-            const tabsEl = document.createElement("div");
-            tabsEl.className = "notation";
-            tabsEl.innerHTML = `<img src="${data.tabs_url}" alt="Tablature" />`;
-            streamingMessageEl.appendChild(tabsEl);
-        }
+    if (streamingMessageEl && streamingTextEl && data) {
+        appendMediaElements(streamingMessageEl, data);
     }
 
     streamingMessageEl = null;

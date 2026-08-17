@@ -64,6 +64,13 @@
                 word-wrap: break-word;
             }
 
+            /* Message content is rendered as plain text (textContent) to prevent
+               HTML injection; pre-wrap preserves newlines and wrapping. */
+            .message-text,
+            .thinking-content {
+                white-space: pre-wrap;
+            }
+
             .message.user {
                 background: #3498db;
                 color: white;
