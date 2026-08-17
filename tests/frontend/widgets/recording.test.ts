@@ -21,14 +21,20 @@ class MockBlobEvent {
 globalThis.BlobEvent = MockBlobEvent as any;
 
 class MockMediaRecorder {
+    static isTypeSupported(type: string): boolean {
+        return type.startsWith("audio/webm");
+    }
+
     state: string = "inactive";
     stream: MediaStream;
+    mimeType: string;
     ondataavailable: ((event: BlobEvent) => void) | null = null;
     onstop: (() => void) | null = null;
     private dataChunks: Blob[] = [];
 
-    constructor(stream: MediaStream) {
+    constructor(stream: MediaStream, options?: { mimeType?: string }) {
         this.stream = stream;
+        this.mimeType = options?.mimeType || "audio/webm";
     }
 
     start(): void {
@@ -280,6 +286,28 @@ describe("Recording Widget", () => {
             const fetchCall = (globalThis.fetch as any).mock.calls[0];
             expect(fetchCall[0]).toContain("/api/audio/upload");
             expect(fetchCall[1].method).toBe("POST");
+        });
+
+        it("should upload with the real recorder mime type and matching extension", async () => {
+            addRecordingWidget("rec_123", "Test", 60);
+            const widget = document.getElementById("recording-rec_123");
+            const recordBtn = widget?.querySelector(".record-btn") as HTMLButtonElement;
+            const sendBtn = widget?.querySelector(".send-btn") as HTMLButtonElement;
+
+            recordBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
+            stopBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            sendBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            const fetchCall = (globalThis.fetch as any).mock.calls[0];
+            const formData = fetchCall[1].body as FormData;
+            const file = formData.get("file") as File;
+            expect(file.name).toBe("recording.webm");
+            expect(file.type).toContain("audio/webm");
         });
 
         it("should show error when no audio recorded", async () => {

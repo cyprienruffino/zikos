@@ -3,6 +3,7 @@ import { addMessage, addTypingIndicator } from "../ui.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 import { clampBpm, validateTimeSignature } from "../utils/validate.js";
 import { createBeatScheduler } from "./audioEngine.js";
+import { pickRecordingType, extensionForMimeType } from "../utils/media.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -288,10 +289,13 @@ async function startRecording(metronomeId: string): Promise<void> {
             return;
         }
 
-        const mediaRecorder = new MediaRecorder(stream);
+        const recordingType = pickRecordingType();
+        const mediaRecorder = recordingType.mimeType
+            ? new MediaRecorder(stream, { mimeType: recordingType.mimeType })
+            : new MediaRecorder(stream);
         recState.mediaRecorder = mediaRecorder;
         recState.audioChunks = [];
-        recState.mimeType = "audio/wav";
+        recState.mimeType = mediaRecorder.mimeType || recordingType.mimeType || "audio/webm";
 
         const statusEl = document.getElementById(`rec-status-${metronomeId}`) as HTMLElement;
         const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
@@ -388,9 +392,10 @@ async function sendRecording(metronomeId: string): Promise<void> {
         statusEl.className = "recording-status";
     }
 
-    const audioBlob = new Blob(recState.audioChunks, { type: recState.mimeType || "audio/wav" });
+    const mimeType = recState.mimeType || "audio/webm";
+    const audioBlob = new Blob(recState.audioChunks, { type: mimeType });
     const formData = new FormData();
-    formData.append("file", audioBlob, "recording.wav");
+    formData.append("file", audioBlob, `recording.${extensionForMimeType(mimeType)}`);
     formData.append("recording_id", metronomeId);
 
     try {

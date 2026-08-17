@@ -1,5 +1,6 @@
 import { addMessage, addTypingIndicator } from "../ui.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { pickRecordingType, extensionForMimeType } from "../utils/media.js";
 
 interface RecordingState {
     mediaRecorder: MediaRecorder | null;
@@ -138,10 +139,13 @@ async function startRecording(recordingId: string): Promise<void> {
             return;
         }
 
-        const mediaRecorder = new MediaRecorder(stream);
+        const recordingType = pickRecordingType();
+        const mediaRecorder = recordingType.mimeType
+            ? new MediaRecorder(stream, { mimeType: recordingType.mimeType })
+            : new MediaRecorder(stream);
         current.mediaRecorder = mediaRecorder;
         current.audioChunks = [];
-        current.mimeType = "audio/wav";
+        current.mimeType = mediaRecorder.mimeType || recordingType.mimeType || "audio/webm";
 
         const widgetEl = document.getElementById(`recording-${recordingId}`);
         if (!widgetEl) {
@@ -250,9 +254,10 @@ async function sendRecording(recordingId: string): Promise<void> {
         statusEl.className = "recording-status";
     }
 
-    const audioBlob = new Blob(state.audioChunks, { type: state.mimeType });
+    const mimeType = state.mimeType || "audio/webm";
+    const audioBlob = new Blob(state.audioChunks, { type: mimeType });
     const formData = new FormData();
-    formData.append("file", audioBlob, "recording.wav");
+    formData.append("file", audioBlob, `recording.${extensionForMimeType(mimeType)}`);
     formData.append("recording_id", recordingId);
 
     try {
