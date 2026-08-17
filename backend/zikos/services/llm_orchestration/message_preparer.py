@@ -1,5 +1,6 @@
 """Prepare messages for LLM, handling truncation and system prompt injection"""
 
+import json
 import logging
 from typing import Any
 
@@ -72,8 +73,15 @@ class MessagePreparer:
         # so truncation can never orphan a tool_use/tool_result pair.
         groups = self._group_messages(body)
 
+        def message_tokens(m: dict[str, Any]) -> int:
+            tokens = len(enc.encode(str(m.get("content") or "")))
+            if m.get("tool_calls"):
+                # tool_calls payloads consume context too — count them.
+                tokens += len(enc.encode(json.dumps(m["tool_calls"], default=str)))
+            return tokens
+
         def group_tokens(group: list[dict[str, Any]]) -> int:
-            return sum(len(enc.encode(str(m.get("content") or ""))) for m in group)
+            return sum(message_tokens(m) for m in group)
 
         def is_pinned(group: list[dict[str, Any]]) -> bool:
             # Only user-role messages are pinned as audio analysis context — never

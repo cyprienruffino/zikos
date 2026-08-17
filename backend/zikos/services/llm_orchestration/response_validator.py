@@ -1,5 +1,6 @@
 """Validate LLM responses for safety and quality"""
 
+import json
 import logging
 from typing import Any
 
@@ -28,7 +29,12 @@ class ResponseValidator:
         """
         try:
             enc = tiktoken.get_encoding("cl100k_base")
-            total_tokens = sum(len(enc.encode(str(msg.get("content", "")))) for msg in messages)
+            total_tokens = 0
+            for msg in messages:
+                total_tokens += len(enc.encode(str(msg.get("content", ""))))
+                if msg.get("tool_calls"):
+                    # tool_calls payloads consume context too — count them.
+                    total_tokens += len(enc.encode(json.dumps(msg["tool_calls"], default=str)))
 
             if context_window is not None:
                 max_tokens = get_max_tokens_for_validation(context_window)
