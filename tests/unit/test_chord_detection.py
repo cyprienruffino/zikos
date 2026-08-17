@@ -85,8 +85,12 @@ class TestChordDetection:
         assert "C" in distinct, distinct
         assert "Am" in distinct, distinct
         # Segment timing should cover the file with sensible durations
-        first_half = [c["chord"] for c in result["chords"] if c["time"] < 1.5 and c["chord"] != "N.C."]
-        second_half = [c["chord"] for c in result["chords"] if c["time"] > 2.5 and c["chord"] != "N.C."]
+        first_half = [
+            c["chord"] for c in result["chords"] if c["time"] < 1.5 and c["chord"] != "N.C."
+        ]
+        second_half = [
+            c["chord"] for c in result["chords"] if c["time"] > 2.5 and c["chord"] != "N.C."
+        ]
         assert "C" in first_half
         assert "Am" in second_half
 

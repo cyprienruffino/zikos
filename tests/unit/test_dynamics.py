@@ -73,9 +73,7 @@ class TestDynamicsAnalysis:
             assert peak["amplitude"] >= max_env - 3.0
             # The fixture's quiet opening third (amplitude 0.1 vs 0.9 max,
             # ~19 dB below peak) must never be reported as a peak.
-            assert peak["time"] > 2.0 / 3.0 - 0.1, (
-                f"peak at {peak['time']}s is in the quiet region"
-            )
+            assert peak["time"] > 2.0 / 3.0 - 0.1, f"peak at {peak['time']}s is in the quiet region"
 
     @pytest.mark.asyncio
     async def test_analyze_dynamics_amplitude_envelope(self, real_audio_file):

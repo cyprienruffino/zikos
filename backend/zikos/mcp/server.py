@@ -104,7 +104,9 @@ class MCPServer:
             }
         except ValueError as e:
             message = str(e)
-            error_type = "UNKNOWN_TOOL" if "unknown tool" in message.lower() else "INVALID_PARAMETER"
+            error_type = (
+                "UNKNOWN_TOOL" if "unknown tool" in message.lower() else "INVALID_PARAMETER"
+            )
             return {
                 "error": True,
                 "error_type": error_type,

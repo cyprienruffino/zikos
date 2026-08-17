@@ -96,9 +96,7 @@ async def analyze_groove(audio_path: str) -> dict[str, Any]:
             microtiming_std = float(np.std(microtiming_deviations))
             microtiming_mean = float(np.mean(np.abs(microtiming_deviations)))
 
-            groove_consistency = float(
-                max(0.0, min(1.0, 1.0 / (1.0 + microtiming_std / 20.0)))
-            )
+            groove_consistency = float(max(0.0, min(1.0, 1.0 / (1.0 + microtiming_std / 20.0))))
             feel_score = float(max(0.0, min(1.0, 1.0 / (1.0 + microtiming_mean / 15.0))))
 
         # Swing ratio from paired eighth-note IOIs anchored to the beat grid:

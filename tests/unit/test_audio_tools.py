@@ -377,9 +377,9 @@ class TestPitchDetection:
 
         result = await audio_tools.detect_pitch(audio_path=str(audio_path))
 
-        assert (
-            result.get("error_type") != "NO_PITCH_DETECTED"
-        ), "G2 (98 Hz) should be detected — fmin=C1 allows pyin to report its sub-octave G1"
+        assert result.get("error_type") != "NO_PITCH_DETECTED", (
+            "G2 (98 Hz) should be detected — fmin=C1 allows pyin to report its sub-octave G1"
+        )
         assert "notes" in result
 
 

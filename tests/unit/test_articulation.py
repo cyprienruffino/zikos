@@ -81,7 +81,6 @@ class TestArticulationAnalysis:
 
         assert result["legato_percentage"] > result["staccato_percentage"]
 
-
     @pytest.mark.asyncio
     async def test_analyze_articulation_accent_detection(self, temp_dir):
         """A note much louder than the others must be reported as an accent.

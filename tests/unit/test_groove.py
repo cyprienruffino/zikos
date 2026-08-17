@@ -58,9 +58,7 @@ def _click_track(onset_times, duration, sample_rate):
         end = min(start + int(0.05 * sample_rate), len(y))
         if end > start:
             t = np.linspace(0, (end - start) / sample_rate, end - start)
-            y[start:end] += (np.sin(2 * np.pi * 880 * t) * np.exp(-t * 40) * 0.8).astype(
-                np.float32
-            )
+            y[start:end] += (np.sin(2 * np.pi * 880 * t) * np.exp(-t * 40) * 0.8).astype(np.float32)
     return y
 
 

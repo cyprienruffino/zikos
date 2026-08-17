@@ -4,12 +4,12 @@ import re
 import uuid
 from typing import Any
 
+from zikos.mcp.tool import Tool, ToolCategory
+from zikos.mcp.tools.base import ToolCollection
+
 MIN_BPM = 20
 MAX_BPM = 400
 TIME_SIGNATURE_PATTERN = re.compile(r"^\d{1,2}/(1|2|4|8|16|32)$")
-
-from zikos.mcp.tool import Tool, ToolCategory
-from zikos.mcp.tools.base import ToolCollection
 
 
 class TempoTrainerTools(ToolCollection):
@@ -120,9 +120,7 @@ Interpretation Guidelines:
             return {
                 "error": True,
                 "error_type": "INVALID_PARAMETER",
-                "message": (
-                    f"start_bpm ({start_bpm}) must be less than end_bpm ({end_bpm})."
-                ),
+                "message": (f"start_bpm ({start_bpm}) must be less than end_bpm ({end_bpm})."),
             }
         if not isinstance(duration_minutes, int | float) or duration_minutes <= 0:
             return {

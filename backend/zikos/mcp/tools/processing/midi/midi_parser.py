@@ -170,9 +170,7 @@ def parse_note_line(line: str, warnings: list[str] | None = None) -> dict[str, A
         return None
 
     if len(pitches) > 1:
-        warnings.append(
-            f"Line '{line}' contains {len(pitches)} pitches; interpreted as a chord."
-        )
+        warnings.append(f"Line '{line}' contains {len(pitches)} pitches; interpreted as a chord.")
 
     return {
         "note": pitches[0],

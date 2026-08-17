@@ -232,9 +232,7 @@ Error Handling:
                 for track in tracks
             ]
             longest_quarters = max(track_quarters) if track_quarters else 0.0
-            metadata["estimated_duration_seconds"] = round(
-                longest_quarters * 60.0 / tempo_bpm, 2
-            )
+            metadata["estimated_duration_seconds"] = round(longest_quarters * 60.0 / tempo_bpm, 2)
 
             midi_file_id = str(uuid.uuid4())
             midi_path = self.storage_path / f"{midi_file_id}.mid"
@@ -466,9 +464,7 @@ Error Handling:
                 pitches = [p.midi for p in element.pitches]
                 if not pitches:
                     continue
-                duration_seconds = (
-                    float(element.duration.quarterLength) * seconds_per_quarter
-                )
+                duration_seconds = float(element.duration.quarterLength) * seconds_per_quarter
                 velocity = getattr(getattr(element, "volume", None), "velocity", None)
                 velocity = int(velocity) if velocity else 60
                 velocity = max(0, min(127, velocity))

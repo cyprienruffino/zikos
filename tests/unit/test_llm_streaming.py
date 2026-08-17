@@ -95,9 +95,9 @@ class TestLLMStreaming:
         history = service._get_conversation_history("s1")
         assistant_msgs = [m for m in history if m["role"] == "assistant" and m.get("tool_calls")]
         tool_result_msgs = [m for m in history if m["role"] == "tool"]
-        assert (
-            len(assistant_msgs) == 1
-        ), "assistant message with pending tool_use must be in history"
+        assert len(assistant_msgs) == 1, (
+            "assistant message with pending tool_use must be in history"
+        )
         assert len(tool_result_msgs) == 0, "no tool_result yet — arrives when recording is done"
 
     @pytest.mark.asyncio
@@ -231,9 +231,9 @@ class TestLLMStreaming:
 
         assert len(assistant_msgs) == 1, "exactly one assistant message with tool_calls"
         assert len(tool_msgs) == 1, "exactly one tool result"
-        assert (
-            assistant_msgs[0][0] + 1 == tool_msgs[0][0]
-        ), "tool result must immediately follow assistant message"
+        assert assistant_msgs[0][0] + 1 == tool_msgs[0][0], (
+            "tool result must immediately follow assistant message"
+        )
 
     @pytest.mark.asyncio
     async def test_handles_streaming_error(self, mcp_server):
