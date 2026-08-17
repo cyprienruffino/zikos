@@ -342,6 +342,6 @@ async def test_segment_phrases_trailing_silence_excluded(temp_dir, sample_audio_
     assert "error" not in result, result
     assert result["phrase_count"] >= 1
     last_phrase = result["phrases"][-1]
-    assert last_phrase["end"] < tone_duration + 1.0, (
-        f"phrase end {last_phrase['end']} extends into the trailing silence"
-    )
+    assert (
+        last_phrase["end"] < tone_duration + 1.0
+    ), f"phrase end {last_phrase['end']} extends into the trailing silence"
