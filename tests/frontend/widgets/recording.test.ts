@@ -77,9 +77,12 @@ describe("Recording Widget", () => {
         };
 
         globalThis.MediaRecorder = MockMediaRecorder as any;
-        globalThis.navigator.mediaDevices = {
-            getUserMedia: vi.fn().mockResolvedValue(new MockMediaStream()),
-        } as any;
+        Object.defineProperty(globalThis.navigator, "mediaDevices", {
+            value: {
+                getUserMedia: vi.fn().mockResolvedValue(new MockMediaStream()),
+            } as any,
+            configurable: true,
+        });
         globalThis.URL.createObjectURL = vi.fn(() => "blob:test-url");
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,

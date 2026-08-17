@@ -28,7 +28,7 @@ class MockWebSocket {
         this.url = url;
         this.send = vi.fn();
         // Store instance globally for test access
-        (global as any).lastWebSocket = this;
+        (globalThis as any).lastWebSocket = this;
         // Simulate connection after a brief delay
         setTimeout(() => {
             this.readyState = MockWebSocket.OPEN;
@@ -99,7 +99,7 @@ describe("WebSocket Module", () => {
     afterEach(() => {
         reset();
         vi.clearAllMocks();
-        (global as any).lastWebSocket = undefined;
+        (globalThis as any).lastWebSocket = undefined;
     });
 
     describe("connect()", () => {
@@ -153,7 +153,7 @@ describe("WebSocket Module", () => {
         it("should send message when connected and not processing", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
             expect(ws.send).toBeDefined();
 
@@ -167,7 +167,7 @@ describe("WebSocket Module", () => {
         it("should format message correctly", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             sendMessage("Hello, world!");
@@ -199,7 +199,7 @@ describe("WebSocket Module", () => {
         beforeEach(async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            ws = (global as any).lastWebSocket;
+            ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
         });
 
@@ -426,7 +426,7 @@ describe("WebSocket Module", () => {
         it("should handle WebSocket errors", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             if (ws.onerror) {
@@ -438,7 +438,7 @@ describe("WebSocket Module", () => {
         it("should handle WebSocket close and attempt reconnection", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             ws.close();
@@ -452,7 +452,7 @@ describe("WebSocket Module", () => {
         it("should implement exponential backoff on reconnection", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            let ws = (global as any).lastWebSocket;
+            let ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             const setTimeoutSpy = vi.spyOn(window, "setTimeout");
@@ -461,7 +461,7 @@ describe("WebSocket Module", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             const reconnectCall = setTimeoutSpy.mock.calls.find(
-                (call) => typeof call[0] === "function" && call[1] > 0
+                (call) => typeof call[0] === "function" && typeof call[1] === "number" && call[1] > 0
             );
             expect(reconnectCall).toBeDefined();
             expect(reconnectCall?.[1]).toBeGreaterThanOrEqual(3000);
@@ -473,7 +473,7 @@ describe("WebSocket Module", () => {
         it("should cap reconnection delay at 30 seconds", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            let ws = (global as any).lastWebSocket;
+            let ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             const setTimeoutSpy = vi.spyOn(window, "setTimeout");
@@ -481,14 +481,14 @@ describe("WebSocket Module", () => {
             for (let i = 0; i < 15; i++) {
                 ws.close();
                 await new Promise((resolve) => setTimeout(resolve, 50));
-                ws = (global as any).lastWebSocket;
+                ws = (globalThis as any).lastWebSocket;
                 if (ws) {
                     await new Promise((resolve) => setTimeout(resolve, 20));
                 }
             }
 
             const reconnectCall = setTimeoutSpy.mock.calls.find(
-                (call) => typeof call[0] === "function" && call[1] > 0
+                (call) => typeof call[0] === "function" && typeof call[1] === "number" && call[1] > 0
             );
             if (reconnectCall) {
                 expect(reconnectCall[1]).toBeLessThanOrEqual(30000);
@@ -500,7 +500,7 @@ describe("WebSocket Module", () => {
         it("should cancel pending reconnection when connect() is called again", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             const clearTimeoutSpy = vi.spyOn(window, "clearTimeout");
@@ -517,7 +517,7 @@ describe("WebSocket Module", () => {
         it("should handle multiple rapid close events", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             ws.close();
@@ -534,7 +534,7 @@ describe("WebSocket Module", () => {
         it("should reset reconnect attempts on successful connection", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             ws.close();
@@ -549,7 +549,7 @@ describe("WebSocket Module", () => {
         it("should update status with reconnection delay message", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             ws.close();
@@ -572,7 +572,7 @@ describe("WebSocket Module", () => {
         it("should handle sendMessage when WebSocket is CLOSING", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
             ws.readyState = MockWebSocket.CLOSING;
 
@@ -583,7 +583,7 @@ describe("WebSocket Module", () => {
         it("should handle sendMessage when WebSocket is CLOSED", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
             ws.readyState = MockWebSocket.CLOSED;
 
@@ -593,7 +593,7 @@ describe("WebSocket Module", () => {
 
         it("should handle sendMessage when WebSocket is CONNECTING", async () => {
             connect();
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
             ws.readyState = MockWebSocket.CONNECTING;
 
@@ -604,7 +604,7 @@ describe("WebSocket Module", () => {
         it("should handle malformed tool_call messages gracefully", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             // Start streaming first
@@ -623,7 +623,7 @@ describe("WebSocket Module", () => {
         it("should handle tool_call with missing tool_id", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             const message = {
@@ -639,7 +639,7 @@ describe("WebSocket Module", () => {
         it("should handle response message with empty string", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             const message = {
@@ -654,7 +654,7 @@ describe("WebSocket Module", () => {
         it("should handle error message without message field", async () => {
             connect();
             await new Promise((resolve) => setTimeout(resolve, 20));
-            const ws = (global as any).lastWebSocket;
+            const ws = (globalThis as any).lastWebSocket;
             expect(ws).toBeDefined();
 
             const message = {

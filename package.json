@@ -15,6 +15,7 @@
     "format": "prettier --write 'frontend/**/*.{ts,html,css}'",
     "format:check": "prettier --check 'frontend/**/*.{ts,html,css}'",
     "type-check": "tsc --noEmit",
+    "type-check:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
