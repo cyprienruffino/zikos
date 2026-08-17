@@ -3,11 +3,34 @@
 import logging
 import re
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 _logger = logging.getLogger("zikos.services.llm_orchestration.stream_processor")
 _conversation_logger = logging.getLogger("zikos.conversation")
+
+_OPEN_TAG_RE = re.compile(r"<think(?:ing)?>")
+_CLOSE_TAG_RE = re.compile(r"</think(?:ing)?>")
+_OPEN_TAGS = ("<thinking>", "<think>")
+_CLOSE_TAGS = ("</thinking>", "</think>")
+
+# Rough chars-per-token estimate used to convert the token budget into a
+# character budget (thinking is counted on accumulated characters, not chunks).
+_CHARS_PER_TOKEN = 4
+
+
+def _partial_tag_suffix(text: str, tags: tuple[str, ...]) -> int:
+    """Length of the longest suffix of text that is a proper prefix of any tag.
+
+    Used to hold back a few characters so tags split across stream chunks are
+    still recognized.
+    """
+    max_len = max(len(t) for t in tags) - 1
+    for k in range(min(len(text), max_len), 0, -1):
+        suffix = text[-k:]
+        if any(tag.startswith(suffix) for tag in tags):
+            return k
+    return 0
 
 
 @dataclass
@@ -41,6 +64,11 @@ class StreamProcessor:
         Populates `result` with accumulated content, tool calls, and
         thinking budget status.
 
+        Responses are assumed to be visible text until an actual <think> tag is
+        observed — never assumed to start in thinking mode. Chunks are split at
+        tag boundaries, and a few characters are buffered so tags split across
+        chunks are still recognized.
+
         Args:
             stream: Async iterator of LLM response chunks
             result: Mutable result object to populate
@@ -51,19 +79,23 @@ class StreamProcessor:
         Yields:
             Token dicts: {"type": "token", "content": "..."}
         """
-        in_thinking = not nothink_retry and max_thinking > 0
-        thinking_token_count = 0
+        in_thinking = False
+        thinking_chars = 0
+        thinking_char_budget = max_thinking * _CHARS_PER_TOKEN
         accumulated_content = ""
         accumulated_tool_calls: list[dict[str, Any]] = []
-        final_delta: dict[str, Any] = {}
-        final_finish_reason = None
+        pending = ""  # partial-tag buffer carried between chunks
 
         _logger.info(
             f"Thinking budget: {max_thinking} tokens (0=unlimited, nothink={nothink_retry})"
         )
 
         async for chunk in stream:
-            choice = chunk.get("choices", [{}])[0]
+            choices = chunk.get("choices") or []
+            if not choices:
+                # Some providers emit keep-alive/usage chunks with empty choices
+                continue
+            choice = choices[0]
             delta = choice.get("delta", {})
             finish_reason = choice.get("finish_reason")
 
@@ -73,7 +105,6 @@ class StreamProcessor:
                     _logger.warning(f"Non-string token received: {type(token)} = {token}")
                     continue
 
-                _logger.debug(f"Token received: {repr(token)}")
                 accumulated_content += token
 
                 if nothink_retry:
@@ -82,38 +113,55 @@ class StreamProcessor:
                         yield {"type": "token", "content": stripped}
                     continue
 
-                if in_thinking:
-                    thinking_token_count += 1
-                    if "</think>" in accumulated_content or "</thinking>" in accumulated_content:
-                        in_thinking = False
-                    elif max_thinking > 0 and thinking_token_count >= max_thinking:
-                        _logger.info(
-                            f"Thinking budget exceeded ({thinking_token_count} tokens), "
-                            "truncating and re-generating with /nothink"
-                        )
-                        _conversation_logger.info(
-                            f"Session: {session_id}\n"
-                            f"Thinking budget exceeded "
-                            f"({thinking_token_count}/{max_thinking} tokens), "
-                            f"re-generating with /nothink\n"
-                            f"{'=' * 80}"
-                        )
-                        result.accumulated_content = accumulated_content
-                        result.thinking_budget_exceeded = True
-                        return
-                    continue
-                elif "<think" in token:
-                    in_thinking = True
-                    continue
+                buf = pending + token
+                pending = ""
+                while buf:
+                    if in_thinking:
+                        match = _CLOSE_TAG_RE.search(buf)
+                        if match:
+                            thinking_chars += match.start()
+                            buf = buf[match.end() :]
+                            in_thinking = False
+                            continue
+                        keep = _partial_tag_suffix(buf, _CLOSE_TAGS)
+                        thinking_chars += len(buf) - keep
+                        pending = buf[-keep:] if keep else ""
+                        buf = ""
+                    else:
+                        match = _OPEN_TAG_RE.search(buf)
+                        if match:
+                            if match.start():
+                                yield {"type": "token", "content": buf[: match.start()]}
+                            buf = buf[match.end() :]
+                            in_thinking = True
+                            continue
+                        keep = _partial_tag_suffix(buf, _OPEN_TAGS)
+                        visible = buf[: len(buf) - keep] if keep else buf
+                        if visible:
+                            yield {"type": "token", "content": visible}
+                        pending = buf[-keep:] if keep else ""
+                        buf = ""
 
-                yield {"type": "token", "content": token}
+                if in_thinking and max_thinking > 0 and thinking_chars > thinking_char_budget:
+                    _logger.info(
+                        f"Thinking budget exceeded ({thinking_chars} chars > "
+                        f"{thinking_char_budget}), truncating and re-generating with /nothink"
+                    )
+                    _conversation_logger.info(
+                        f"Session: {session_id}\n"
+                        f"Thinking budget exceeded "
+                        f"({thinking_chars}/{thinking_char_budget} chars), "
+                        f"re-generating with /nothink\n"
+                        f"{'=' * 80}"
+                    )
+                    result.accumulated_content = accumulated_content
+                    result.thinking_budget_exceeded = True
+                    return
 
             if delta.get("tool_calls"):
                 accumulated_tool_calls.extend(delta.get("tool_calls", []))
 
             if finish_reason:
-                final_delta = delta
-                final_finish_reason = finish_reason
                 # Only add from choice.tool_calls when delta.tool_calls was not already present
                 # in this same chunk — some backends (e.g. CloudBackend) set both, which
                 # would double-count the same tool_calls.
@@ -121,9 +169,9 @@ class StreamProcessor:
                     accumulated_tool_calls.extend(choice.get("tool_calls", []))
                 break
 
+        # Flush any held-back partial-tag characters that never became a tag
+        if pending and not in_thinking:
+            yield {"type": "token", "content": pending}
+
         result.accumulated_content = accumulated_content
-        result.tool_calls = (
-            accumulated_tool_calls
-            if accumulated_tool_calls
-            else (final_delta.get("tool_calls") if final_finish_reason == "tool_calls" else None)
-        )
+        result.tool_calls = accumulated_tool_calls or None

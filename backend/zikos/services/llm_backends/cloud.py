@@ -118,7 +118,11 @@ class CloudBackend(LLMBackend):
 
         async for chunk in response:
             chunk_dict = chunk.model_dump()
-            choice = chunk_dict.get("choices", [{}])[0]
+            choices = chunk_dict.get("choices") or []
+            if not choices:
+                # e.g. final usage-only chunks have empty choices
+                continue
+            choice = choices[0]
             delta = choice.get("delta", {})
             finish_reason = choice.get("finish_reason")
 
