@@ -188,6 +188,8 @@ export async function showSetupOverlay(status: SystemStatusResponse): Promise<vo
     setupOverlayEl = document.createElement("div");
     setupOverlayEl.id = "setup-overlay";
     setupOverlayEl.className = "setup-overlay";
+    setupOverlayEl.setAttribute("role", "dialog");
+    setupOverlayEl.setAttribute("aria-modal", "true");
 
     let modelsSection: string;
     if (recommendations && recommendations.all_recommendations.length > 0) {
@@ -226,6 +228,7 @@ export async function showSetupOverlay(status: SystemStatusResponse): Promise<vo
     }
 
     const title = modelLoaded ? "System Information" : "Model Setup Required";
+    setupOverlayEl.setAttribute("aria-label", title);
     const introMessage = modelLoaded
         ? "View your hardware configuration and available models."
         : status.initialization_error ||
@@ -250,10 +253,20 @@ export async function showSetupOverlay(status: SystemStatusResponse): Promise<vo
     const dismissBtn = document.getElementById("dismissSetup");
     if (dismissBtn) {
         dismissBtn.addEventListener("click", hideSetupOverlay);
+        dismissBtn.focus();
+    }
+
+    document.addEventListener("keydown", handleOverlayKeydown);
+}
+
+function handleOverlayKeydown(e: KeyboardEvent): void {
+    if (e.key === "Escape") {
+        hideSetupOverlay();
     }
 }
 
 export function hideSetupOverlay(): void {
+    document.removeEventListener("keydown", handleOverlayKeydown);
     if (setupOverlayEl) {
         setupOverlayEl.remove();
         setupOverlayEl = null;

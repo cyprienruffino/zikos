@@ -1003,16 +1003,23 @@
     <body>
         <div class="header">
             <h1>Zikos - AI Music Teacher</h1>
-            <button class="settings-btn" id="settingsBtn" title="Settings">&#9881;</button>
+            <button class="settings-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+                &#9881;
+            </button>
         </div>
 
         <div class="status" id="status">Loading...</div>
 
         <div class="container">
             <div class="chat-panel">
-                <div class="messages" id="messages"></div>
+                <div class="messages" id="messages" role="log" aria-live="polite"></div>
                 <div class="input-area">
-                    <input type="text" id="messageInput" placeholder="Type your message..." />
+                    <input
+                        type="text"
+                        id="messageInput"
+                        placeholder="Type your message..."
+                        aria-label="Message to the music teacher"
+                    />
                     <button id="sendButton">Send</button>
                 </div>
             </div>
