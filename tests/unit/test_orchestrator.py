@@ -62,6 +62,15 @@ class TestPrepareConversation:
         assert len(user_msgs) == 1
         assert "C major scale" in user_msgs[0]["content"]
 
+    def test_empty_message_becomes_session_start_sentinel(self, orchestrator, mcp_server):
+        """An empty greeting message must never produce content:'' (rejected by
+        Anthropic) — it becomes the '[session start]' sentinel."""
+        history, *_ = orchestrator.prepare_conversation("", "session_greet", mcp_server)
+
+        user_msgs = [m for m in history if m["role"] == "user"]
+        assert len(user_msgs) == 1
+        assert user_msgs[0]["content"] == "[session start]"
+
     def test_initializes_history_with_system_prompt(self, orchestrator, mcp_server):
         history, *_ = orchestrator.prepare_conversation("hello", "new_session", mcp_server)
 
