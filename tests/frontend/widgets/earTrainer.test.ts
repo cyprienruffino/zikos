@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { addEarTrainerWidget } from "../../../frontend/src/widgets/earTrainer.js";
+import { resetAudioEngine } from "../../../frontend/src/widgets/audioEngine.js";
 
 class MockAudioContext {
     state: string = "running";
@@ -33,6 +34,7 @@ describe("Ear Trainer Widget", () => {
         document.body.innerHTML = `<div id="messages"></div>`;
 
         globalThis.AudioContext = vi.fn(() => new MockAudioContext()) as any;
+        resetAudioEngine();
         vi.spyOn(Math, "floor").mockReturnValue(0);
     });
 

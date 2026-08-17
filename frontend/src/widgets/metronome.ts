@@ -2,6 +2,7 @@ import { MetronomeState } from "../types.js";
 import { addMessage, addTypingIndicator } from "../ui.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 import { clampBpm, validateTimeSignature } from "../utils/validate.js";
+import { createBeatScheduler } from "./audioEngine.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -145,8 +146,7 @@ export function addMetronomeWidget(
         bpm,
         beats,
         widgetEl,
-        intervalId: null,
-        audioContext: null,
+        scheduler: null,
         currentBeat: 0,
         isPlaying: false,
     });
@@ -170,13 +170,6 @@ export function startMetronome(metronomeId: string, bpm: number, beats: number):
     bpm = clampBpm(bpm);
     const metronome = metronomes.get(metronomeId);
     if (!metronome || metronome.isPlaying) return;
-    if (!metronome.audioContext) {
-        metronome.audioContext = new AudioContext();
-    }
-    const audioContext = metronome.audioContext;
-    if (audioContext.state === "suspended") {
-        audioContext.resume();
-    }
     metronome.isPlaying = true;
     const intervalMs = (60 / bpm) * 1000;
     const widgetEl = metronome.widgetEl;
@@ -190,41 +183,31 @@ export function startMetronome(metronomeId: string, bpm: number, beats: number):
         statusEl.textContent = "Playing";
         statusEl.className = "metronome-status playing";
     }
-    function playBeat(beatIndex: number): void {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        const isDownbeat = beatIndex === 0;
-        oscillator.frequency.value = isDownbeat ? 800 : 600;
-        oscillator.type = "sine";
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.1);
-        if (!widgetEl) return;
-        const beatDots = widgetEl.querySelectorAll(".beat-dot");
-        beatDots.forEach((dot, idx) => {
-            if (idx === beatIndex) {
-                dot.classList.add("active");
-                setTimeout(() => dot.classList.remove("active"), intervalMs * 0.2);
-            }
+    if (!metronome.scheduler) {
+        metronome.scheduler = createBeatScheduler({
+            bpm,
+            beats,
+            onBeat: (beatIndex: number): void => {
+                metronome.currentBeat = beatIndex;
+                if (!widgetEl) return;
+                const beatDots = widgetEl.querySelectorAll(".beat-dot");
+                beatDots.forEach((dot, idx) => {
+                    if (idx === beatIndex) {
+                        dot.classList.add("active");
+                        setTimeout(() => dot.classList.remove("active"), intervalMs * 0.2);
+                    }
+                });
+            },
         });
     }
-    playBeat(metronome.currentBeat);
-    metronome.intervalId = window.setInterval(() => {
-        metronome.currentBeat = (metronome.currentBeat + 1) % beats;
-        playBeat(metronome.currentBeat);
-    }, intervalMs);
+    metronome.scheduler.setBpm(bpm);
+    metronome.scheduler.start();
 }
 
 export function pauseMetronome(metronomeId: string): void {
     const metronome = metronomes.get(metronomeId);
     if (!metronome || !metronome.isPlaying) return;
-    if (metronome.intervalId) {
-        clearInterval(metronome.intervalId);
-        metronome.intervalId = null;
-    }
+    metronome.scheduler?.stop();
     metronome.isPlaying = false;
     const widgetEl = metronome.widgetEl;
     if (!widgetEl) return;
@@ -242,10 +225,8 @@ export function pauseMetronome(metronomeId: string): void {
 export function stopMetronome(metronomeId: string): void {
     const metronome = metronomes.get(metronomeId);
     if (!metronome) return;
-    if (metronome.intervalId) {
-        clearInterval(metronome.intervalId);
-        metronome.intervalId = null;
-    }
+    metronome.scheduler?.stop();
+    metronome.scheduler?.resetBeat();
     metronome.isPlaying = false;
     metronome.currentBeat = 0;
     const widgetEl = metronome.widgetEl;

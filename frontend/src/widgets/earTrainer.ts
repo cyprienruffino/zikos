@@ -1,5 +1,6 @@
 import { EarTrainerState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { getAudioContext } from "./audioEngine.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -83,7 +84,6 @@ export function addEarTrainerWidget(
         intervals,
         widgetEl,
         currentAnswer: null,
-        audioContext: null,
     });
 }
 
@@ -95,8 +95,9 @@ function playEarTrainerQuestion(
 ): void {
     const trainer = earTrainers.get(trainerId);
     if (!trainer) return;
-    const audioContext = new AudioContext();
-    trainer.audioContext = audioContext;
+    // Reuse the app-wide AudioContext: creating one per question leaked
+    // contexts until the browser refused to create more.
+    const audioContext = getAudioContext();
     const randomInterval = intervals[Math.floor(Math.random() * intervals.length)];
     trainer.currentAnswer = randomInterval;
     const rootFreq = getNoteFrequency(rootNote, 4);

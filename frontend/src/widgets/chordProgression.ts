@@ -1,6 +1,7 @@
 import { ChordProgressionState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 import { clampBpm, positiveNumber, validateTimeSignature } from "../utils/validate.js";
+import { createBeatScheduler } from "./audioEngine.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -62,8 +63,7 @@ export function addChordProgressionWidget(
         timeSignature,
         chordsPerBar,
         widgetEl,
-        audioContext: null,
-        intervalId: null,
+        scheduler: null,
         currentChordIndex: 0,
         isPlaying: false,
     });
@@ -128,18 +128,23 @@ export function parseChordName(chordName: string): number[] {
     return intervals.map((interval) => rootFreq * Math.pow(2, interval / 12));
 }
 
-function playChordAudio(audioContext: AudioContext, frequencies: number[], duration: number): void {
+function playChordAudio(
+    audioContext: AudioContext,
+    frequencies: number[],
+    duration: number,
+    startTime: number
+): void {
     frequencies.forEach((freq) => {
         const osc = audioContext.createOscillator();
         const gain = audioContext.createGain();
         osc.frequency.value = freq;
         osc.type = "sine";
-        gain.gain.setValueAtTime(0.15, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+        gain.gain.setValueAtTime(0.15, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
         osc.connect(gain);
         gain.connect(audioContext.destination);
-        osc.start();
-        osc.stop(audioContext.currentTime + duration);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
     });
 }
 
@@ -154,17 +159,10 @@ function startChordProgression(
     if (chords.length === 0) return;
     const progression = chordProgressions.get(progressionId);
     if (!progression || progression.isPlaying) return;
-    if (!progression.audioContext) {
-        progression.audioContext = new AudioContext();
-    }
-    const audioContext = progression.audioContext;
-    if (audioContext.state === "suspended") {
-        audioContext.resume();
-    }
     progression.isPlaying = true;
-    const [beats, division] = timeSignature.split("/").map(Number);
-    const barDuration = (beats / division) * (60 / tempo);
-    const chordDuration = barDuration / chordsPerBar;
+    const [beats, division] = validateTimeSignature(timeSignature).split("/").map(Number);
+    const barDuration = (beats / division) * (60 / clampBpm(tempo));
+    const chordDuration = barDuration / positiveNumber(chordsPerBar, 1);
     const widgetEl = progression.widgetEl;
     const playBtn = widgetEl.querySelector(".play-btn") as HTMLButtonElement;
     const pauseBtn = widgetEl.querySelector(".pause-btn") as HTMLButtonElement;
@@ -175,34 +173,35 @@ function startChordProgression(
         statusEl.textContent = "Playing";
         statusEl.className = "chord-progression-status";
     }
-    function playChord(chordIndex: number): void {
-        const chordBoxes = widgetEl.querySelectorAll(".chord-box");
-        chordBoxes.forEach((box, idx) => {
-            if (idx === chordIndex) {
-                box.classList.add("active");
-            } else {
-                box.classList.remove("active");
-            }
+    if (!progression.scheduler) {
+        progression.scheduler = createBeatScheduler({
+            // One scheduler "beat" per chord change: 60 / bpm === chordDuration.
+            bpm: 60 / chordDuration,
+            beats: chords.length,
+            scheduleAudio: (ctx: AudioContext, time: number, chordIndex: number): void => {
+                const frequencies = parseChordName(chords[chordIndex]);
+                playChordAudio(ctx, frequencies, chordDuration, time);
+            },
+            onBeat: (chordIndex: number): void => {
+                progression.currentChordIndex = chordIndex;
+                const chordBoxes = widgetEl.querySelectorAll(".chord-box");
+                chordBoxes.forEach((box, idx) => {
+                    if (idx === chordIndex) {
+                        box.classList.add("active");
+                    } else {
+                        box.classList.remove("active");
+                    }
+                });
+            },
         });
-
-        const chordName = chords[chordIndex];
-        const frequencies = parseChordName(chordName);
-        playChordAudio(audioContext, frequencies, chordDuration);
     }
-    playChord(progression.currentChordIndex);
-    progression.intervalId = window.setInterval(() => {
-        progression.currentChordIndex = (progression.currentChordIndex + 1) % chords.length;
-        playChord(progression.currentChordIndex);
-    }, chordDuration * 1000);
+    progression.scheduler.start();
 }
 
 function pauseChordProgression(progressionId: string): void {
     const progression = chordProgressions.get(progressionId);
     if (!progression || !progression.isPlaying) return;
-    if (progression.intervalId) {
-        clearInterval(progression.intervalId);
-        progression.intervalId = null;
-    }
+    progression.scheduler?.stop();
     progression.isPlaying = false;
     const widgetEl = progression.widgetEl;
     const playBtn = widgetEl.querySelector(".play-btn") as HTMLButtonElement;
@@ -219,10 +218,8 @@ function pauseChordProgression(progressionId: string): void {
 function stopChordProgression(progressionId: string): void {
     const progression = chordProgressions.get(progressionId);
     if (!progression) return;
-    if (progression.intervalId) {
-        clearInterval(progression.intervalId);
-        progression.intervalId = null;
-    }
+    progression.scheduler?.stop();
+    progression.scheduler?.resetBeat();
     progression.isPlaying = false;
     progression.currentChordIndex = 0;
     const widgetEl = progression.widgetEl;

@@ -3,6 +3,7 @@ import {
     addChordProgressionWidget,
     parseChordName,
 } from "../../../frontend/src/widgets/chordProgression.js";
+import { resetAudioEngine } from "../../../frontend/src/widgets/audioEngine.js";
 
 class MockAudioContext {
     state: string = "running";
@@ -51,6 +52,7 @@ describe("Chord Progression Widget", () => {
         originalClearInterval = globalThis.window.clearInterval;
 
         globalThis.AudioContext = vi.fn(() => new MockAudioContext()) as any;
+        resetAudioEngine();
         globalThis.window.setInterval = vi.fn((fn: Function, delay: number) => {
             return originalSetInterval(fn, delay);
         }) as any;
@@ -158,12 +160,14 @@ describe("Chord Progression Widget", () => {
             expect(AudioContext).toHaveBeenCalled();
         });
 
-        it("should highlight active chord", () => {
+        it("should highlight active chord", async () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
             const widget = document.getElementById("chord-chord_123");
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
+            // Visual updates fire near the scheduled audio time (lookahead scheduler)
+            await new Promise((resolve) => setTimeout(resolve, 20));
 
             const chordBoxes = widget.querySelectorAll(".chord-box");
             expect(chordBoxes[0].classList.contains("active")).toBe(true);

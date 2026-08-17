@@ -1,6 +1,7 @@
 import { TempoTrainerState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 import { clampBpm, positiveNumber, validateTimeSignature } from "../utils/validate.js";
+import { createBeatScheduler } from "./audioEngine.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -69,7 +70,7 @@ export function addTempoTrainerWidget(
         timeSignature,
         rampType,
         widgetEl,
-        metronome: null,
+        scheduler: null,
         startTime: null,
         pausedTime: 0,
         isPlaying: false,
@@ -100,6 +101,12 @@ function startTempoTrainer(
         statusEl.className = "tempo-trainer-status";
     }
     const [beats] = timeSignature.split("/").map(Number);
+    // One scheduler for the whole ramp; the tempo is adjusted in place
+    // instead of tearing intervals down per 0.5 BPM step.
+    if (!trainer.scheduler) {
+        trainer.scheduler = createBeatScheduler({ bpm: startBpm, beats });
+    }
+    trainer.scheduler.start();
     function updateTempo(): void {
         const currentTrainer = tempoTrainers.get(trainerId);
         if (!currentTrainer || !currentTrainer.isPlaying || !currentTrainer.startTime) return;
@@ -116,54 +123,7 @@ function startTempoTrainer(
         const progressFill = document.getElementById(`progress-${trainerId}`);
         if (tempoDisplay) tempoDisplay.textContent = `${currentBpm.toFixed(1)} BPM`;
         if (progressFill) progressFill.style.width = `${progress * 100}%`;
-        if (
-            !currentTrainer.metronome ||
-            Math.abs(currentTrainer.metronome.bpm - currentBpm) > 0.5
-        ) {
-            if (currentTrainer.metronome && currentTrainer.metronome.intervalId) {
-                clearInterval(currentTrainer.metronome.intervalId);
-            }
-            if (!currentTrainer.metronome || !currentTrainer.metronome.audioContext) {
-                currentTrainer.metronome = {
-                    bpm: currentBpm,
-                    beats,
-                    audioContext: new AudioContext(),
-                    intervalId: null,
-                    currentBeat: 0,
-                };
-            }
-            currentTrainer.metronome.bpm = currentBpm;
-            const audioContext = currentTrainer.metronome.audioContext;
-            if (audioContext.state === "suspended") {
-                audioContext.resume();
-            }
-            const intervalMs = (60 / currentBpm) * 1000;
-            const playBeat = (beatIndex: number): void => {
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                const isDownbeat = beatIndex === 0;
-                oscillator.frequency.value = isDownbeat ? 800 : 600;
-                oscillator.type = "sine";
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.1);
-            };
-            if (currentTrainer.metronome.intervalId) {
-                clearInterval(currentTrainer.metronome.intervalId);
-            }
-            playBeat(currentTrainer.metronome.currentBeat);
-            currentTrainer.metronome.intervalId = window.setInterval(() => {
-                const trainerState = tempoTrainers.get(trainerId);
-                if (trainerState?.metronome) {
-                    trainerState.metronome.currentBeat =
-                        (trainerState.metronome.currentBeat + 1) % beats;
-                    playBeat(trainerState.metronome.currentBeat);
-                }
-            }, intervalMs);
-        }
+        currentTrainer.scheduler?.setBpm(currentBpm);
         if (progress >= 1) {
             stopTempoTrainer(trainerId);
             if (statusEl) {
@@ -182,10 +142,7 @@ function pauseTempoTrainer(trainerId: string): void {
     if (!trainer || !trainer.isPlaying || !trainer.startTime) return;
     trainer.pausedTime = Date.now() - trainer.startTime;
     trainer.isPlaying = false;
-    if (trainer.metronome && trainer.metronome.intervalId) {
-        clearInterval(trainer.metronome.intervalId);
-        trainer.metronome.intervalId = null;
-    }
+    trainer.scheduler?.stop();
     const widgetEl = trainer.widgetEl;
     const playBtn = widgetEl.querySelector(".play-btn") as HTMLButtonElement;
     const pauseBtn = widgetEl.querySelector(".pause-btn") as HTMLButtonElement;
@@ -204,14 +161,11 @@ function stopTempoTrainer(trainerId: string): void {
     trainer.isPlaying = false;
     trainer.startTime = null;
     trainer.pausedTime = 0;
-    if (trainer.metronome) {
-        if (trainer.metronome.intervalId) {
-            clearInterval(trainer.metronome.intervalId);
-        }
-        if (trainer.metronome.audioContext) {
-            trainer.metronome.audioContext.close();
-        }
-        trainer.metronome = null;
+    if (trainer.scheduler) {
+        trainer.scheduler.stop();
+        trainer.scheduler.resetBeat();
+        // The shared AudioContext stays open for other widgets.
+        trainer.scheduler = null;
     }
     const widgetEl = trainer.widgetEl;
     const playBtn = widgetEl.querySelector(".play-btn") as HTMLButtonElement;

@@ -8,6 +8,7 @@ import {
     setMetronomeWebSocket,
     setMetronomeSessionId,
 } from "../../../frontend/src/widgets/metronome.js";
+import { resetAudioEngine } from "../../../frontend/src/widgets/audioEngine.js";
 
 // Mock AudioContext
 class MockAudioContext {
@@ -51,6 +52,7 @@ describe("Metronome Widget", () => {
         `;
 
         globalThis.AudioContext = MockAudioContext as any;
+        resetAudioEngine();
 
         // Store original setInterval/clearInterval
         const originalSetInterval = globalThis.window.setInterval;
