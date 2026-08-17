@@ -1,5 +1,6 @@
 """Main audio analysis tools class"""
 
+from pathlib import Path
 from typing import Any
 
 from zikos.mcp.tool import Tool, ToolCategory
@@ -477,7 +478,7 @@ Interpretation Guidelines:
                 "sample_rate": info.samplerate,
                 "channels": info.channels,
                 "format": info.format,
-                "file_size_bytes": info.frames * info.channels * info.samplerate,
+                "file_size_bytes": Path(resolved_path).stat().st_size,
             }
         except FileNotFoundError:
             ref = audio_file_id or audio_path or "unknown"

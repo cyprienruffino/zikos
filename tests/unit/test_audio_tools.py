@@ -611,6 +611,14 @@ class TestErrorHandling:
         assert result["error_type"] == "UNKNOWN_TOOL"
 
     @pytest.mark.asyncio
+    async def test_get_audio_info_real_file_size(self, audio_tools, sample_audio_file):
+        """file_size_bytes must be the actual on-disk size (it used to be
+        frames x channels x samplerate, an absurd number)."""
+        result = await audio_tools.get_audio_info(audio_path=str(sample_audio_file))
+
+        assert result["file_size_bytes"] == Path(sample_audio_file).stat().st_size
+
+    @pytest.mark.asyncio
     async def test_get_audio_info_missing_parameter(self, audio_tools):
         """Test get_audio_info with missing parameters"""
         result = await audio_tools.get_audio_info()
