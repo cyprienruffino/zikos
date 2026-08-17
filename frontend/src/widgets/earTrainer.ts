@@ -1,14 +1,7 @@
 import { EarTrainerState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 import { getAudioContext } from "./audioEngine.js";
-
-function getMessagesEl(): HTMLElement {
-    const el = document.getElementById("messages");
-    if (!el) {
-        throw new Error("Messages element not found");
-    }
-    return el as HTMLElement;
-}
+import { getMessagesEl } from "../dom.js";
 
 const earTrainers = new Map<string, EarTrainerState>();
 

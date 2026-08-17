@@ -1,14 +1,7 @@
 import { PracticeTimerState } from "../types.js";
 import { addMessage } from "../ui.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
-
-function getMessagesEl(): HTMLElement {
-    const el = document.getElementById("messages");
-    if (!el) {
-        throw new Error("Messages element not found");
-    }
-    return el as HTMLElement;
-}
+import { getMessagesEl } from "../dom.js";
 
 const practiceTimers = new Map<string, PracticeTimerState>();
 

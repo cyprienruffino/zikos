@@ -1,13 +1,6 @@
 import { WebSocketMessage } from "./types.js";
 import { API_URL } from "./config.js";
-
-function getMessagesEl(): HTMLElement {
-    const el = document.getElementById("messages");
-    if (!el) {
-        throw new Error("Messages element not found");
-    }
-    return el as HTMLElement;
-}
+import { getMessagesEl } from "./dom.js";
 
 const NEAR_BOTTOM_PX = 120;
 

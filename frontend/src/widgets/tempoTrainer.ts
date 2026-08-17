@@ -2,14 +2,7 @@ import { TempoTrainerState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 import { clampBpm, positiveNumber, validateTimeSignature } from "../utils/validate.js";
 import { createBeatScheduler } from "./audioEngine.js";
-
-function getMessagesEl(): HTMLElement {
-    const el = document.getElementById("messages");
-    if (!el) {
-        throw new Error("Messages element not found");
-    }
-    return el as HTMLElement;
-}
+import { getMessagesEl } from "../dom.js";
 
 const tempoTrainers = new Map<string, TempoTrainerState>();
 
