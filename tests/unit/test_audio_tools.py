@@ -289,6 +289,49 @@ class TestPitchDetection:
             assert 0.0 <= result["sharp_tendency"] <= 1.0
 
     @pytest.mark.asyncio
+    async def test_detect_pitch_intonation_nearest_semitone(self, audio_tools, temp_dir):
+        """A 445 Hz tone is ~19.6 cents sharp of A4. The nearest-semitone
+        intonation analysis must report that deviation and a sharp tendency."""
+        import numpy as np
+        import soundfile as sf
+
+        sr = 22050
+        t = np.linspace(0, 2.0, int(sr * 2.0), endpoint=False)
+        audio = 0.8 * np.sin(2 * np.pi * 445.0 * t)
+        audio_path = temp_dir / "sharp_445.wav"
+        sf.write(str(audio_path), audio, sr)
+
+        result = await audio_tools.detect_pitch(audio_path=str(audio_path))
+
+        assert not result.get("error"), result
+        assert "average_cents_deviation" in result
+        assert 12.0 < result["average_cents_deviation"] < 28.0, result["average_cents_deviation"]
+        assert result["sharp_tendency"] > 0.8
+        assert result["flat_tendency"] < 0.1
+
+    @pytest.mark.asyncio
+    async def test_detect_pitch_melody_not_penalized(self, audio_tools, temp_dir):
+        """An in-tune melody (multiple different notes) must score well on both
+        intonation and stability. Previously intonation compared everything to a
+        single octave-4 reference and stability used whole-take variance, so any
+        melody was graded as unstable/out of tune."""
+        from tests.helpers.audio_synthesis import generate_scale_audio, save_audio_file
+
+        sr = 44100
+        audio = generate_scale_audio(
+            ["C4", "E4", "G4", "C5"], note_duration=0.5, instrument="piano", sample_rate=sr
+        )
+        audio_path = temp_dir / "arpeggio.wav"
+        save_audio_file(audio, audio_path, sr)
+
+        result = await audio_tools.detect_pitch(audio_path=str(audio_path))
+
+        assert not result.get("error"), result
+        assert result["intonation_accuracy"] > 0.8, result
+        assert result["pitch_stability"] > 0.7, result
+        assert result["average_cents_deviation"] < 20.0, result
+
+    @pytest.mark.asyncio
     async def test_detect_pitch_44khz_octave_regression(self, audio_tools, temp_dir):
         """pyin must receive the native sample rate. A 440 Hz tone at 44.1 kHz was
         previously analyzed as if it were 22.05 kHz, reporting ~an octave off."""

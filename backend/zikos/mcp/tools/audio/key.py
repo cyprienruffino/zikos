@@ -35,6 +35,52 @@ Interpretation Guidelines:
     )
 
 
+# Krumhansl-Schmuckler key profiles
+KEY_PROFILE_MAJOR = np.array(
+    [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+)
+KEY_PROFILE_MINOR = np.array(
+    [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+)
+
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def krumhansl_key_correlations(chroma_mean: np.ndarray) -> tuple[list[float], list[float]]:
+    """Correlate a mean chroma vector against Krumhansl-Schmuckler key profiles.
+
+    Returns (correlations_major, correlations_minor), each a list of 12 raw
+    Pearson correlations indexed by tonic pitch class (C=0 ... B=11).
+    """
+    correlations_major = []
+    correlations_minor = []
+
+    for i in range(12):
+        rotated_chroma = np.roll(chroma_mean, -i)
+        corr_major = np.corrcoef(rotated_chroma, KEY_PROFILE_MAJOR)[0, 1]
+        corr_minor = np.corrcoef(rotated_chroma, KEY_PROFILE_MINOR)[0, 1]
+        correlations_major.append(float(corr_major) if not np.isnan(corr_major) else 0.0)
+        correlations_minor.append(float(corr_minor) if not np.isnan(corr_minor) else 0.0)
+
+    return correlations_major, correlations_minor
+
+
+def estimate_key_from_chroma(chroma_mean: np.ndarray) -> tuple[str, str, str, float]:
+    """Estimate the key from a mean chroma vector using Krumhansl profiles.
+
+    Returns (key_name like "C major", mode, tonic, raw correlation).
+    """
+    correlations_major, correlations_minor = krumhansl_key_correlations(chroma_mean)
+    max_major_idx = int(np.argmax(correlations_major))
+    max_minor_idx = int(np.argmax(correlations_minor))
+
+    if correlations_major[max_major_idx] > correlations_minor[max_minor_idx]:
+        tonic = NOTE_NAMES[max_major_idx]
+        return f"{tonic} major", "major", tonic, correlations_major[max_major_idx]
+    tonic = NOTE_NAMES[max_minor_idx]
+    return f"{tonic} minor", "minor", tonic, correlations_minor[max_minor_idx]
+
+
 async def detect_key(audio_path: str) -> dict[str, Any]:
     """Detect musical key"""
     try:
@@ -50,28 +96,9 @@ async def detect_key(audio_path: str) -> dict[str, Any]:
         chroma = librosa.feature.chroma_stft(y=y, sr=sr)
         chroma_mean = np.mean(chroma, axis=1)
 
-        key_profiles_major = np.array(
-            [
-                [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88],
-            ]
-        )
-        key_profiles_minor = np.array(
-            [
-                [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17],
-            ]
-        )
+        note_names = NOTE_NAMES
 
-        note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
-        correlations_major = []
-        correlations_minor = []
-
-        for i in range(12):
-            rotated_chroma = np.roll(chroma_mean, -i)
-            corr_major = np.corrcoef(rotated_chroma, key_profiles_major[0])[0, 1]
-            corr_minor = np.corrcoef(rotated_chroma, key_profiles_minor[0])[0, 1]
-            correlations_major.append(corr_major if not np.isnan(corr_major) else 0.0)
-            correlations_minor.append(corr_minor if not np.isnan(corr_minor) else 0.0)
+        correlations_major, correlations_minor = krumhansl_key_correlations(chroma_mean)
 
         max_major_idx = np.argmax(correlations_major)
         max_minor_idx = np.argmax(correlations_minor)
