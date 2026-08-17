@@ -324,6 +324,55 @@ class TestAudioPreprocessingService:
         temp_root = preprocessing_service.storage_path / "temp"
         assert list(temp_root.iterdir()) == []
 
+    @pytest.mark.asyncio
+    async def test_upload_cache_hits_on_identical_content(self, preprocessing_service, temp_dir):
+        """Re-uploading identical bytes must hit the cache (content-hash key)."""
+        from io import BytesIO
+
+        from fastapi import UploadFile
+
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
+        source = temp_dir / "cache_src.wav"
+        create_test_audio_file(source, audio_type="single_note", duration=1.0)
+        data = source.read_bytes()
+
+        out1 = await preprocessing_service.preprocess_upload_file(
+            UploadFile(filename="a.wav", file=BytesIO(data))
+        )
+        with patch("subprocess.run") as mock_run:
+            out2 = await preprocessing_service.preprocess_upload_file(
+                UploadFile(filename="differently-named.wav", file=BytesIO(data))
+            )
+            mock_run.assert_not_called()
+
+        assert out1 == out2
+
+    @pytest.mark.asyncio
+    async def test_store_audio_moves_preprocessed_file(self, temp_dir):
+        """store_audio must move (not copy) the preprocessed file into storage."""
+        from unittest.mock import AsyncMock
+
+        from zikos.services.audio import AudioService
+
+        with patch("zikos.config.settings") as mock_settings:
+            mock_settings.audio_storage_path = temp_dir
+            service = AudioService()
+            service.storage_path = temp_dir
+
+        preprocessed = temp_dir / "preprocessed" / "cached.wav"
+        preprocessed.parent.mkdir(parents=True, exist_ok=True)
+        preprocessed.write_bytes(b"preprocessed audio")
+        service.preprocessing_service.preprocess_upload_file = AsyncMock(
+            return_value=preprocessed
+        )
+
+        audio_file_id = await service.store_audio(MagicMock())
+
+        stored = temp_dir / f"{audio_file_id}.wav"
+        assert stored.read_bytes() == b"preprocessed audio"
+        assert not preprocessed.exists(), "source must be moved, not copied"
+
     def test_clear_cache(self, preprocessing_service, temp_dir):
         """Test clearing preprocessing cache"""
         cache_file = preprocessing_service.cache_dir / "test.wav"

@@ -37,7 +37,9 @@ class AudioService:
 
             import shutil
 
-            shutil.copy2(preprocessed_path, file_path)
+            # Move (not copy): the preprocessed file would otherwise remain in
+            # the cache dir forever, doubling storage per upload.
+            shutil.move(str(preprocessed_path), str(file_path))
         except ValueError:
             # Validation errors (bad filename/extension) — let callers map to 400
             raise
