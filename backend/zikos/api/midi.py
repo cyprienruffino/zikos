@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from zikos.api.validation import validate_uuid
 from zikos.services.midi import MidiService
 
 router = APIRouter()
@@ -29,6 +30,7 @@ async def validate_midi(request: ValidateMidiRequest):
 @router.post("/{midi_file_id}/synthesize")
 async def synthesize_midi(midi_file_id: str, instrument: str = "piano"):
     """Synthesize MIDI to audio"""
+    validate_uuid(midi_file_id, "MIDI file ID")
     try:
         audio_file_id = await midi_service.synthesize(midi_file_id, instrument)
         return {"audio_file_id": audio_file_id}
@@ -39,6 +41,7 @@ async def synthesize_midi(midi_file_id: str, instrument: str = "piano"):
 @router.post("/{midi_file_id}/render")
 async def render_notation(midi_file_id: str, format: str = "both"):
     """Render MIDI to notation"""
+    validate_uuid(midi_file_id, "MIDI file ID")
     try:
         result = await midi_service.render_notation(midi_file_id, format)
         return result
@@ -49,6 +52,7 @@ async def render_notation(midi_file_id: str, format: str = "both"):
 @router.get("/{midi_file_id}")
 async def get_midi_file(midi_file_id: str):
     """Get MIDI file"""
+    validate_uuid(midi_file_id, "MIDI file ID")
     try:
         file_path = await midi_service.get_midi_path(midi_file_id)
         return FileResponse(file_path, media_type="audio/midi")

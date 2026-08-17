@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
+from zikos.api.validation import validate_uuid
 from zikos.constants import UploadConstants
 from zikos.services.audio import AudioService
 
@@ -78,6 +79,7 @@ async def upload_audio(
 @router.get("/{audio_file_id}/info")
 async def get_audio_info(audio_file_id: str):
     """Get audio file information"""
+    validate_uuid(audio_file_id, "audio file ID")
     try:
         info = await audio_service.get_audio_info(audio_file_id)
         return info
@@ -88,6 +90,7 @@ async def get_audio_info(audio_file_id: str):
 @router.get("/{audio_file_id}")
 async def get_audio_file(audio_file_id: str):
     """Get audio file"""
+    validate_uuid(audio_file_id, "audio file ID")
     try:
         file_path = await audio_service.get_audio_path(audio_file_id)
         from fastapi.responses import FileResponse

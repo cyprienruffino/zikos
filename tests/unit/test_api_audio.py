@@ -67,3 +67,26 @@ class TestUploadLimits:
             files={"file": ("recording.webm", b"\x1a\x45\xdf\xa3", "video/webm")},
         )
         assert response.status_code == 200
+
+
+class TestAudioIdValidation:
+    """Path IDs must be UUIDs before touching the filesystem"""
+
+    def test_get_audio_rejects_non_uuid_id(self, client, mock_audio_service):
+        mock_audio_service.get_audio_path = AsyncMock()
+        response = client.get("/api/audio/..%5Csecret")
+        assert response.status_code == 400
+        mock_audio_service.get_audio_path.assert_not_called()
+
+    def test_get_audio_info_rejects_non_uuid_id(self, client, mock_audio_service):
+        mock_audio_service.get_audio_info = AsyncMock()
+        response = client.get("/api/audio/not-a-uuid/info")
+        assert response.status_code == 400
+        mock_audio_service.get_audio_info.assert_not_called()
+
+    def test_get_audio_accepts_uuid(self, client, mock_audio_service, temp_dir):
+        test_file = temp_dir / "a.wav"
+        test_file.write_bytes(b"RIFF")
+        mock_audio_service.get_audio_path = AsyncMock(return_value=test_file)
+        response = client.get("/api/audio/33333333-3333-4333-8333-333333333333")
+        assert response.status_code == 200
