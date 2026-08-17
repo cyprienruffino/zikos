@@ -174,8 +174,6 @@ class TestSynthesizeErrorPropagation:
     async def test_synthesize_raises_on_missing_audio_file_id(self, midi_service):
         from unittest.mock import AsyncMock, patch
 
-        with patch.object(
-            midi_service.midi_tools, "midi_to_audio", AsyncMock(return_value={})
-        ):
+        with patch.object(midi_service.midi_tools, "midi_to_audio", AsyncMock(return_value={})):
             with pytest.raises(RuntimeError, match="no audio file ID"):
                 await midi_service.synthesize("some-id", "piano")

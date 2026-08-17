@@ -44,9 +44,7 @@ class TestDebugTokenGating:
         with patch("zikos.api.debug.settings") as mock_settings:
             mock_settings.debug_api_token = "s3cret"
             with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
-                response = client.get(
-                    "/api/debug/sessions", headers={"X-Debug-Token": "s3cret"}
-                )
+                response = client.get("/api/debug/sessions", headers={"X-Debug-Token": "s3cret"})
         assert response.status_code == 200
         assert response.json() == {"sessions": ["sess-1"]}
 

@@ -227,9 +227,7 @@ class TestAudioPreprocessingService:
         assert len(trimmed) < len(audio)
 
     @pytest.mark.asyncio
-    async def test_upload_filename_path_traversal_is_ignored(
-        self, preprocessing_service, temp_dir
-    ):
+    async def test_upload_filename_path_traversal_is_ignored(self, preprocessing_service, temp_dir):
         """Client filenames with ../ must not escape the temp storage dir."""
         from io import BytesIO
 
@@ -363,9 +361,7 @@ class TestAudioPreprocessingService:
         preprocessed = temp_dir / "preprocessed" / "cached.wav"
         preprocessed.parent.mkdir(parents=True, exist_ok=True)
         preprocessed.write_bytes(b"preprocessed audio")
-        service.preprocessing_service.preprocess_upload_file = AsyncMock(
-            return_value=preprocessed
-        )
+        service.preprocessing_service.preprocess_upload_file = AsyncMock(return_value=preprocessed)
 
         audio_file_id = await service.store_audio(MagicMock())
 

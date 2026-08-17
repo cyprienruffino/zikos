@@ -5,13 +5,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-_logger = logging.getLogger(__name__)
-
 from fastapi import UploadFile
 
 from zikos.config import settings
 from zikos.mcp.tools.analysis import AudioAnalysisTools
 from zikos.services.audio_preprocessing import AudioPreprocessingService
+
+_logger = logging.getLogger(__name__)
 
 
 class AudioService:

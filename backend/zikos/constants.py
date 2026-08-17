@@ -124,9 +124,7 @@ class UploadConstants:
     # Allowed content types for audio uploads. Browsers commonly report
     # webm recordings as video/webm and generic uploads as octet-stream.
     ALLOWED_CONTENT_TYPE_PREFIXES: tuple[str, ...] = ("audio/",)
-    ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
-        {"video/webm", "application/octet-stream"}
-    )
+    ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset({"video/webm", "application/octet-stream"})
 
 
 # Convenience access

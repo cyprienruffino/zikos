@@ -6,11 +6,11 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-_logger = logging.getLogger(__name__)
-
 from zikos.api.validation import validate_uuid
 from zikos.constants import UploadConstants
 from zikos.services.audio import AudioService
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter()
 audio_service = AudioService()

@@ -6,10 +6,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-_logger = logging.getLogger(__name__)
-
 from zikos.api.validation import validate_uuid
 from zikos.services.midi import MidiService
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter()
 midi_service = MidiService()

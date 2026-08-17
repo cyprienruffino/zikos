@@ -22,9 +22,7 @@ def _require_debug_access(x_debug_token: str | None) -> None:
     """
     if not settings.debug_api_token:
         raise HTTPException(status_code=404, detail="Not Found")
-    if not x_debug_token or not secrets.compare_digest(
-        x_debug_token, settings.debug_api_token
-    ):
+    if not x_debug_token or not secrets.compare_digest(x_debug_token, settings.debug_api_token):
         raise HTTPException(status_code=403, detail="Invalid or missing X-Debug-Token header")
 
 
