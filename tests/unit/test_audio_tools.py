@@ -1217,6 +1217,194 @@ class TestComparisonTools:
             assert result["reference_type"] == "scale"
             assert "errors" in result
 
+    def test_scale_pitch_classes_flat_and_minor_keys(self):
+        """Bb major must yield 7 pitch classes (not all 12) and A minor must be
+        graded against the minor scale, not A major."""
+        from zikos.mcp.tools.audio.comparison import _get_scale_pitch_classes
+
+        bb_major = _get_scale_pitch_classes("Bb major")
+        assert len(bb_major) == 7
+        # Bb major: Bb C D Eb F G A -> pitch classes 10 0 2 3 5 7 9
+        assert bb_major == {10, 0, 2, 3, 5, 7, 9}
+
+        a_minor = _get_scale_pitch_classes("A minor")
+        # A natural minor: A B C D E F G -> 9 11 0 2 4 5 7 (no C#)
+        assert 0 in a_minor  # C natural
+        assert 1 not in a_minor  # no C#
+        assert a_minor == {9, 11, 0, 2, 4, 5, 7}
+
+        with pytest.raises(ValueError):
+            _get_scale_pitch_classes("H sharpish")
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_flat_key_flags_wrong_notes(self, audio_tools, temp_dir):
+        """A B-natural played over Bb major must be flagged as a wrong note.
+        Previously unknown tonics like 'Bb' silently expanded to all 12 notes."""
+        audio_file_id = "test_audio"
+        file_path = temp_dir / f"{audio_file_id}.wav"
+        file_path.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+            patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
+            patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
+        ):
+            mock_tempo.return_value = {"bpm": 120}
+            mock_pitch.return_value = {
+                "intonation_accuracy": 0.9,
+                "notes": [
+                    {"pitch": "A#4", "start_time": 0.0},  # Bb, in key
+                    {"pitch": "B4", "start_time": 0.5},  # B natural, NOT in Bb major
+                    {"pitch": "F4", "start_time": 1.0},  # in key
+                ],
+            }
+            mock_rhythm.return_value = {"timing_accuracy": 0.9}
+
+            result = await audio_tools.call_tool(
+                "compare_to_reference",
+                audio_file_id=audio_file_id,
+                reference_type="scale",
+                reference_params={"scale": "Bb major"},
+            )
+
+            assert not result.get("error"), result
+            wrong = [e for e in result["errors"] if e["type"] == "wrong_note"]
+            assert len(wrong) == 1
+            assert wrong[0]["played"] == "B4"
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_unknown_key_rejected(self, audio_tools, temp_dir):
+        """Unknown scale names must return an error dict, not all 12 notes."""
+        audio_file_id = "test_audio"
+        file_path = temp_dir / f"{audio_file_id}.wav"
+        file_path.touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+            patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
+            patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
+        ):
+            mock_tempo.return_value = {"bpm": 120}
+            mock_pitch.return_value = {"intonation_accuracy": 0.9, "notes": []}
+            mock_rhythm.return_value = {"timing_accuracy": 0.9}
+
+            result = await audio_tools.call_tool(
+                "compare_to_reference",
+                audio_file_id=audio_file_id,
+                reference_type="scale",
+                reference_params={"scale": "X wibble"},
+            )
+
+            assert result.get("error") is True
+            assert result["error_type"] == "INVALID_KEY"
+
+    @pytest.mark.asyncio
+    async def test_compare_audio_invalid_comparison_type(self, audio_tools, temp_dir):
+        """Unknown comparison_type must return an error dict."""
+        audio_file_id_1 = "a1"
+        audio_file_id_2 = "a2"
+        (temp_dir / f"{audio_file_id_1}.wav").touch()
+        (temp_dir / f"{audio_file_id_2}.wav").touch()
+
+        with patch.object(settings, "audio_storage_path", str(temp_dir)):
+            result = await audio_tools.call_tool(
+                "compare_audio",
+                audio_file_id_1=audio_file_id_1,
+                audio_file_id_2=audio_file_id_2,
+                comparison_type="sparkle",
+            )
+
+        assert result.get("error") is True
+        assert result["error_type"] == "INVALID_COMPARISON_TYPE"
+
+    @pytest.mark.asyncio
+    async def test_compare_audio_per_type_similarity(self, audio_tools, temp_dir):
+        """tempo/pitch/rhythm comparison types must produce a real
+        similarity_score (previously always 0.0 for non-overall types)."""
+        audio_file_id_1 = "a1"
+        audio_file_id_2 = "a2"
+        (temp_dir / f"{audio_file_id_1}.wav").touch()
+        (temp_dir / f"{audio_file_id_2}.wav").touch()
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+        ):
+            mock_tempo.side_effect = [
+                {"bpm": 120, "tempo_stability_score": 0.9},
+                {"bpm": 122, "tempo_stability_score": 0.9},
+            ]
+            result = await audio_tools.call_tool(
+                "compare_audio",
+                audio_file_id_1=audio_file_id_1,
+                audio_file_id_2=audio_file_id_2,
+                comparison_type="tempo",
+            )
+
+        assert not result.get("error"), result
+        # 2 BPM apart -> similarity 1 - 2/20 = 0.9
+        assert abs(result["similarity_score"] - 0.9) < 1e-6
+
+    @pytest.mark.asyncio
+    async def test_compare_to_reference_midi_note_comparison(self, audio_tools, temp_dir):
+        """MIDI comparison must actually read the reference notes and report
+        wrong notes with timestamps (previously errors were always [])."""
+        from music21 import note as m21_note
+        from music21 import stream as m21_stream
+
+        audio_file_id = "test_audio"
+        midi_file_id = "test_midi"
+        (temp_dir / f"{audio_file_id}.wav").touch()
+
+        # Reference: C4 D4 E4
+        score = m21_stream.Stream()
+        for i, pitch_name in enumerate(["C4", "D4", "E4"]):
+            n = m21_note.Note(pitch_name)
+            n.offset = float(i)
+            score.append(n)
+        midi_path = temp_dir / f"{midi_file_id}.mid"
+        score.write("midi", fp=str(midi_path))
+
+        with (
+            patch.object(settings, "audio_storage_path", str(temp_dir)),
+            patch.object(settings, "midi_storage_path", temp_dir),
+            patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
+            patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
+            patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
+        ):
+            mock_tempo.return_value = {"bpm": 120}
+            # Player played C4, D#4 (wrong), E4
+            mock_pitch.return_value = {
+                "intonation_accuracy": 0.9,
+                "notes": [
+                    {"pitch": "C4", "start_time": 0.0},
+                    {"pitch": "D#4", "start_time": 0.5},
+                    {"pitch": "E4", "start_time": 1.0},
+                ],
+            }
+            mock_rhythm.return_value = {"timing_accuracy": 0.9}
+
+            result = await audio_tools.call_tool(
+                "compare_to_reference",
+                audio_file_id=audio_file_id,
+                reference_type="midi_file",
+                reference_params={"midi_file_id": midi_file_id},
+            )
+
+        assert not result.get("error"), result
+        comparison = result["comparison"]
+        assert comparison["reference_note_count"] == 3
+        assert comparison["played_note_count"] == 3
+        assert comparison["matched_notes"] == 2
+        assert abs(comparison["pitch_accuracy"] - 2 / 3) < 1e-6
+        wrong = [e for e in result["errors"] if e["type"] == "wrong_note"]
+        assert len(wrong) == 1
+        assert wrong[0]["played"] == "D#4"
+        assert wrong[0]["expected"] == "D4"
+        assert wrong[0]["time"] == 0.5
+
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_file_not_found(self, audio_tools, temp_dir):
         """Test compare_to_reference with non-existent MIDI file"""

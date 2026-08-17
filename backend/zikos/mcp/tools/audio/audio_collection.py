@@ -98,7 +98,7 @@ Interpretation Guidelines:
                     "message": (
                         "compare_audio requires both audio_file_id_1 and audio_file_id_2 — "
                         "both must be valid audio UUIDs from the current session. "
-                        "comparison_type must be one of: 'overall' (default), 'tempo', 'pitch', 'rhythm', 'dynamics'."
+                        "comparison_type must be one of: 'overall' (default), 'tempo', 'pitch', 'rhythm'."
                     ),
                 }
 
@@ -126,8 +126,8 @@ Interpretation Guidelines:
                     "message": (
                         "compare_to_reference requires audio_file_id (valid audio UUID) and reference_type. "
                         "Valid reference_type values: "
-                        "'scale' (reference_params: {'scale': 'C major', 'instrument': 'piano'}), "
-                        "'midi' (reference_params: {'midi_file_id': '<id from validate_midi>'})."
+                        "'scale' (reference_params: {'scale': 'C major', 'tempo': 120}), "
+                        "'midi_file' (reference_params: {'midi_file_id': '<id from validate_midi>'})."
                     ),
                 }
 
