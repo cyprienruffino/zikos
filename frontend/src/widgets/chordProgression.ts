@@ -69,7 +69,7 @@ export function addChordProgressionWidget(
     });
 }
 
-function parseChordName(chordName: string): number[] {
+export function parseChordName(chordName: string): number[] {
     const noteToSemitones: Record<string, number> = {
         C: 0,
         "C#": 1,
@@ -101,19 +101,26 @@ function parseChordName(chordName: string): number[] {
     const octave = 4;
     const rootFreq = 440 * Math.pow(2, (semitones - 9 + (octave - 4) * 12) / 12);
 
-    const chordType = chordName.replace(baseNote, "").toLowerCase();
+    const chordType = chordName.slice(baseNote.length).toLowerCase();
     let intervals: number[];
 
-    if (chordType.includes("m") || chordType.includes("min")) {
-        intervals = [0, 3, 7];
-    } else if (chordType.includes("dim")) {
+    // Specific qualities first: a naive "includes('m')" check would classify
+    // Cmaj7 and Cdim as minor.
+    if (chordType.includes("dim")) {
         intervals = [0, 3, 6];
     } else if (chordType.includes("aug")) {
         intervals = [0, 4, 8];
+    } else if (chordType.includes("sus4")) {
+        intervals = [0, 5, 7];
     } else if (chordType.includes("sus2")) {
         intervals = [0, 2, 7];
-    } else if (chordType.includes("sus4") || chordType.includes("sus")) {
+    } else if (chordType.includes("sus")) {
         intervals = [0, 5, 7];
+    } else if (chordType.includes("maj")) {
+        // maj, maj7, maj9... all get a major triad
+        intervals = [0, 4, 7];
+    } else if (/^(m|min)(?!aj)/.test(chordType)) {
+        intervals = [0, 3, 7];
     } else {
         intervals = [0, 4, 7];
     }
