@@ -304,6 +304,25 @@ describe("Practice Timer Widget", () => {
             );
         });
 
+        it("should report cumulative practice minutes in reminders", () => {
+            addPracticeTimerWidget("timer_123", 30, "Practice scales", 1);
+            const widget = document.getElementById("timer-timer_123");
+            const startBtn = widget?.querySelector(".start-btn") as HTMLButtonElement;
+
+            startBtn.click();
+            vi.advanceTimersByTime(60_000);
+            expect(ui.addMessage).toHaveBeenCalledWith(
+                expect.stringContaining("practicing for 1 minutes"),
+                "assistant"
+            );
+
+            vi.advanceTimersByTime(60_000);
+            expect(ui.addMessage).toHaveBeenCalledWith(
+                expect.stringContaining("practicing for 2 minutes"),
+                "assistant"
+            );
+        });
+
         it("should clear break interval when paused", () => {
             const clearIntervalSpy = vi.spyOn(window, "clearInterval");
             addPracticeTimerWidget("timer_123", 30, "Practice scales", 5);

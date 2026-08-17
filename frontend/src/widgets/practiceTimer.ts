@@ -101,8 +101,15 @@ function startPracticeTimer(
     if (breakIntervalMinutes) {
         timer.breakIntervalId = window.setInterval(
             () => {
+                // Report cumulative practice time, not the interval length.
+                const currentTimer = practiceTimers.get(timerId);
+                const elapsedSeconds =
+                    currentTimer && currentTimer.startTime
+                        ? Math.floor((Date.now() - currentTimer.startTime) / 1000)
+                        : 0;
+                const totalMinutes = Math.round(elapsedSeconds / 60);
                 addMessage(
-                    `Break reminder: You've been practicing for ${breakIntervalMinutes} minutes. Consider taking a short break!`,
+                    `Break reminder: You've been practicing for ${totalMinutes} minutes. Consider taking a short break!`,
                     "assistant"
                 );
             },
