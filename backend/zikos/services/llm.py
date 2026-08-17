@@ -476,14 +476,32 @@ class LLMService:
                     elif result:
                         tool_name = result.get("tool_name", "")
                         tool = tool_registry.get_tool(tool_name) if tool_name else None
-                        assistant_msg = {
-                            "role": "assistant",
-                            "content": cleaned_content or None,
-                            "tool_calls": tool_calls,
-                        }
-                        if tool and tool.category == ToolCategory.DISPLAY_WIDGET:
-                            # Result is immediate: commit assistant + synthetic tool_result now.
-                            history.append(assistant_msg)
+                        # Commit the assistant message plus every tool result that
+                        # was executed in this batch (analysis tools mixed with the
+                        # widget call) so no tool_use is ever left dangling.
+                        history.append(
+                            {
+                                "role": "assistant",
+                                "content": cleaned_content or None,
+                                "tool_calls": tool_calls,
+                            }
+                        )
+                        if tool_results:
+                            history.extend(tool_results)
+                            for event in self._media_events_from_tool_results(tool_results):
+                                yield event
+                        if tool and tool.category == ToolCategory.INTERACTION_REQUEST:
+                            # Result arrives later (e.g. audio recording); tool_result
+                            # appended by handle_audio_ready when the user completes
+                            # the action, or synthesized on cancel/next message.
+                            tool_call_id = result.get("tool_id") or ""
+                            if tool_call_id:
+                                self.conversation_manager.set_pending_interaction(
+                                    session_id, tool_call_id, tool_name
+                                )
+                        else:
+                            # Display widgets are immediate: commit a synthetic
+                            # tool_result now.
                             history.append(
                                 {
                                     "role": "tool",
@@ -492,16 +510,6 @@ class LLMService:
                                     "tool_call_id": result.get("tool_id"),
                                 }
                             )
-                        elif tool and tool.category == ToolCategory.INTERACTION_REQUEST:
-                            # Result arrives later (e.g. audio recording).
-                            # Commit the assistant message now; tool_result appended
-                            # by handle_audio_ready when the user completes the action.
-                            history.append(assistant_msg)
-                            tool_call_id = result.get("tool_id") or ""
-                            if tool_call_id:
-                                self.conversation_manager.set_pending_interaction(
-                                    session_id, tool_call_id, tool_name
-                                )
                         yield result
                         return
                 else:

@@ -180,7 +180,11 @@ class LLMOrchestrator:
             - should_continue: True if iteration should continue normally
             - response_or_error: Widget response or loop error dict, or None
             - tool_call_infos: Tool call info dicts for UI streaming
-            - tool_results: Tool result messages; empty list on early exit
+            - tool_results: Tool result messages. Empty on loop errors (nothing
+              executed). When a widget response is returned, this still contains
+              the results of every non-widget tool that was executed in the same
+              batch — the caller must commit them alongside the assistant message
+              so no tool_use is left dangling.
         """
         iteration_state.consecutive_tool_calls += 1
 
@@ -243,13 +247,15 @@ class LLMOrchestrator:
                 -LLM.RECENT_TOOL_CALLS_WINDOW :
             ]
 
-        # Execute tools
+        # Execute all non-widget tools first so their results are never lost,
+        # even when the same batch also contains a widget/interaction call.
         tool_results = []
+        widget_response: dict[str, Any] | None = None
         for tool_call in tool_calls:
             if not isinstance(tool_call, dict):
                 continue
 
-            widget_response = await self.tool_executor.execute_tool_call(
+            response = await self.tool_executor.execute_tool_call(
                 tool_call,
                 tool_registry,
                 mcp_server,
@@ -257,13 +263,29 @@ class LLMOrchestrator:
                 cleaned_content,
                 self.tool_call_parser,
             )
-            if widget_response:
-                return False, widget_response, tool_call_infos, []
+            if response:
+                if widget_response is None:
+                    widget_response = response
+                else:
+                    # Only one widget can be returned per turn; close the extra
+                    # call with a synthetic result so it doesn't dangle.
+                    tool_results.append(
+                        {
+                            "role": "tool",
+                            "name": response.get("tool_name", ""),
+                            "content": "Skipped: only one widget can be displayed per turn.",
+                            "tool_call_id": tool_call.get("id"),
+                        }
+                    )
+                continue
 
             tool_result = await self.tool_executor.execute_tool_and_get_result(
                 tool_call, tool_registry, mcp_server, session_id
             )
             tool_results.append(tool_result)
+
+        if widget_response:
+            return False, widget_response, tool_call_infos, tool_results
 
         return True, None, tool_call_infos, tool_results
 

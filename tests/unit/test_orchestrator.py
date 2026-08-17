@@ -239,6 +239,58 @@ class TestProcessToolCalls:
         assert tool_results == []
 
     @pytest.mark.asyncio
+    async def test_mixed_analysis_and_widget_keeps_executed_results(self, orchestrator, mcp_server):
+        """A batch of [analysis_call, widget_call] must return the widget response
+        AND the executed analysis results so the caller can commit them."""
+        tool_calls = [
+            {
+                "id": "call_analysis",
+                "function": {"name": "analyze_tempo", "arguments": '{"audio_file_id": "f1"}'},
+            },
+            {
+                "id": "call_widget",
+                "function": {"name": "create_metronome", "arguments": '{"bpm": 100}'},
+            },
+        ]
+        state = IterationState()
+        registry = mcp_server.get_tool_registry()
+
+        should_continue, result, infos, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
+        )
+
+        assert should_continue is False
+        assert result is not None
+        assert result["type"] == "tool_call"
+        assert result["tool_name"] == "create_metronome"
+        assert len(tool_results) == 1
+        assert tool_results[0]["role"] == "tool"
+        assert tool_results[0]["tool_call_id"] == "call_analysis"
+        assert "120" in tool_results[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_multiple_widgets_extra_calls_get_synthetic_results(self, orchestrator):
+        """Only the first widget is returned; extra widget calls are closed with
+        synthetic tool results so nothing dangles."""
+        server = MCPServer()
+        tool_calls = [
+            {"id": "w1", "function": {"name": "create_metronome", "arguments": '{"bpm": 90}'}},
+            {"id": "w2", "function": {"name": "create_metronome", "arguments": '{"bpm": 120}'}},
+        ]
+        state = IterationState()
+        registry = server.get_tool_registry()
+
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, server, "s1", ""
+        )
+
+        assert should_continue is False
+        assert result["arguments"]["bpm"] == 90
+        assert len(tool_results) == 1
+        assert tool_results[0]["tool_call_id"] == "w2"
+        assert "Skipped" in tool_results[0]["content"]
+
+    @pytest.mark.asyncio
     async def test_loop_detection_triggers(self, orchestrator, mcp_server):
         state = IterationState()
         state.consecutive_tool_calls = LLM.MAX_CONSECUTIVE_TOOL_CALLS

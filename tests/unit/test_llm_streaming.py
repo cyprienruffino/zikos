@@ -184,6 +184,49 @@ class TestLLMStreaming:
         assert assistant_idx + 1 == tool_idx, "tool_result immediately follows assistant tool_use"
 
     @pytest.mark.asyncio
+    async def test_mixed_analysis_and_widget_commits_all_results(self, mcp_server):
+        """When one response contains [analysis_call, widget_call], the executed
+        analysis result must be committed to history — every tool_call id gets a
+        tool_result."""
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "call_a",
+                    "function": {
+                        "name": "analyze_tempo",
+                        "arguments": '{"audio_file_id": "f1"}',
+                    },
+                },
+                {
+                    "id": "call_w",
+                    "function": {"name": "create_metronome", "arguments": '{"bpm": 100}'},
+                },
+            ],
+        )
+        mcp_server.call_tool = AsyncMock(return_value={"bpm": 120})
+
+        chunks = []
+        async for chunk in service.generate_response_stream("Analyse + metronome", "s1", mcp_server):
+            chunks.append(chunk)
+
+        assert any(
+            c.get("type") == "tool_call" and c.get("tool_name") == "create_metronome"
+            for c in chunks
+        )
+
+        history = service._get_conversation_history("s1")
+        assistant_ids = sorted(
+            tc["id"]
+            for m in history
+            if m["role"] == "assistant"
+            for tc in (m.get("tool_calls") or [])
+        )
+        result_ids = sorted(m["tool_call_id"] for m in history if m["role"] == "tool")
+        assert assistant_ids == result_ids, "every tool_use must have a tool_result"
+        assert len(result_ids) == 2
+
+    @pytest.mark.asyncio
     async def test_unfulfilled_interaction_closed_on_next_user_message(self, mcp_server):
         """If the user replies with text instead of recording, the pending
         tool_use must be closed with a synthesized tool_result before the new
