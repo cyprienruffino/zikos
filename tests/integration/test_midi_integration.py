@@ -180,10 +180,10 @@ Track 1:
             midi_text_to_file(midi_text, midi_path)
 
             try:
-                result = await midi_tools.midi_to_notation(midi_file_id, "both")
+                result = await midi_tools.midi_to_notation(midi_file_id, "sheet_music")
 
                 assert "midi_file_id" in result
-                assert result["format"] == "both"
+                assert result["format"] == "sheet_music"
 
                 notation_path = Path(settings.notation_storage_path)
                 if "sheet_music_url" in result:
@@ -244,7 +244,7 @@ Track 1:
                 raise
 
             try:
-                notation_result = await midi_tools.midi_to_notation(midi_file_id, "both")
+                notation_result = await midi_tools.midi_to_notation(midi_file_id, "sheet_music")
                 assert "midi_file_id" in notation_result
                 assert notation_result["midi_file_id"] == midi_file_id
             except Exception as e:

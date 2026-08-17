@@ -94,8 +94,9 @@ class TestMCPToolCalling:
 
         mcp_server = MCPServer()
 
-        with pytest.raises(ValueError, match="Unknown tool"):
-            await mcp_server.call_tool("nonexistent_tool", arg1="value")
+        result = await mcp_server.call_tool("nonexistent_tool", arg1="value")
+        assert result["error"] is True
+        assert result["error_type"] == "UNKNOWN_TOOL"
 
     @pytest.mark.asyncio
     async def test_tool_schemas_format(self):
