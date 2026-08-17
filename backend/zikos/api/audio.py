@@ -1,12 +1,54 @@
 """Audio API endpoints"""
 
+from pathlib import Path
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
+from zikos.constants import UploadConstants
 from zikos.services.audio import AudioService
 
 router = APIRouter()
 audio_service = AudioService()
+
+_READ_CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+
+def _validate_upload_type(file: UploadFile) -> None:
+    """Validate extension and content-type against the audio allowlist (415 on failure)."""
+    extension = Path(file.filename or "").suffix.lower()
+    if extension not in UploadConstants.ALLOWED_AUDIO_EXTENSIONS:
+        allowed = ", ".join(sorted(UploadConstants.ALLOWED_AUDIO_EXTENSIONS))
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file extension {extension!r}. Allowed: {allowed}",
+        )
+
+    content_type = (file.content_type or "").lower()
+    if content_type and not (
+        content_type.startswith(UploadConstants.ALLOWED_CONTENT_TYPE_PREFIXES)
+        or content_type in UploadConstants.ALLOWED_CONTENT_TYPES
+    ):
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported content type {content_type!r}",
+        )
+
+
+async def _enforce_upload_size(file: UploadFile) -> None:
+    """Read the upload in chunks to enforce the max size (413 on failure)."""
+    size = 0
+    while chunk := await file.read(_READ_CHUNK_SIZE):
+        size += len(chunk)
+        if size > UploadConstants.MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "Upload too large. Maximum size is "
+                    f"{UploadConstants.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MB"
+                ),
+            )
+    await file.seek(0)
 
 
 @router.post("/upload")
@@ -15,6 +57,9 @@ async def upload_audio(
     recording_id: str | None = Form(None),
 ):
     """Upload audio file"""
+    _validate_upload_type(file)
+    await _enforce_upload_size(file)
+
     try:
         audio_file_id = await audio_service.store_audio(file, recording_id)
         analysis = await audio_service.run_baseline_analysis(audio_file_id)
