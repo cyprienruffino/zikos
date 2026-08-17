@@ -37,10 +37,13 @@ If MIDI generated: validate → synthesize → render notation → UI displays
 |-----------|----------|
 | **LLM Service** | `backend/zikos/services/llm.py` |
 | **Orchestration** | `backend/zikos/services/llm_orchestration/` |
+| | - `orchestrator.py` - Coordinates the generation loop |
 | | - `conversation_manager.py` - History per session |
 | | - `message_preparer.py` - Truncation, system prompt |
-| | - `audio_context_enricher.py` - Inject analysis |
+| | - `stream_processor.py` - Streaming token handling |
+| | - `thinking_extractor.py` - Strip/extract thinking blocks |
 | | - `tool_call_parser.py` - Parse native + Qwen XML |
+| | - `tool_injector.py` - Inject tool docs/results |
 | | - `tool_executor.py` - Execute via MCP |
 | | - `response_validator.py` - Gibberish, tokens, loops |
 | **Prompt System** | `backend/zikos/services/prompt/` |
@@ -71,10 +74,11 @@ Tools return **LLM-interpretable** structured data:
 5. **Severity indicators**: Context for problems
 6. **Structured errors**: `{"error": true, "error_type": "...", "message": "..."}`
 
-### Baseline Tools (auto-run on upload)
+### Baseline Tools (auto-run on upload — four of them)
 - `analyze_tempo()` - BPM, stability, rushing/dragging
 - `detect_pitch()` - Note-by-note, intonation, key detection
 - `analyze_rhythm()` - Onsets, timing accuracy, beat deviations
+- `detect_instrument()` - Instrument classification
 
 ### Optional Tools (LLM decides)
 - `detect_key()`, `detect_chords()`, `analyze_timbre()`, `analyze_dynamics()`
@@ -101,8 +105,15 @@ Tools return **LLM-interpretable** structured data:
 
 ### Key Environment Variables
 ```bash
-LLM_MODEL_PATH=./models/model.gguf  # Required
+# Cloud backends (litellm) — easiest path, no GPU needed
+LLM_PROVIDER=                        # openai|anthropic|gemini|mistral|...
+LLM_API_KEY=                         # Or provider-specific env var (OPENAI_API_KEY, ...)
+LLM_MODEL_NAME=                      # litellm model string, e.g. claude-sonnet-4-6
+
+# Local backends
+LLM_MODEL_PATH=./models/model.gguf  # Required for local models
 LLM_BACKEND=auto                     # auto|llama_cpp|transformers
+LLM_TOOL_FORMAT=auto                 # auto|qwen|simplified|native
 LLM_N_GPU_LAYERS=-1                  # -1=full GPU, 0=CPU
 LLM_N_CTX=                           # Auto-detected if not set
 SYSTEM_PROMPT_CACHE_PATH=            # Optional KV cache
@@ -126,7 +137,8 @@ DEBUG_TOOL_CALLS=false               # Verbose tool logs
 - **Comprehensive tests** (`tests/comprehensive/`): Require real LLM/heavy audio, marked `@pytest.mark.comprehensive`
 
 ### Coverage Exclusions (require real models/hardware)
-- `services/llm.py`, `llm_backends/*`, `utils/gpu.py`, `utils/context_length.py`
+- `llm_backends/transformers.py`, `llm_backends/llama_cpp.py`, `utils/gpu.py`
+- (`services/llm.py`, `utils/context_length.py`, `llm_backends/__init__.py` ARE measured — unit-tested via FakeBackend)
 
 ---
 

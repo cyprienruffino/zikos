@@ -1,6 +1,6 @@
 # Bug Tracker
 
-## Open
+## Resolved
 
 ### BUG-001 — ~~Same audio file reused across re-recordings~~ CLOSED: not a real bug
 **Resolution:** Each upload correctly generates a fresh `uuid4`. The "same file" observation was caused by BUG-002: the `AudioContextEnricher` re-injects the first recording's analysis on every subsequent turn, so the LLM kept seeing and commenting on the old data.

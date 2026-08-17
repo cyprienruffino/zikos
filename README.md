@@ -37,8 +37,8 @@ Early development - POC implementation - Vibe-coding involved - Not to be used a
 
 ```bash
 # Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install .
 
 # Install JavaScript dependencies (for TypeScript frontend)
@@ -67,7 +67,7 @@ LLM_API_KEY=sk-...
 
 # Anthropic (Claude)
 LLM_PROVIDER=anthropic
-LLM_MODEL_NAME=claude-opus-4-7
+LLM_MODEL_NAME=claude-sonnet-4-6
 LLM_API_KEY=sk-ant-...
 
 # Google (Gemini)
@@ -90,15 +90,15 @@ You can download models using the provided helper script:
 ```bash
 # List available models
 python scripts/download_model.py --list
-python scripts/download_model.py qwen3-8b-instruct-q4 -o ./models
-python scripts/download_model.py qwen3-14b-instruct-q4 -o ./models
+python scripts/download_model.py qwen2.5-7b-instruct-q4 -o ./models   # GGUF
+python scripts/download_model.py qwen3-8b-instruct -o ./models        # Transformers
 ```
 
-The script supports both GGUF (llama-cpp-python) and Transformers (HuggingFace) formats. After downloading, the `.env` file created by the setup script will be configured automatically, or you can set `LLM_MODEL_PATH` manually:
+The script supports both GGUF (llama-cpp-python) and Transformers (HuggingFace) formats. After downloading, set `LLM_MODEL_PATH` in your `.env` (the script prints the exact value to use):
 
 ```bash
 # For GGUF models (example)
-export LLM_MODEL_PATH=./models/qwen3-8b-instruct-q4_k_m.gguf
+export LLM_MODEL_PATH=./models/Qwen2.5-7B-Instruct-Q4_K_M.gguf
 ```
 
 ### System Prompt KV Cache (llama-cpp-python only)
@@ -163,7 +163,7 @@ The easiest way to run Zikos with Docker:
 
 ```bash
 # Set the model filename (optional, defaults to Phi-3-mini-4k-instruct-q4.gguf)
-export LLM_MODEL_FILE=qwen3-8b-instruct-q4_k_m.gguf
+export LLM_MODEL_FILE=Qwen2.5-7B-Instruct-Q4_K_M.gguf
 
 # Build and start the container
 docker-compose up --build
@@ -192,8 +192,7 @@ docker run -d \
   -v ./audio_storage:/app/audio_storage \
   -v ./midi_storage:/app/midi_storage \
   -v ./notation_storage:/app/notation_storage \
-  -e LLM_MODEL_PATH=/app/models/qwen3-8b-instruct-q4_k_m.gguf \
-  -e LLM_N_CTX=32768 \
+  -e LLM_MODEL_PATH=/app/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf \
   -e LLM_N_GPU_LAYERS=0 \
   zikos
 ```
@@ -292,9 +291,10 @@ This project follows Test-Driven Development (TDD) principles with comprehensive
 
 Run tests:
 ```bash
-pytest -m not comprehensive  # Run all but comprehensive tests
-pytest -m integration    # Run integration tests
-pytest -m ""             # Run all tests including comprehensive and integration
+pytest                        # Unit + fast tests (comprehensive/integration excluded by default)
+pytest -m "not comprehensive" # Everything except comprehensive tests
+pytest -m integration         # Run integration tests
+pytest -m ""                  # Run all tests including comprehensive and integration
 ```
 
 ### Continuous Integration
@@ -304,21 +304,18 @@ The project uses GitHub Actions for CI/CD. The workflow (`.github/workflows/ci.y
 #### CI Jobs
 
 1. **Test** (Python 3.11, 3.12, 3.13)
-   - Runs unit tests with coverage (minimum 75% required)
+   - Installs system dependencies (libsndfile, ffmpeg, fluidsynth, rubberband, etc.)
+   - Runs linters: `ruff check`, `black --check`, `mypy`
+   - Runs unit tests in parallel with coverage (minimum 79% required)
    - Runs integration tests (excluding comprehensive tests)
+   - Smoke-checks that comprehensive tests still collect (import bit-rot guard)
    - Uploads coverage to Codecov (Python 3.13 only)
-   - Installs system dependencies (libsndfile, ffmpeg, fluidsynth, etc.)
 
-2. **Lint**
-   - Runs `ruff` for linting
-   - Runs `black --check` for code formatting
-   - Runs `mypy` for type checking
-
-3. **TypeScript Type Check**
-   - Runs TypeScript type checking
+2. **TypeScript Type Check**
+   - Runs TypeScript type checking and the frontend build
    - Runs ESLint for frontend code quality
 
-4. **Frontend Tests**
+3. **Frontend Tests**
    - Runs frontend test suite with coverage
    - Uploads coverage to Codecov
 
