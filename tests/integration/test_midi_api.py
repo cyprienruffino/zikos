@@ -118,7 +118,7 @@ Track 1:
             midi_text_to_file(midi_text, midi_path)
 
             try:
-                response = client.post(f"/api/midi/{midi_file_id}/render?format=both")
+                response = client.post(f"/api/midi/{midi_file_id}/render?format=sheet_music")
 
                 assert response.status_code == 200
                 data = response.json()

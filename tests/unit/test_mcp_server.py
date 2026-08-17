@@ -102,9 +102,66 @@ class TestMCPServer:
         assert "Play a C scale" in result["prompt"]
 
     @pytest.mark.asyncio
-    async def test_call_unknown_tool_raises(self, mcp_server):
-        with pytest.raises(ValueError, match="Unknown tool"):
-            await mcp_server.call_tool("nonexistent_tool", arg="value")
+    async def test_call_unknown_tool_returns_error_dict(self, mcp_server):
+        """Unknown tools return the documented error shape, not a raised exception"""
+        result = await mcp_server.call_tool("nonexistent_tool", arg="value")
+
+        assert result["error"] is True
+        assert result["error_type"] == "UNKNOWN_TOOL"
+        assert "nonexistent_tool" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_call_tool_normalizes_missing_kwargs(self, mcp_server):
+        """KeyError from missing required kwargs becomes a MISSING_PARAMETER error dict"""
+        result = await mcp_server.call_tool("validate_midi")  # no midi_text
+
+        assert result["error"] is True
+        assert result["error_type"] == "MISSING_PARAMETER"
+        assert "midi_text" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_call_tool_normalizes_file_not_found(self, mcp_server):
+        """FileNotFoundError raised by MIDI tools becomes a FILE_NOT_FOUND error dict"""
+        result = await mcp_server.call_tool(
+            "midi_to_audio", midi_file_id="nonexistent", instrument="piano"
+        )
+
+        assert result["error"] is True
+        assert result["error_type"] == "FILE_NOT_FOUND"
+        assert "validate_midi" in result["message"]  # helpful message preserved
+
+    @pytest.mark.asyncio
+    async def test_metronome_rejects_bad_params(self, mcp_server):
+        result = await mcp_server.call_tool("create_metronome", bpm=1000)
+        assert result["error"] is True
+        assert result["error_type"] == "INVALID_PARAMETER"
+
+        result = await mcp_server.call_tool("create_metronome", time_signature="waltz")
+        assert result["error"] is True
+        assert result["error_type"] == "INVALID_PARAMETER"
+
+    @pytest.mark.asyncio
+    async def test_tempo_trainer_rejects_bad_params(self, mcp_server):
+        result = await mcp_server.call_tool("create_tempo_trainer", start_bpm=120, end_bpm=60)
+        assert result["error"] is True
+        assert result["error_type"] == "INVALID_PARAMETER"
+        assert "start_bpm" in result["message"]
+
+        result = await mcp_server.call_tool(
+            "create_tempo_trainer", start_bpm=60, end_bpm=120, ramp_type="wibbly"
+        )
+        assert result["error"] is True
+
+        result = await mcp_server.call_tool(
+            "create_tempo_trainer", start_bpm=60, end_bpm=120, duration_minutes=-1
+        )
+        assert result["error"] is True
+
+    @pytest.mark.asyncio
+    async def test_tuner_rejects_bad_reference_frequency(self, mcp_server):
+        result = await mcp_server.call_tool("create_tuner", reference_frequency=-440.0)
+        assert result["error"] is True
+        assert result["error_type"] == "INVALID_PARAMETER"
 
     @pytest.mark.asyncio
     async def test_routing_goes_through_registry(self, mcp_server):

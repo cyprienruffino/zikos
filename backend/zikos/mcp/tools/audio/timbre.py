@@ -49,19 +49,19 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
                 "message": f"Audio is too short (minimum {AUDIO.MIN_AUDIO_DURATION} seconds required)",
             }
 
-        spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-        spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr)[0]
-        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
+        # One STFT shared by all spectral features
+        magnitude = np.abs(librosa.stft(y, n_fft=AUDIO.STFT_N_FFT))
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=AUDIO.STFT_N_FFT)
+
+        spectral_centroids = librosa.feature.spectral_centroid(S=magnitude, sr=sr)[0]
+        spectral_rolloff = librosa.feature.spectral_rolloff(S=magnitude, sr=sr)[0]
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(S=magnitude, sr=sr)[0]
 
         mean_centroid = float(np.mean(spectral_centroids))
         mean_rolloff = float(np.mean(spectral_rolloff))
         mean_bandwidth = float(np.mean(spectral_bandwidth))
 
         brightness = float(min(1.0, mean_centroid / AUDIO.BRIGHTNESS_DIVISOR))
-
-        stft = librosa.stft(y, n_fft=AUDIO.STFT_N_FFT)
-        magnitude = np.abs(stft)
-        freqs = librosa.fft_frequencies(sr=sr, n_fft=AUDIO.STFT_N_FFT)
 
         low_freq_mask = freqs < AUDIO.LOW_FREQ_THRESHOLD
         high_freq_mask = freqs >= AUDIO.HIGH_FREQ_THRESHOLD
@@ -100,20 +100,26 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
                     attack_time_ms = (max_idx / sr) * 1000
                     attack_times.append(attack_time_ms)
 
-        average_attack_time = float(np.mean(attack_times)) if attack_times else 15.0
-        attack_time = average_attack_time / 1000.0
+        notes = []
+        attack_time: float | None = None
+        if attack_times:
+            attack_time = float(np.mean(attack_times)) / 1000.0
+        else:
+            notes.append("No onsets detected, so attack time could not be measured.")
 
-        harmonic_ratio = 0.85
+        harmonic_ratio: float | None = None
         try:
             harmonic, percussive = librosa.effects.hpss(y)
             harmonic_energy = float(np.sum(harmonic**2))
             total_energy_hpss = float(np.sum(y**2))
             if total_energy_hpss > 0:
                 harmonic_ratio = float(harmonic_energy / total_energy_hpss)
-        except Exception:
-            pass
+            else:
+                notes.append("Audio has no energy, so harmonic ratio could not be measured.")
+        except Exception as e:
+            notes.append(f"Harmonic/percussive separation failed ({e}), harmonic_ratio unknown.")
 
-        return {
+        result: dict[str, Any] = {
             "brightness": brightness,
             "warmth": warmth,
             "sharpness": sharpness,
@@ -121,9 +127,12 @@ async def analyze_timbre(audio_path: str) -> dict[str, Any]:
             "spectral_rolloff": mean_rolloff,
             "spectral_bandwidth": mean_bandwidth,
             "timbre_consistency": timbre_consistency,
-            "attack_time": float(attack_time),
-            "harmonic_ratio": float(harmonic_ratio),
+            "attack_time": attack_time,
+            "harmonic_ratio": harmonic_ratio,
         }
+        if notes:
+            result["note"] = " ".join(notes)
+        return result
     except FileNotFoundError:
         return {
             "error": True,

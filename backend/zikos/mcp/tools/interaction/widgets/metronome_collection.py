@@ -1,10 +1,15 @@
 """Metronome tools"""
 
+import re
 import uuid
 from typing import Any
 
 from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.base import ToolCollection
+
+MIN_BPM = 20
+MAX_BPM = 400
+TIME_SIGNATURE_PATTERN = re.compile(r"^\d{1,2}/(1|2|4|8|16|32)$")
 
 
 class MetronomeTools(ToolCollection):
@@ -81,6 +86,21 @@ Interpretation Guidelines:
         self, bpm: float, time_signature: str, description: str | None
     ) -> dict[str, Any]:
         """Create metronome widget"""
+        if not isinstance(bpm, int | float) or not (MIN_BPM <= bpm <= MAX_BPM):
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": f"bpm must be a number between {MIN_BPM} and {MAX_BPM}, got: {bpm}",
+            }
+        if not isinstance(time_signature, str) or not TIME_SIGNATURE_PATTERN.match(time_signature):
+            return {
+                "error": True,
+                "error_type": "INVALID_PARAMETER",
+                "message": (
+                    f"time_signature must look like '4/4', '3/4', or '6/8', got: {time_signature}"
+                ),
+            }
+
         metronome_id = str(uuid.uuid4())
 
         return {

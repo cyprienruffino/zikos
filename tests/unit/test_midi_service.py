@@ -113,7 +113,7 @@ Track 1:
             midi_text_to_file(midi_text, midi_path)
 
             try:
-                result = await midi_service.render_notation(midi_file_id, "both")
+                result = await midi_service.render_notation(midi_file_id, "sheet_music")
 
                 assert "midi_file_id" in result
                 assert result["midi_file_id"] == midi_file_id

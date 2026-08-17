@@ -88,7 +88,9 @@ async def segment_phrases(audio_path: str) -> dict[str, Any]:
                     silence_start = None
 
         if in_phrase:
-            phrase_end = duration
+            # If the audio ends during a silence, close the phrase where the
+            # silence began instead of extending it to the end of the file.
+            phrase_end = silence_start if silence_start is not None else duration
             phrase_duration = phrase_end - phrase_start
             if phrase_duration >= min_phrase_duration:
                 phrase_boundaries.append({"start": phrase_start, "end": phrase_end})

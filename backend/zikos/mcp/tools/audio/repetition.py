@@ -35,101 +35,137 @@ Interpretation Guidelines:
     )
 
 
+# Cap analysis length so long files don't blow up segmentation cost.
+MAX_ANALYSIS_SECONDS = 180.0
+
+# Target segment length (seconds) for structural segmentation.
+TARGET_SEGMENT_SECONDS = 4.0
+
+# Cosine similarity threshold for two segments to count as the same section.
+SEGMENT_MATCH_THRESHOLD = 0.85
+
+_HOP_LENGTH = 512
+
+
+def _segment_label(index: int) -> str:
+    """0 -> A, 1 -> B, ..., 26 -> AA, ..."""
+    if index < 26:
+        return chr(ord("A") + index)
+    return chr(ord("A") + index // 26 - 1) + chr(ord("A") + index % 26)
+
+
 async def detect_repetitions(audio_path: str) -> dict[str, Any]:
-    """Detect repeated patterns in audio"""
+    """Detect repeated patterns in audio.
+
+    Segments the piece with librosa's agglomerative structural segmentation
+    on chroma features, then clusters segments by cosine similarity of their
+    mean chroma so repeated sections share a form label (A-B-A etc.).
+    """
     try:
         y, sr = librosa.load(audio_path, sr=None)
 
-        if len(y) / sr < 2.0:
+        duration = len(y) / sr
+        if duration < 2.0:
             return {
                 "error": True,
                 "error_type": "TOO_SHORT",
                 "message": "Audio is too short for repetition detection (minimum 2 seconds required)",
             }
 
-        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
-        chroma_normalized = librosa.util.normalize(chroma, norm=2, axis=0)
+        truncated = False
+        if duration > MAX_ANALYSIS_SECONDS:
+            y = y[: int(MAX_ANALYSIS_SECONDS * sr)]
+            duration = MAX_ANALYSIS_SECONDS
+            truncated = True
 
-        similarity_matrix = np.dot(chroma_normalized.T, chroma_normalized)
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=_HOP_LENGTH)
+        n_frames = chroma.shape[1]
 
-        frame_times = librosa.frames_to_time(np.arange(chroma.shape[1]), sr=sr)
+        # Number of structural segments: about one per TARGET_SEGMENT_SECONDS,
+        # clamped to a sane range and to the number of available frames.
+        n_segments = int(np.clip(round(duration / TARGET_SEGMENT_SECONDS), 2, 16))
+        n_segments = min(n_segments, n_frames)
 
+        boundaries = librosa.segment.agglomerative(chroma, n_segments)
+        boundary_times = librosa.frames_to_time(boundaries, sr=sr, hop_length=_HOP_LENGTH)
+
+        # Build segments as (start_time, end_time, mean_chroma)
+        segments = []
+        boundary_list = list(boundaries) + [n_frames]
+        time_list = list(boundary_times) + [duration]
+        for idx in range(len(boundary_list) - 1):
+            start_f, end_f = int(boundary_list[idx]), int(boundary_list[idx + 1])
+            if end_f <= start_f:
+                continue
+            mean_chroma = np.mean(chroma[:, start_f:end_f], axis=1)
+            norm = float(np.linalg.norm(mean_chroma))
+            if norm > 0:
+                mean_chroma = mean_chroma / norm
+            segments.append(
+                {
+                    "start": float(time_list[idx]),
+                    "end": float(time_list[idx + 1]),
+                    "chroma": mean_chroma,
+                }
+            )
+
+        # Greedy clustering: assign each segment to the first earlier label
+        # whose representative chroma is similar enough, else a new label.
+        labels: list[str] = []
+        label_representatives: list[np.ndarray] = []
+        label_similarities: list[list[float]] = []
+        for seg in segments:
+            assigned = None
+            for label_idx, rep_chroma in enumerate(label_representatives):
+                similarity = float(np.dot(seg["chroma"], rep_chroma))
+                if similarity >= SEGMENT_MATCH_THRESHOLD:
+                    assigned = label_idx
+                    label_similarities[label_idx].append(similarity)
+                    break
+            if assigned is None:
+                assigned = len(label_representatives)
+                label_representatives.append(seg["chroma"])
+                label_similarities.append([])
+            labels.append(_segment_label(assigned))
+
+        # Repetitions: every label that occurs more than once. The first
+        # occurrence is the pattern; later occurrences are its repetitions.
         repetitions = []
-        min_pattern_duration = 1.0
-        min_similarity = 0.75
-
-        for i in range(len(frame_times) - int(min_pattern_duration * sr / 512)):
-            for pattern_length in range(
-                int(min_pattern_duration * sr / 512), min(len(frame_times) - i, int(8 * sr / 512))
-            ):
-                pattern_end = min(i + pattern_length, len(frame_times) - 1)
-                pattern_start_time = frame_times[i]
-                pattern_end_time = frame_times[pattern_end]
-
-                if pattern_end_time - pattern_start_time < min_pattern_duration:
-                    continue
-
-                pattern_similarity = similarity_matrix[
-                    i : i + pattern_length, i : i + pattern_length
-                ]
-                pattern_self_similarity = float(np.mean(np.diag(pattern_similarity)))
-
-                if pattern_self_similarity < 0.6:
-                    continue
-
-                repetition_times = []
-                for j in range(i + pattern_length, len(frame_times) - pattern_length):
-                    comparison_similarity = similarity_matrix[
-                        i : i + pattern_length, j : j + pattern_length
-                    ]
-                    avg_similarity = float(np.mean(comparison_similarity))
-
-                    if avg_similarity >= min_similarity:
-                        repetition_start_time = frame_times[j]
-                        if repetition_start_time not in repetition_times:
-                            repetition_times.append(repetition_start_time)
-
-                if len(repetition_times) > 0:
-                    repetitions.append(
-                        {
-                            "pattern_start": float(pattern_start_time),
-                            "pattern_end": float(pattern_end_time),
-                            "repetition_times": repetition_times,
-                            "similarity": float(pattern_self_similarity),
-                        }
-                    )
+        for label_idx in range(len(label_representatives)):
+            label = _segment_label(label_idx)
+            occurrence_indices = [i for i, lb in enumerate(labels) if lb == label]
+            if len(occurrence_indices) < 2:
+                continue
+            first = segments[occurrence_indices[0]]
+            sims = label_similarities[label_idx]
+            repetitions.append(
+                {
+                    "pattern_start": first["start"],
+                    "pattern_end": first["end"],
+                    "repetition_times": [segments[i]["start"] for i in occurrence_indices[1:]],
+                    "similarity": float(np.mean(sims)) if sims else 1.0,
+                    "label": label,
+                }
+            )
 
         if len(repetitions) == 0:
-            return {
+            result: dict[str, Any] = {
                 "repetitions": [],
                 "form": "no_repetition",
             }
+        else:
+            result = {
+                "repetitions": repetitions[:10],
+                "form": "-".join(labels),
+            }
 
-        repetitions.sort(key=lambda x: float(x["pattern_start"]))  # type: ignore[arg-type]
+        if truncated:
+            result["note"] = (
+                f"Audio longer than {MAX_ANALYSIS_SECONDS:.0f}s; only the first "
+                f"{MAX_ANALYSIS_SECONDS:.0f} seconds were analyzed."
+            )
 
-        form_parts = []
-        pattern_labels = {}
-        label_counter = 0
-
-        for rep in repetitions:
-            pattern_key = (rep["pattern_start"], rep["pattern_end"])
-            if pattern_key not in pattern_labels:
-                if label_counter < 26:
-                    label = chr(ord("A") + label_counter)
-                else:
-                    label = f"A{chr(ord('A') + (label_counter - 26))}"
-                pattern_labels[pattern_key] = label
-                label_counter += 1
-
-            label = pattern_labels[pattern_key]
-            form_parts.append(label)
-
-        form = "-".join(form_parts) if form_parts else "no_repetition"
-
-        return {
-            "repetitions": repetitions[:10],
-            "form": form,
-        }
+        return result
     except FileNotFoundError as e:
         return {
             "error": True,

@@ -54,7 +54,7 @@ async def synthesize_midi(midi_file_id: str, instrument: str = "piano"):
 
 
 @router.post("/{midi_file_id}/render")
-async def render_notation(midi_file_id: str, format: str = "both"):
+async def render_notation(midi_file_id: str, format: str = "sheet_music"):
     """Render MIDI to notation"""
     validate_uuid(midi_file_id, "MIDI file ID")
     try:

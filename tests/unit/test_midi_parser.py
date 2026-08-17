@@ -53,17 +53,45 @@ class TestParseNoteLine:
         result = parse_note_line("")
         assert result is None
 
-    def test_parse_invalid_velocity(self):
-        """Test parsing with invalid velocity"""
-        result = parse_note_line("C4 velocity=invalid")
-        assert result is not None
-        assert result["velocity"] == 60
+    def test_parse_invalid_velocity_raises(self):
+        """Malformed velocity= no longer silently becomes the default"""
+        with pytest.raises(MidiParseError, match="Invalid velocity"):
+            parse_note_line("C4 velocity=invalid")
 
-    def test_parse_invalid_duration(self):
-        """Test parsing with invalid duration"""
-        result = parse_note_line("C4 duration=invalid")
+    def test_parse_invalid_duration_raises(self):
+        """Malformed duration= no longer silently becomes the default"""
+        with pytest.raises(MidiParseError, match="Invalid duration"):
+            parse_note_line("C4 duration=invalid")
+
+    def test_parse_zero_or_negative_duration_raises(self):
+        with pytest.raises(MidiParseError, match="greater than 0"):
+            parse_note_line("C4 duration=0")
+        with pytest.raises(MidiParseError, match="greater than 0"):
+            parse_note_line("C4 duration=-1.0")
+
+    def test_parse_velocity_clamped_with_warning(self):
+        warnings: list[str] = []
+        result = parse_note_line("C4 velocity=200", warnings)
         assert result is not None
-        assert result["duration"] == 0.5
+        assert result["velocity"] == 127
+        assert any("clamped" in w for w in warnings)
+
+        warnings = []
+        result = parse_note_line("C4 velocity=-5", warnings)
+        assert result is not None
+        assert result["velocity"] == 0
+        assert any("clamped" in w for w in warnings)
+
+    def test_parse_chord_line(self):
+        """A line with multiple pitches is a chord, with a warning"""
+        warnings: list[str] = []
+        result = parse_note_line("C4 E4 G4 velocity=70 duration=1.0", warnings)
+        assert result is not None
+        assert result["pitches"] == ["C4", "E4", "G4"]
+        assert result["note"] == "C4"
+        assert result["velocity"] == 70
+        assert result["duration"] == 1.0
+        assert any("chord" in w for w in warnings)
 
 
 class TestParseMidiText:
@@ -170,6 +198,59 @@ Track 1:
 """
         with pytest.raises(MidiParseError, match="Invalid tempo"):
             parse_midi_text(midi_text)
+
+    def test_parse_midi_fractional_tempo_preserved(self):
+        """72.5 BPM must not be truncated to 72"""
+        midi_text = """
+[MIDI]
+Tempo: 72.5
+Track 1:
+  C4
+[/MIDI]
+"""
+        result = parse_midi_text(midi_text)
+        assert result["metadata"]["tempo"] == 72.5
+
+    def test_parse_midi_case_insensitive_block(self):
+        """[midi]...[/midi] should be accepted"""
+        midi_text = """
+[midi]
+Tempo: 120
+Track 1:
+  C4
+[/midi]
+"""
+        result = parse_midi_text(midi_text)
+        assert len(result["tracks"]) == 1
+
+    def test_parse_midi_collects_warnings(self):
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 E4 G4 velocity=200 duration=1.0
+[/MIDI]
+"""
+        result = parse_midi_text(midi_text)
+        assert "warnings" in result
+        assert any("chord" in w for w in result["warnings"])
+        assert any("clamped" in w for w in result["warnings"])
+
+    def test_parse_midi_chord_stream(self):
+        """Chord lines must produce a music21 chord, not just the first note"""
+        midi_text = """
+[MIDI]
+Tempo: 120
+Track 1:
+  C4 E4 G4 duration=1.0
+[/MIDI]
+"""
+        parsed = parse_midi_text(midi_text)
+        score = create_music21_stream(parsed)
+        notes = list(score.parts[0].notes)
+        assert len(notes) == 1
+        assert notes[0].isChord
+        assert sorted(p.nameWithOctave for p in notes[0].pitches) == ["C4", "E4", "G4"]
 
 
 class TestCreateMusic21Stream:
