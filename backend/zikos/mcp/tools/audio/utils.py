@@ -1,9 +1,19 @@
 """Utility functions for audio analysis"""
 
+import re
 from pathlib import Path
 from typing import Any
 
 from zikos.config import settings
+
+UUID_REGEX = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def is_valid_audio_file_id(audio_file_id: Any) -> bool:
+    """Check that an audio_file_id looks like the UUIDs this system issues"""
+    return isinstance(audio_file_id, str) and bool(UUID_REGEX.match(audio_file_id))
 
 
 def resolve_audio_path(audio_file_id: str) -> Path:

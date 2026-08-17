@@ -1,5 +1,6 @@
 """Tests for audio analysis tools"""
 
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -537,7 +538,11 @@ class TestAudioInfo:
     @pytest.mark.asyncio
     async def test_get_audio_info_via_call_tool(self, audio_tools, sample_audio_file):
         """Test get_audio_info via call_tool (MCP tool exposure) with real soundfile"""
-        result = await audio_tools.call_tool("get_audio_info", audio_path=str(sample_audio_file))
+        audio_file_id = str(uuid.uuid4())
+        target = sample_audio_file.parent / f"{audio_file_id}.wav"
+        target.write_bytes(sample_audio_file.read_bytes())
+        with patch.object(settings, "audio_storage_path", str(sample_audio_file.parent)):
+            result = await audio_tools.call_tool("get_audio_info", audio_file_id=audio_file_id)
 
         assert "duration" in result
         assert result["duration"] > 0
@@ -597,7 +602,11 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_error_handling_unknown_tool(self, audio_tools, sample_audio_file):
         """Test error handling for unknown tool"""
-        result = await audio_tools.call_tool("unknown_tool", audio_path=str(sample_audio_file))
+        audio_file_id = str(uuid.uuid4())
+        target = sample_audio_file.parent / f"{audio_file_id}.wav"
+        target.write_bytes(sample_audio_file.read_bytes())
+        with patch.object(settings, "audio_storage_path", str(sample_audio_file.parent)):
+            result = await audio_tools.call_tool("unknown_tool", audio_file_id=audio_file_id)
         assert "error" in result
         assert result["error_type"] == "UNKNOWN_TOOL"
 
@@ -651,6 +660,42 @@ class TestUtils:
             with pytest.raises(FileNotFoundError):
                 resolve_audio_path("nonexistent")
 
+    def test_is_valid_audio_file_id(self):
+        """UUID validation for LLM-facing audio_file_id parameters"""
+        from zikos.mcp.tools.audio.utils import is_valid_audio_file_id
+
+        assert is_valid_audio_file_id(str(uuid.uuid4()))
+        assert not is_valid_audio_file_id("test_audio")
+        assert not is_valid_audio_file_id("recording.wav")
+        assert not is_valid_audio_file_id("")
+        assert not is_valid_audio_file_id(None)
+        assert not is_valid_audio_file_id(1234)
+
+    @pytest.mark.asyncio
+    async def test_call_tool_rejects_non_uuid_ids(self, audio_tools, temp_dir):
+        """The LLM-facing call_tool path must reject fabricated non-UUID ids
+        with an explanatory error dict (and never accept an audio_path kwarg)."""
+        with patch.object(settings, "audio_storage_path", str(temp_dir)):
+            result = await audio_tools.call_tool("analyze_tempo", audio_file_id="fabricated_id")
+            assert result["error"] is True
+            assert result["error_type"] == "INVALID_PARAMETER"
+            assert "UUID" in result["message"]
+
+            result = await audio_tools.call_tool(
+                "compare_audio",
+                audio_file_id_1="not-a-uuid",
+                audio_file_id_2=str(uuid.uuid4()),
+            )
+            assert result["error"] is True
+            assert result["error_type"] == "INVALID_PARAMETER"
+
+            # audio_path is no longer honored at the tool boundary
+            secret = temp_dir / "secret.wav"
+            secret.touch()
+            result = await audio_tools.call_tool("analyze_tempo", audio_path=str(secret))
+            assert result["error"] is True
+            assert result["error_type"] == "MISSING_PARAMETER"
+
     def test_create_error_response(self):
         """Test create_error_response"""
         from zikos.mcp.tools.audio.utils import create_error_response
@@ -696,8 +741,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_overall(self, audio_tools, temp_dir):
         """Test compare_audio with overall comparison"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -738,8 +783,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_tempo(self, audio_tools, temp_dir):
         """Test compare_audio with tempo comparison"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -779,8 +824,8 @@ class TestComparisonTools:
         """Test compare_audio with missing files"""
         result = await audio_tools.call_tool(
             "compare_audio",
-            audio_file_id_1="nonexistent_1",
-            audio_file_id_2="nonexistent_2",
+            audio_file_id_1=str(uuid.uuid4()),
+            audio_file_id_2=str(uuid.uuid4()),
         )
 
         assert "error" in result
@@ -789,7 +834,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_scale(self, audio_tools, temp_dir):
         """Test compare_to_reference with scale"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -832,7 +877,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_file(self, audio_tools, temp_dir):
         """Test compare_to_reference with MIDI file"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         midi_file_id = "test_midi"
         file_path = temp_dir / f"{audio_file_id}.wav"
         midi_path = temp_dir / f"{midi_file_id}.mid"
@@ -882,7 +927,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_missing_midi_file_id(self, audio_tools, temp_dir):
         """Test compare_to_reference with missing midi_file_id"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -917,7 +962,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_invalid_type(self, audio_tools, temp_dir):
         """Test compare_to_reference with invalid reference type"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -952,8 +997,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_pitch_comparison(self, audio_tools, temp_dir):
         """Test compare_audio with pitch comparison"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -992,8 +1037,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_rhythm_comparison(self, audio_tools, temp_dir):
         """Test compare_audio with rhythm comparison"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -1032,8 +1077,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_with_improvements(self, audio_tools, temp_dir):
         """Test compare_audio detecting improvements"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -1086,8 +1131,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_with_regressions(self, audio_tools, temp_dir):
         """Test compare_audio detecting regressions"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -1140,8 +1185,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_error_in_analysis(self, audio_tools, temp_dir):
         """Test compare_audio when analysis fails"""
-        audio_file_id_1 = "test_audio_1"
-        audio_file_id_2 = "test_audio_2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -1166,7 +1211,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_scale_with_wrong_notes(self, audio_tools, temp_dir):
         """Test compare_to_reference with scale and wrong notes"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -1240,7 +1285,7 @@ class TestComparisonTools:
     async def test_compare_to_reference_flat_key_flags_wrong_notes(self, audio_tools, temp_dir):
         """A B-natural played over Bb major must be flagged as a wrong note.
         Previously unknown tonics like 'Bb' silently expanded to all 12 notes."""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -1276,7 +1321,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_unknown_key_rejected(self, audio_tools, temp_dir):
         """Unknown scale names must return an error dict, not all 12 notes."""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -1303,8 +1348,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_invalid_comparison_type(self, audio_tools, temp_dir):
         """Unknown comparison_type must return an error dict."""
-        audio_file_id_1 = "a1"
-        audio_file_id_2 = "a2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         (temp_dir / f"{audio_file_id_1}.wav").touch()
         (temp_dir / f"{audio_file_id_2}.wav").touch()
 
@@ -1323,8 +1368,8 @@ class TestComparisonTools:
     async def test_compare_audio_per_type_similarity(self, audio_tools, temp_dir):
         """tempo/pitch/rhythm comparison types must produce a real
         similarity_score (previously always 0.0 for non-overall types)."""
-        audio_file_id_1 = "a1"
-        audio_file_id_2 = "a2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         (temp_dir / f"{audio_file_id_1}.wav").touch()
         (temp_dir / f"{audio_file_id_2}.wav").touch()
 
@@ -1354,7 +1399,7 @@ class TestComparisonTools:
         from music21 import note as m21_note
         from music21 import stream as m21_stream
 
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         midi_file_id = "test_midi"
         (temp_dir / f"{audio_file_id}.wav").touch()
 
@@ -1408,7 +1453,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_file_not_found(self, audio_tools, temp_dir):
         """Test compare_to_reference with non-existent MIDI file"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -1450,7 +1495,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_parse_error(self, audio_tools, temp_dir):
         """Test compare_to_reference when MIDI parsing fails"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         midi_file_id = "test_midi"
         file_path = temp_dir / f"{audio_file_id}.wav"
         midi_path = temp_dir / f"{midi_file_id}.mid"
@@ -1505,8 +1550,8 @@ class TestComparisonTools:
         ):
             result = await audio_tools.call_tool(
                 "compare_audio",
-                audio_file_id_1="nonexistent1",
-                audio_file_id_2="nonexistent2",
+                audio_file_id_1=str(uuid.uuid4()),
+                audio_file_id_2=str(uuid.uuid4()),
                 comparison_type="overall",
             )
 
@@ -1516,8 +1561,8 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_audio_general_exception(self, audio_tools, temp_dir):
         """Test compare_audio with general exception"""
-        audio_file_id_1 = "test1"
-        audio_file_id_2 = "test2"
+        audio_file_id_1 = str(uuid.uuid4())
+        audio_file_id_2 = str(uuid.uuid4())
         file_1 = temp_dir / f"{audio_file_id_1}.wav"
         file_2 = temp_dir / f"{audio_file_id_2}.wav"
         file_1.touch()
@@ -1548,7 +1593,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_scale_no_tempo(self, audio_tools, temp_dir):
         """Test compare_to_reference with scale but no expected tempo (line 196)"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 
@@ -1598,7 +1643,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_no_tempo(self, audio_tools, temp_dir):
         """Test compare_to_reference with MIDI file but no tempo in MIDI (line 268)"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         midi_file_id = "test_midi"
         file_path = temp_dir / f"{audio_file_id}.wav"
         midi_path = temp_dir / f"{midi_file_id}.mid"
@@ -1650,7 +1695,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_midi_tempo_exception(self, audio_tools, temp_dir):
         """Test compare_to_reference with MIDI file when tempo extraction raises exception (line 260-261)"""
-        audio_file_id = "test_audio"
+        audio_file_id = str(uuid.uuid4())
         midi_file_id = "test_midi"
         file_path = temp_dir / f"{audio_file_id}.wav"
         midi_path = temp_dir / f"{midi_file_id}.mid"
@@ -1711,7 +1756,7 @@ class TestComparisonTools:
         ):
             result = await audio_tools.call_tool(
                 "compare_to_reference",
-                audio_file_id="nonexistent",
+                audio_file_id=str(uuid.uuid4()),
                 reference_type="scale",
                 reference_params={},
             )
@@ -1722,7 +1767,7 @@ class TestComparisonTools:
     @pytest.mark.asyncio
     async def test_compare_to_reference_general_exception(self, audio_tools, temp_dir):
         """Test compare_to_reference with general exception"""
-        audio_file_id = "test"
+        audio_file_id = str(uuid.uuid4())
         file_path = temp_dir / f"{audio_file_id}.wav"
         file_path.touch()
 

@@ -1,5 +1,6 @@
 """Tests for audio segmentation tool"""
 
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -156,7 +157,8 @@ async def test_segment_audio_via_call_tool(temp_dir, sample_audio_path):
 
     sf.write(str(sample_audio_path), y, sample_rate)
 
-    audio_file_id = sample_audio_path.stem
+    audio_file_id = str(uuid.uuid4())
+    sample_audio_path.rename(sample_audio_path.parent / f"{audio_file_id}.wav")
     tools = AudioAnalysisTools()
 
     with patch.object(settings, "audio_storage_path", str(temp_dir)):
