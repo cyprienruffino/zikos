@@ -280,7 +280,7 @@ def _detect_gguf_context_length(model_path: str) -> int:
                 try:
                     # Try to access model params directly
                     if hasattr(model._model, "n_ctx_train"):
-                        context_length = model._model.n_ctx_train()
+                        context_length = int(model._model.n_ctx_train())
                         if context_length and context_length > 0:
                             _logger.info(
                                 f"Detected GGUF context length from n_ctx_train: {context_length} tokens"
