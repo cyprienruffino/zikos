@@ -120,7 +120,7 @@ class MessagePreparer:
     ) -> int:
         """Compute the token budget available for conversation history."""
         if context_window is not None:
-            reserve = calculate_reserve_tokens(context_window)
+            reserve = int(calculate_reserve_tokens(context_window))
             available_tokens = max_tokens - system_prompt_tokens - reserve
 
             if available_tokens <= 0:
