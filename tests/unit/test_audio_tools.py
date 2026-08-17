@@ -289,6 +289,30 @@ class TestPitchDetection:
             assert 0.0 <= result["sharp_tendency"] <= 1.0
 
     @pytest.mark.asyncio
+    async def test_detect_pitch_44khz_octave_regression(self, audio_tools, temp_dir):
+        """pyin must receive the native sample rate. A 440 Hz tone at 44.1 kHz was
+        previously analyzed as if it were 22.05 kHz, reporting ~an octave off."""
+        import numpy as np
+        import soundfile as sf
+
+        sr = 44100
+        duration = 2.0
+        t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+        audio = 0.8 * np.sin(2 * np.pi * 440.0 * t)
+
+        audio_path = temp_dir / "a4_44100.wav"
+        sf.write(str(audio_path), audio, sr)
+
+        result = await audio_tools.detect_pitch(audio_path=str(audio_path))
+
+        assert not result.get("error"), result
+        assert len(result["notes"]) > 0
+        # Every detected note should be A4 at ~440 Hz (not A3/~220 or A5/~880)
+        for note in result["notes"]:
+            assert note["pitch"] == "A4", f"expected A4, got {note['pitch']}"
+            assert abs(note["frequency"] - 440.0) < 10.0, note["frequency"]
+
+    @pytest.mark.asyncio
     async def test_detect_pitch_bass_register(self, audio_tools, temp_dir):
         """G2 (98 Hz) was undetectable with the old fmin=C2 because pyin prefers sub-octaves
         and G1 (49 Hz) fell below the floor. With fmin=C1 it should now return a result."""

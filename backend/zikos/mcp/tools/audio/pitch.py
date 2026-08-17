@@ -91,11 +91,14 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
                 "message": "Audio is too short (minimum 0.5 seconds required)",
             }
 
+        hop_length = 512
         f0, voiced_flag, voiced_prob = librosa.pyin(
             y,
+            sr=sr,
             fmin=float(librosa.note_to_hz("C1")),
             fmax=float(librosa.note_to_hz("C7")),
             frame_length=4096,
+            hop_length=hop_length,
         )
 
         valid_f0 = f0[voiced_flag & (voiced_prob > 0.5)]
@@ -107,8 +110,8 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
                 "message": "Could not detect pitch in audio",
             }
 
-        onsets = librosa.onset.onset_detect(y=y, sr=sr)
-        onset_times = librosa.frames_to_time(onsets, sr=sr)
+        onsets = librosa.onset.onset_detect(y=y, sr=sr, hop_length=hop_length)
+        onset_times = librosa.frames_to_time(onsets, sr=sr, hop_length=hop_length)
 
         notes = []
         for i, onset_time in enumerate(onset_times):
@@ -117,8 +120,8 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
             else:
                 end_time = len(y) / sr
 
-            onset_frame = librosa.time_to_frames(onset_time, sr=sr)
-            end_frame = librosa.time_to_frames(end_time, sr=sr)
+            onset_frame = librosa.time_to_frames(onset_time, sr=sr, hop_length=hop_length)
+            end_frame = librosa.time_to_frames(end_time, sr=sr, hop_length=hop_length)
 
             segment_f0 = f0[onset_frame:end_frame]
             segment_voiced = voiced_flag[onset_frame:end_frame]
