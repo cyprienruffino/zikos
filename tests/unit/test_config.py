@@ -53,3 +53,21 @@ def test_settings_from_env():
     # Cleanup
     del os.environ["API_PORT"]
     del os.environ["LLM_TEMPERATURE"]
+
+
+@pytest.mark.lightweight
+def test_malformed_numeric_env_vars_fall_back_to_defaults():
+    """Malformed int/float env values must not crash settings loading"""
+    os.environ["API_PORT"] = "not-a-port"
+    os.environ["LLM_TEMPERATURE"] = "warm"
+    os.environ["LLM_N_GPU_LAYERS"] = "many"
+    try:
+        settings = Settings.from_env()
+        defaults = Settings()
+        assert settings.api_port == defaults.api_port
+        assert settings.llm_temperature == defaults.llm_temperature
+        assert settings.llm_n_gpu_layers == defaults.llm_n_gpu_layers
+    finally:
+        del os.environ["API_PORT"]
+        del os.environ["LLM_TEMPERATURE"]
+        del os.environ["LLM_N_GPU_LAYERS"]
