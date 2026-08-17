@@ -20,10 +20,6 @@ dependencies = [
     "tiktoken>=0.5.0",
     "huggingface_hub>=0.20.0",
     "requests>=2.31.0",  # Fallback for model downloads
-    "llama-cpp-python>=0.2.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
-    "transformers>=4.35.0",
     "psutil>=5.9.0",
     "litellm>=1.50.0",
 ]
@@ -35,6 +31,18 @@ dependencies = [
 
 
 [project.optional-dependencies]
+# Local LLM inference backends (heavy: GPU wheels / source builds).
+# Base install is cloud-capable via litellm; install ".[local]" to run
+# GGUF (llama-cpp-python) or HuggingFace Transformers models locally.
+# NOTE: the modules importing these (services/llm_backends/llama_cpp.py,
+# services/llm_backends/transformers.py, utils/gpu.py, utils/context_length.py)
+# must keep their import guards for base installs.
+local = [
+    "llama-cpp-python>=0.2.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "transformers>=4.35.0",
+]
 # Development tools
 dev = [
     "pytest>=7.4.0",
