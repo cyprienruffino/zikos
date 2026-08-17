@@ -52,22 +52,32 @@ export function connect(): void {
         reconnectTimeout = null;
     }
 
-    updateStatus("Connecting...", "disconnected");
-    ws = new WebSocket(WS_URL);
-    setWebSocket(ws);
-    setMetronomeWebSocket(ws);
+    // Detach handlers from any previous socket so a stale connection can't
+    // fire onclose and schedule competing reconnect loops.
+    if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+    }
 
-    ws.onopen = () => {
+    updateStatus("Connecting...", "disconnected");
+    const socket = new WebSocket(WS_URL);
+    ws = socket;
+    setWebSocket(socket);
+    setMetronomeWebSocket(socket);
+
+    socket.onopen = () => {
         reconnectAttempts = 0;
         updateStatus("Connected", "connected");
         const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
         if (sendButton) {
             sendButton.disabled = false;
         }
-        ws!.send(JSON.stringify({ type: "connect", session_id: sessionId }));
+        socket.send(JSON.stringify({ type: "connect", session_id: sessionId }));
     };
 
-    ws.onmessage = (event: MessageEvent) => {
+    socket.onmessage = (event: MessageEvent) => {
         try {
             const data = JSON.parse(event.data as string) as WebSocketMessage;
 
@@ -274,12 +284,12 @@ export function connect(): void {
         }
     };
 
-    ws.onerror = (error: Event) => {
+    socket.onerror = (error: Event) => {
         updateStatus("Connection error", "disconnected");
         console.error("WebSocket error:", error);
     };
 
-    ws.onclose = () => {
+    socket.onclose = () => {
         // A disconnect mid-stream would otherwise leave isProcessing stuck at
         // true forever, permanently blocking sendMessage after reconnect.
         finishStreamingMessage();
