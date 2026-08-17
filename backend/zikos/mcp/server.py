@@ -68,14 +68,57 @@ class MCPServer:
         return self._registry
 
     async def call_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
-        """Call a tool by name - routes to the appropriate ToolCollection"""
+        """Call a tool by name - routes to the appropriate ToolCollection.
+
+        Exceptions raised by tools are normalized into the documented
+        {"error": true, "error_type": ..., "message": ...} shape so callers
+        always receive a structured result.
+        """
         if settings.debug_tool_calls:
             print(f"[MCP TOOL CALL] {tool_name}")
             print(f"  Arguments: {json.dumps(kwargs, indent=2, default=str)}")
 
         collection = self._registry.get_collection_for_tool(tool_name)
         if collection is None:
-            raise ValueError(f"Unknown tool: {tool_name}")
+            return {
+                "error": True,
+                "error_type": "UNKNOWN_TOOL",
+                "message": f"Unknown tool: {tool_name}",
+            }
 
-        result = await collection.call_tool(tool_name, **kwargs)
-        return dict(result)
+        try:
+            result = await collection.call_tool(tool_name, **kwargs)
+            return dict(result)
+        except KeyError as e:
+            missing = str(e).strip("'\"")
+            return {
+                "error": True,
+                "error_type": "MISSING_PARAMETER",
+                "message": f"'{tool_name}' is missing required parameter: {missing}",
+            }
+        except FileNotFoundError as e:
+            return {
+                "error": True,
+                "error_type": "FILE_NOT_FOUND",
+                "message": str(e),
+            }
+        except ValueError as e:
+            message = str(e)
+            error_type = "UNKNOWN_TOOL" if "unknown tool" in message.lower() else "INVALID_PARAMETER"
+            return {
+                "error": True,
+                "error_type": error_type,
+                "message": message,
+            }
+        except RuntimeError as e:
+            return {
+                "error": True,
+                "error_type": "PROCESSING_FAILED",
+                "message": str(e),
+            }
+        except Exception as e:
+            return {
+                "error": True,
+                "error_type": "PROCESSING_FAILED",
+                "message": f"Tool '{tool_name}' failed: {e}",
+            }
