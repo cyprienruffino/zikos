@@ -257,11 +257,18 @@ zikos/
 
 ### Python env setup
 ```bash
-pip install .[dev]
+pip install ".[dev]"
 
-# Optional: generate a pinned requirements.txt for reproducible builds
-pip-compile pyproject.toml -o requirements.txt
+# Or reproducible install from the committed lockfile:
+pip install -r requirements.lock && pip install -e . --no-deps
+
+# Regenerate the lockfile after changing dependencies in pyproject.toml:
+pip-compile --extra=dev --output-file=requirements.lock pyproject.toml
 ```
+
+`requirements.lock` pins base + dev dependencies (compiled under Python 3.13).
+The heavy `local` extra (torch, llama-cpp-python, transformers) is not locked;
+install it separately with `pip install -e ".[local]"` for local model inference.
 
 ### Pre-commit Hooks
 
