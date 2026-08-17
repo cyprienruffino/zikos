@@ -86,7 +86,6 @@ class TestAudioService:
         assert "rhythm" in result
 
     @pytest.mark.asyncio
-    @pytest.mark.integration
     async def test_run_baseline_analysis_with_real_audio(self, audio_service, temp_dir):
         """Test running baseline analysis with real synthesized audio"""
         from tests.helpers.audio_synthesis import create_test_audio_file

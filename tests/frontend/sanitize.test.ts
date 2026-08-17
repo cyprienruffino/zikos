@@ -18,7 +18,7 @@ const XSS = '<img src=x onerror="window.__pwned = true">';
 describe("sanitize helpers", () => {
     describe("escapeHtml()", () => {
         it("should escape HTML special characters", () => {
-            expect(escapeHtml('<script>"a" & \'b\'</script>')).toBe(
+            expect(escapeHtml("<script>\"a\" & 'b'</script>")).toBe(
                 "&lt;script&gt;&quot;a&quot; &amp; &#39;b&#39;&lt;/script&gt;"
             );
         });

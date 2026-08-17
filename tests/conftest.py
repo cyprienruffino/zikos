@@ -5,16 +5,34 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_logs():
-    """Clean up logs directory after test session"""
+    """Remove the logs/ directory created by the app during the test session.
+
+    Guarded so we never rmtree an arbitrary CWD-relative path: the directory
+    is only removed if it lives inside this repository AND did not exist
+    before the session started.
+    """
+    logs_dir = (Path.cwd() / "logs").resolve()
+    preexisting = logs_dir.exists()
     yield
-    logs_dir = Path("logs")
-    if logs_dir.exists():
+    if preexisting or not logs_dir.exists():
+        return
+    if logs_dir.is_relative_to(REPO_ROOT):
         shutil.rmtree(logs_dir)
+
+
+@pytest.fixture(autouse=True)
+def _seed_random():
+    """Seed numpy's global RNG per test to kill nondeterminism."""
+    np.random.seed(0)
+    yield
 
 
 @pytest.fixture

@@ -70,14 +70,14 @@ describe("Chord Progression Widget", () => {
     describe("addChordProgressionWidget()", () => {
         it("should create chord progression widget in DOM", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             expect(widget).toBeTruthy();
             expect(widget?.className).toBe("chord-progression-widget");
         });
 
         it("should display all chords", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             expect(widget?.textContent).toContain("C");
             expect(widget?.textContent).toContain("F");
             expect(widget?.textContent).toContain("G");
@@ -85,7 +85,7 @@ describe("Chord Progression Widget", () => {
 
         it("should display tempo and time signature", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             expect(widget?.textContent).toContain("120");
             expect(widget?.textContent).toContain("4/4");
         });
@@ -100,13 +100,13 @@ describe("Chord Progression Widget", () => {
                 "piano",
                 "Test progression"
             );
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             expect(widget?.textContent).toContain("Test progression");
         });
 
         it("should create control buttons", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             expect(widget?.querySelector(".play-btn")).toBeTruthy();
             expect(widget?.querySelector(".pause-btn")).toBeTruthy();
             expect(widget?.querySelector(".stop-btn")).toBeTruthy();
@@ -114,7 +114,7 @@ describe("Chord Progression Widget", () => {
 
         it("should initially hide pause button", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const pauseBtn = widget?.querySelector(".pause-btn") as HTMLElement;
             expect(pauseBtn?.style.display).toBe("none");
         });
@@ -129,7 +129,7 @@ describe("Chord Progression Widget", () => {
     describe("Start Chord Progression", () => {
         it("should start progression when play button is clicked", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -140,7 +140,7 @@ describe("Chord Progression Widget", () => {
 
         it("should show pause button when playing", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const pauseBtn = widget?.querySelector(".pause-btn") as HTMLElement;
 
@@ -152,7 +152,7 @@ describe("Chord Progression Widget", () => {
 
         it("should create AudioContext when started", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -162,7 +162,7 @@ describe("Chord Progression Widget", () => {
 
         it("should highlight active chord", async () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -175,7 +175,7 @@ describe("Chord Progression Widget", () => {
 
         it("should not start if already playing", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -213,7 +213,7 @@ describe("Chord Progression Widget", () => {
             globalThis.AudioContext = vi.fn(() => mockAudioContext) as any;
 
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -225,7 +225,7 @@ describe("Chord Progression Widget", () => {
     describe("Pause Chord Progression", () => {
         it("should pause progression when pause button is clicked", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const pauseBtn = widget?.querySelector(".pause-btn") as HTMLButtonElement;
 
@@ -238,7 +238,7 @@ describe("Chord Progression Widget", () => {
 
         it("should show play button when paused", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const pauseBtn = widget?.querySelector(".pause-btn") as HTMLButtonElement;
 
@@ -251,7 +251,7 @@ describe("Chord Progression Widget", () => {
 
         it("should clear interval when paused", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const pauseBtn = widget?.querySelector(".pause-btn") as HTMLButtonElement;
 
@@ -263,7 +263,7 @@ describe("Chord Progression Widget", () => {
 
         it("should not pause if not playing", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const pauseBtn = widget?.querySelector(".pause-btn") as HTMLButtonElement;
 
             pauseBtn.click();
@@ -276,7 +276,7 @@ describe("Chord Progression Widget", () => {
     describe("Stop Chord Progression", () => {
         it("should stop progression when stop button is clicked", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
 
@@ -289,7 +289,7 @@ describe("Chord Progression Widget", () => {
 
         it("should reset to first chord when stopped", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
 
@@ -302,7 +302,7 @@ describe("Chord Progression Widget", () => {
 
         it("should clear interval when stopped", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
 
@@ -314,7 +314,7 @@ describe("Chord Progression Widget", () => {
 
         it("should show play button when stopped", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const stopBtn = widget?.querySelector(".stop-btn") as HTMLButtonElement;
 
@@ -382,7 +382,7 @@ describe("Chord Progression Widget", () => {
     describe("Chord Parsing", () => {
         it("should handle major chords", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -392,7 +392,7 @@ describe("Chord Progression Widget", () => {
 
         it("should handle minor chords", () => {
             addChordProgressionWidget("chord_123", ["Cm", "Fm"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -402,7 +402,7 @@ describe("Chord Progression Widget", () => {
 
         it("should handle chords with sharps and flats", () => {
             addChordProgressionWidget("chord_123", ["C#", "Db"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -414,7 +414,7 @@ describe("Chord Progression Widget", () => {
     describe("Progression Cycling", () => {
         it("should cycle through chords", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -424,7 +424,7 @@ describe("Chord Progression Widget", () => {
 
         it("should calculate correct chord duration based on tempo", () => {
             addChordProgressionWidget("chord_123", ["C", "F", "G"], 120, "4/4", 1, "piano");
-            const widget = document.getElementById("chord-chord_123");
+            const widget = document.getElementById("chord-chord_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();

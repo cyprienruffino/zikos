@@ -45,16 +45,19 @@ describe("Tuner Widget", () => {
         document.body.innerHTML = `<div id="messages"></div>`;
 
         globalThis.AudioContext = vi.fn(() => new MockAudioContext()) as any;
-        globalThis.navigator.mediaDevices = {
-            getUserMedia: vi.fn().mockResolvedValue(new MockMediaStream()),
-        } as any;
+        Object.defineProperty(globalThis.navigator, "mediaDevices", {
+            value: {
+                getUserMedia: vi.fn().mockResolvedValue(new MockMediaStream()),
+            } as any,
+            configurable: true,
+        });
         globalThis.requestAnimationFrame = vi.fn((fn: Function) => {
             setTimeout(fn, 16);
             return 1;
         });
         globalThis.cancelAnimationFrame = vi.fn();
 
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
     });
 
     afterEach(() => {

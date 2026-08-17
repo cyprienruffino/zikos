@@ -25,6 +25,7 @@ ENV/
 env/
 
 # Testing
+tests/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -67,6 +68,9 @@ models/
 # Documentation
 *.md
 !README.md
+# SYSTEM_PROMPT.md is required at runtime (production system prompt);
+# without it the app silently falls back to a one-line prompt.
+!SYSTEM_PROMPT.md
 
 # CI/CD
 .github/

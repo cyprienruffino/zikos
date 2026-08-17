@@ -34,14 +34,15 @@ MODEL_CONFIGS = {
         "function_calling": "excellent",
     },
     "mistral-7b-instruct-v0.3-q4": {
-        "repo_id": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
-        "filename": "mistral-7b-instruct-v0.3.Q4_K_M.gguf",
+        # TheBloke never published v0.3 GGUFs; MaziyarPanahi's repo verified 2026-08
+        "repo_id": "MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF",
+        "filename": "Mistral-7B-Instruct-v0.3.Q4_K_M.gguf",
         "description": "Mistral 7B Instruct v0.3 Q4_K_M (GOOD function calling)",
         "function_calling": "good",
     },
     "mistral-7b-instruct-v0.3-q5": {
-        "repo_id": "TheBloke/Mistral-7B-Instruct-v0.3-GGUF",
-        "filename": "mistral-7b-instruct-v0.3.Q5_K_M.gguf",
+        "repo_id": "MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF",
+        "filename": "Mistral-7B-Instruct-v0.3.Q5_K_M.gguf",
         "description": "Mistral 7B Instruct v0.3 Q5_K_M (GOOD function calling, higher quality)",
         "function_calling": "good",
     },
@@ -58,29 +59,20 @@ MODEL_CONFIGS = {
         "function_calling": "limited",
     },
     "llama-3.1-8b-instruct-q4": {
-        "repo_id": "TheBloke/Llama-3.1-8B-Instruct-GGUF",
-        "filename": "llama-3.1-8b-instruct.Q4_K_M.gguf",
+        # TheBloke/bartowski "Llama-3.1-..." repos don't exist; Meta- prefix verified 2026-08
+        "repo_id": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+        "filename": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
         "description": "Llama 3.1 8B Instruct Q4_K_M (moderate function calling)",
         "function_calling": "moderate",
     },
     "llama-3.1-8b-instruct-q5": {
-        "repo_id": "bartowski/Llama-3.1-8B-Instruct-GGUF",
-        "filename": "Llama-3.1-8B-Instruct-Q5_K_M.gguf",
+        "repo_id": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+        "filename": "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf",
         "description": "Llama 3.1 8B Instruct Q5_K_M (moderate function calling, higher quality)",
         "function_calling": "moderate",
     },
-    "llama-3.2-8b-instruct-q4": {
-        "repo_id": "bartowski/Llama-3.2-8B-Instruct-GGUF",
-        "filename": "Llama-3.2-8B-Instruct-Q4_K_M.gguf",
-        "description": "Llama 3.2 8B Instruct Q4_K_M (better function calling than 3.1)",
-        "function_calling": "good",
-    },
-    "llama-3.2-8b-instruct-q5": {
-        "repo_id": "bartowski/Llama-3.2-8B-Instruct-GGUF",
-        "filename": "Llama-3.2-8B-Instruct-Q5_K_M.gguf",
-        "description": "Llama 3.2 8B Instruct Q5_K_M (better function calling than 3.1, higher quality)",
-        "function_calling": "good",
-    },
+    # NOTE: former "llama-3.2-8b-instruct-*" entries removed: Llama 3.2 has no 8B
+    # variant (1B/3B/11B/90B only) and the referenced repos do not exist.
     "llama-3.3-70b-instruct-q4": {
         "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
         "filename": "Llama-3.3-70B-Instruct-Q4_K_M.gguf",
@@ -88,29 +80,31 @@ MODEL_CONFIGS = {
         "function_calling": "excellent",
     },
     "llama-3.3-70b-instruct-q5": {
+        # Q5_K_M in this repo is split into multi-part GGUFs this script can't
+        # download as one file; Q5_K_S is the single-file Q5 option.
         "repo_id": "bartowski/Llama-3.3-70B-Instruct-GGUF",
-        "filename": "Llama-3.3-70B-Instruct-Q5_K_M.gguf",
-        "description": "Llama 3.3 70B Instruct Q5_K_M (large model, requires significant RAM)",
+        "filename": "Llama-3.3-70B-Instruct-Q5_K_S.gguf",
+        "description": "Llama 3.3 70B Instruct Q5_K_S (large model, requires significant RAM)",
         "function_calling": "excellent",
     },
     "qwen3-32b-instruct": {
-        "repo_id": "Qwen/Qwen3-32B-Instruct",
+        "repo_id": "Qwen/Qwen3-32B",  # Qwen3 repos carry no "-Instruct" suffix
         "filename": None,
-        "description": "Qwen3 32B Instruct (128K context, Transformers format, requires 80GB+ VRAM)",
+        "description": "Qwen3 32B (128K context, Transformers format, requires 80GB+ VRAM)",
         "function_calling": "excellent",
         "backend": "transformers",
     },
     "qwen3-14b-instruct": {
-        "repo_id": "Qwen/Qwen3-14B-Instruct",
+        "repo_id": "Qwen/Qwen3-14B",
         "filename": None,
-        "description": "Qwen3 14B Instruct (128K context, Transformers format)",
+        "description": "Qwen3 14B (128K context, Transformers format)",
         "function_calling": "excellent",
         "backend": "transformers",
     },
     "qwen3-8b-instruct": {
-        "repo_id": "Qwen/Qwen3-8B-Instruct",
+        "repo_id": "Qwen/Qwen3-8B",
         "filename": None,
-        "description": "Qwen3 8B Instruct (32K context, extendable to 128K, Transformers format)",
+        "description": "Qwen3 8B (32K context, extendable to 128K, Transformers format)",
         "function_calling": "excellent",
         "backend": "transformers",
     },
@@ -122,6 +116,10 @@ MODEL_CONFIGS = {
         "backend": "transformers",
     },
 }
+
+# Single source of truth for the "recommended" section shown by both
+# list_models() and the unknown-model error path.
+RECOMMENDED_MODELS = ["phi-3-mini-q4", "mistral-7b-instruct-v0.3-q4"]
 
 
 def download_with_hf_hub(
@@ -135,7 +133,6 @@ def download_with_hf_hub(
         repo_id=repo_id,
         filename=filename,
         local_dir=str(output_dir),
-        local_dir_use_symlinks=False,
         token=token,
     )
 
@@ -197,7 +194,7 @@ def download_model(
         print(f"Error: Unknown model '{model_key}'")
         print("\nAvailable models:")
         print("\n⭐ RECOMMENDED (Default):")
-        for key in ["tinyllama-1.1b-chat-q4", "mistral-7b-instruct-v0.3-q4"]:
+        for key in RECOMMENDED_MODELS:
             if key in MODEL_CONFIGS:
                 config = MODEL_CONFIGS[key]
                 print(f"  {key}: {config['description']}")
@@ -272,7 +269,6 @@ def download_model(
         snapshot_download(
             repo_id=config["repo_id"],
             local_dir=str(output_path),
-            local_dir_use_symlinks=False,
             token=token,
         )
 
@@ -362,7 +358,7 @@ def list_models():
     print("Available models:\n")
     print("⭐ RECOMMENDED (Default):")
     print("-" * 70)
-    for key in ["phi-3-mini-q4", "mistral-7b-instruct-v0.3-q4"]:
+    for key in RECOMMENDED_MODELS:
         if key in MODEL_CONFIGS:
             config = MODEL_CONFIGS[key]
             print(f"  {key}")
@@ -408,18 +404,18 @@ def list_models():
             print(f"    File: {config['filename']}")
             print()
 
-        print("\n70B+ Models (requires significant RAM/VRAM, 16GB+ recommended):")
-        print("-" * 70)
-        for key, config in MODEL_CONFIGS.items():
-            if any(x in key.lower() for x in ["70b", "72b", "32b", "30b"]):
-                print(f"  {key}")
-                print(f"    {config['description']}")
-                print(f"    Repository: {config['repo_id']}")
-                if config.get("filename"):
-                    print(f"    File: {config['filename']}")
-                if config.get("backend"):
-                    print(f"    Backend: {config['backend']}")
-                print()
+    print("\n70B+ Models (requires significant RAM/VRAM, 16GB+ recommended):")
+    print("-" * 70)
+    for key, config in MODEL_CONFIGS.items():
+        if any(x in key.lower() for x in ["70b", "72b", "32b", "30b"]):
+            print(f"  {key}")
+            print(f"    {config['description']}")
+            print(f"    Repository: {config['repo_id']}")
+            if config.get("filename"):
+                print(f"    File: {config['filename']}")
+            if config.get("backend"):
+                print(f"    Backend: {config['backend']}")
+            print()
 
 
 def main():

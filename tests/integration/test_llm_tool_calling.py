@@ -21,7 +21,7 @@ class TestLLMToolCallingIntegration:
         service = LLMService()
         mcp_server = MCPServer()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
         # Clear any existing conversation
@@ -60,7 +60,7 @@ class TestLLMToolCallingIntegration:
         service = LLMService()
         mcp_server = MCPServer()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
         session_id = "test_session"
@@ -92,7 +92,7 @@ class TestLLMToolCallingIntegration:
         service = LLMService()
         mcp_server = MCPServer()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
         tools = mcp_server.get_tools()
@@ -135,7 +135,7 @@ class TestLLMToolCallingIntegration:
         service = LLMService()
         mcp_server = MCPServer()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
         session_id = "test_session"
@@ -169,7 +169,7 @@ class TestLLMToolCallingIntegration:
         service = LLMService()
         mcp_server = MCPServer()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
         session_id = "test_session"

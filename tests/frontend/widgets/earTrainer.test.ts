@@ -45,33 +45,33 @@ describe("Ear Trainer Widget", () => {
     describe("addEarTrainerWidget()", () => {
         it("should create ear trainer widget in DOM", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             expect(widget).toBeTruthy();
             expect(widget?.className).toBe("ear-trainer-widget");
         });
 
         it("should display mode (intervals)", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             expect(widget?.textContent).toContain("Intervals");
         });
 
         it("should display description when provided", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C", "Test trainer");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             expect(widget?.textContent).toContain("Test trainer");
         });
 
         it("should create play and next buttons", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             expect(widget?.querySelector(".play-btn")).toBeTruthy();
             expect(widget?.querySelector(".next-btn")).toBeTruthy();
         });
 
         it("should initially hide next button", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const nextBtn = widget?.querySelector(".next-btn") as HTMLElement;
             expect(nextBtn?.style.display).toBe("none");
         });
@@ -84,21 +84,21 @@ describe("Ear Trainer Widget", () => {
 
         it("should create option buttons for easy difficulty", () => {
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const options = widget?.querySelectorAll(".ear-trainer-option");
             expect(options?.length).toBe(4);
         });
 
         it("should create option buttons for medium difficulty", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const options = widget?.querySelectorAll(".ear-trainer-option");
             expect(options?.length).toBe(11);
         });
 
         it("should create option buttons for hard difficulty", () => {
             addEarTrainerWidget("ear_123", "intervals", "hard", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const options = widget?.querySelectorAll(".ear-trainer-option");
             expect(options?.length).toBe(14);
         });
@@ -107,7 +107,7 @@ describe("Ear Trainer Widget", () => {
     describe("Play Question", () => {
         it("should play question when play button is clicked", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -117,7 +117,7 @@ describe("Ear Trainer Widget", () => {
 
         it("should show next button after playing", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const nextBtn = widget?.querySelector(".next-btn") as HTMLElement;
 
@@ -129,7 +129,7 @@ describe("Ear Trainer Widget", () => {
 
         it("should enable option buttons after playing", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -142,7 +142,7 @@ describe("Ear Trainer Widget", () => {
 
         it("should play intervals in intervals mode", () => {
             addEarTrainerWidget("ear_123", "intervals", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -152,7 +152,7 @@ describe("Ear Trainer Widget", () => {
 
         it("should play chords in chords mode", () => {
             addEarTrainerWidget("ear_123", "chords", "medium", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -166,7 +166,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -183,7 +183,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -200,7 +200,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -216,7 +216,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
 
             playBtn.click();
@@ -304,7 +304,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const nextBtn = widget?.querySelector(".next-btn") as HTMLButtonElement;
 
@@ -319,7 +319,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const nextBtn = widget?.querySelector(".next-btn") as HTMLButtonElement;
 
@@ -341,7 +341,7 @@ describe("Ear Trainer Widget", () => {
             vi.spyOn(Math, "floor").mockReturnValue(0);
 
             addEarTrainerWidget("ear_123", "intervals", "easy", "C");
-            const widget = document.getElementById("ear-ear_123");
+            const widget = document.getElementById("ear-ear_123")!;
             const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
             const nextBtn = widget?.querySelector(".next-btn") as HTMLButtonElement;
 

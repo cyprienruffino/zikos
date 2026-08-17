@@ -31,7 +31,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.lock', 'pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -47,12 +47,21 @@ jobs:
           mypy backend
 
       - name: Run unit tests
+        # No xdist here: librosa's numba functions use on-disk JIT caches
+        # (cache=True); parallel fresh workers compiling the same cache
+        # entries crash on cold CI runners.
         run: |
-          pytest tests/unit/ -v -m "not comprehensive and not integration" --cov=backend/zikos --cov-config=pyproject.toml --cov-report=term-missing --cov-report=xml --cov-fail-under=75
+          pytest tests/unit/ -v -m "not comprehensive and not integration" --cov=backend/zikos --cov-config=pyproject.toml --cov-report=term-missing --cov-report=xml --cov-fail-under=79
 
       - name: Run integration tests
         run: |
           pytest tests/integration/ -v --no-cov -m "not comprehensive"
+
+      - name: Smoke-check comprehensive test collection
+        run: |
+          # Comprehensive tests need real models and are not run in CI,
+          # but they must at least still collect (catches import bit-rot).
+          pytest -m comprehensive --collect-only --no-cov -q
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -78,6 +87,12 @@ jobs:
 
       - name: Run TypeScript type check
         run: npm run type-check
+
+      - name: Type-check frontend tests
+        run: npm run type-check:test
+
+      - name: Build frontend
+        run: npm run build
 
       - name: Run ESLint
         run: npm run lint

@@ -23,10 +23,10 @@ class TestLLMServiceIntegration:
 
         service = LLMService()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
-        assert service.llm is not None
+        assert service.backend is not None
 
     @pytest.mark.asyncio
     async def test_llm_generate_response(self):
@@ -37,7 +37,7 @@ class TestLLMServiceIntegration:
         service = LLMService()
         mcp_server = MCPServer()
 
-        if service.llm is None:
+        if service.backend is None:
             pytest.skip("LLM not initialized (no model file configured)")
 
         result = await service.generate_response(

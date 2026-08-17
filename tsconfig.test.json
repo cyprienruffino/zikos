@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["vitest/globals"],
+    // Unused locals/params are common in test doubles; don't fail tests on them.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["frontend/src/**/*", "frontend/tests/**/*", "tests/frontend/**/*"],
+  "exclude": ["node_modules", "frontend/dist"]
+}

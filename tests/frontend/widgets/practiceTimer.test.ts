@@ -6,7 +6,7 @@ describe("Practice Timer Widget", () => {
     beforeEach(() => {
         document.body.innerHTML = `<div id="messages"></div>`;
         vi.useFakeTimers();
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
     });
 
     afterEach(() => {

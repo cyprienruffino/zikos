@@ -83,9 +83,12 @@ describe("Recording Widget", () => {
         };
 
         globalThis.MediaRecorder = MockMediaRecorder as any;
-        globalThis.navigator.mediaDevices = {
-            getUserMedia: vi.fn().mockResolvedValue(new MockMediaStream()),
-        } as any;
+        Object.defineProperty(globalThis.navigator, "mediaDevices", {
+            value: {
+                getUserMedia: vi.fn().mockResolvedValue(new MockMediaStream()),
+            } as any,
+            configurable: true,
+        });
         globalThis.URL.createObjectURL = vi.fn(() => "blob:test-url");
         globalThis.URL.revokeObjectURL = vi.fn();
         globalThis.fetch = vi.fn().mockResolvedValue({
@@ -93,7 +96,7 @@ describe("Recording Widget", () => {
             json: vi.fn().mockResolvedValue({ audio_file_id: "audio_123" }),
         });
 
-        vi.spyOn(ui, "addMessage").mockImplementation(() => {});
+        vi.spyOn(ui, "addMessage").mockImplementation(() => document.createElement("div"));
         vi.spyOn(ui, "addTypingIndicator").mockImplementation(() => {});
 
         setWebSocket(mockWs);

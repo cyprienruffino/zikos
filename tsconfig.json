@@ -14,8 +14,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "types": ["vitest/globals"]
+    "noFallthroughCasesInSwitch": true
   },
   "include": ["frontend/src/**/*"],
   "exclude": ["node_modules", "frontend/dist/**/*.js", "tests/**/*"]

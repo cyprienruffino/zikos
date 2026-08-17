@@ -39,7 +39,6 @@ async def test_analyze_tempo(temp_dir, sample_audio_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_analyze_tempo_with_real_audio(temp_dir):
     """Test tempo analysis with real synthesized audio"""
     from pathlib import Path

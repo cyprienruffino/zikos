@@ -13,9 +13,4 @@ export default defineConfig({
       exclude: ['tests/**/*', 'frontend/dist/**/*.js'],
     },
   },
-  resolve: {
-    alias: {
-      '@': './frontend/src',
-    },
-  },
 });
