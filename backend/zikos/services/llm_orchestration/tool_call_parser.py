@@ -408,5 +408,11 @@ def get_tool_call_parser(tool_format: str | None = None) -> ToolCallParser:
         "auto": HybridToolCallParser,
     }
 
+    if tool_format not in parsers:
+        _logger.warning(
+            f"Unknown LLM_TOOL_FORMAT value '{tool_format}'; "
+            f"expected one of {sorted(parsers)}. Falling back to 'auto' (hybrid parser)."
+        )
+
     parser_class = parsers.get(tool_format, HybridToolCallParser)
     return parser_class()
