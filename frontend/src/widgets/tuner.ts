@@ -55,17 +55,21 @@ export function addTunerWidget(
         microphone: null,
         audioContext: null,
         isRunning: false,
+        starting: false,
         animationFrame: null,
     });
 }
 
 function startTuner(tunerId: string, referenceFreq: number): void {
     const tuner = tuners.get(tunerId);
-    if (!tuner || tuner.isRunning) return;
+    // starting is set synchronously so a double-click cannot acquire two streams.
+    if (!tuner || tuner.isRunning || tuner.starting) return;
+    tuner.starting = true;
     navigator.mediaDevices
         .getUserMedia({ audio: true })
         .then((stream) => {
             if (!tuner) return;
+            tuner.starting = false;
             tuner.audioContext = new AudioContext();
             tuner.microphone = tuner.audioContext.createMediaStreamSource(stream);
             tuner.analyser = tuner.audioContext.createAnalyser();
@@ -116,6 +120,7 @@ function startTuner(tunerId: string, referenceFreq: number): void {
             updateTuner();
         })
         .catch((error) => {
+            tuner.starting = false;
             addMessage(`Error accessing microphone: ${error.message}`, "error");
         });
 }

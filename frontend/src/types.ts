@@ -28,6 +28,8 @@ export interface TunerState {
     microphone: MediaStreamAudioSourceNode | null;
     audioContext: AudioContext | null;
     isRunning: boolean;
+    /** Synchronous guard set before getUserMedia resolves. */
+    starting: boolean;
     animationFrame: number | null;
 }
 

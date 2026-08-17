@@ -1,8 +1,19 @@
 import { addMessage, addTypingIndicator } from "../ui.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
 
-let mediaRecorder: MediaRecorder | null = null;
-let audioChunks: Blob[] = [];
+interface RecordingState {
+    mediaRecorder: MediaRecorder | null;
+    audioChunks: Blob[];
+    /** Synchronous guard so a double-click cannot acquire two streams. */
+    starting: boolean;
+    maxDurationMs: number;
+    autoStopTimeout: number | null;
+    objectUrl: string | null;
+    mimeType: string;
+}
+
+const recordings = new Map<string, RecordingState>();
+
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 
@@ -15,14 +26,16 @@ export function setSessionId(id: string | null): void {
 }
 
 export function reset(): void {
-    audioChunks = [];
-    mediaRecorder = null;
+    for (const recordingId of [...recordings.keys()]) {
+        teardownRecording(recordingId);
+    }
+    recordings.clear();
 }
 
 export function addRecordingWidget(
     recordingId: string,
     prompt: string,
-    _maxDuration: number
+    maxDuration: number
 ): void {
     recordingId = sanitizeToolId(recordingId, "rec");
     const messagesEl = document.getElementById("messages") as HTMLElement;
@@ -44,6 +57,16 @@ export function addRecordingWidget(
     messagesEl.appendChild(widgetEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
+    recordings.set(recordingId, {
+        mediaRecorder: null,
+        audioChunks: [],
+        starting: false,
+        maxDurationMs: maxDuration > 0 ? maxDuration * 1000 : 60_000,
+        autoStopTimeout: null,
+        objectUrl: null,
+        mimeType: "",
+    });
+
     widgetEl
         .querySelector(".record-btn")
         ?.addEventListener("click", () => startRecording(recordingId));
@@ -58,7 +81,32 @@ export function addRecordingWidget(
         ?.addEventListener("click", () => cancelRecording(recordingId));
 }
 
+/** Stop any active recorder/stream and release resources for this widget. */
+function teardownRecording(recordingId: string): void {
+    const state = recordings.get(recordingId);
+    if (!state) return;
+    if (state.autoStopTimeout !== null) {
+        clearTimeout(state.autoStopTimeout);
+        state.autoStopTimeout = null;
+    }
+    if (state.mediaRecorder) {
+        if (state.mediaRecorder.state !== "inactive") {
+            state.mediaRecorder.stop();
+        }
+        state.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        state.mediaRecorder = null;
+    }
+    if (state.objectUrl) {
+        URL.revokeObjectURL(state.objectUrl);
+        state.objectUrl = null;
+    }
+    state.audioChunks = [];
+    state.starting = false;
+}
+
 export function removeRecordingWidget(recordingId: string): void {
+    teardownRecording(recordingId);
+    recordings.delete(recordingId);
     const widget = document.getElementById(`recording-${recordingId}`);
     if (widget) {
         widget.remove();
@@ -66,6 +114,14 @@ export function removeRecordingWidget(recordingId: string): void {
 }
 
 async function startRecording(recordingId: string): Promise<void> {
+    const state = recordings.get(recordingId);
+    if (!state) return;
+    // Synchronous guard: a second click before getUserMedia resolves must not
+    // acquire a second stream.
+    if (state.starting || (state.mediaRecorder && state.mediaRecorder.state !== "inactive")) {
+        return;
+    }
+    state.starting = true;
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -74,11 +130,24 @@ async function startRecording(recordingId: string): Promise<void> {
                 autoGainControl: false,
             },
         });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
+
+        const current = recordings.get(recordingId);
+        if (!current) {
+            // Widget was removed (e.g. cancelled) while waiting for permission.
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+        }
+
+        const mediaRecorder = new MediaRecorder(stream);
+        current.mediaRecorder = mediaRecorder;
+        current.audioChunks = [];
+        current.mimeType = "audio/wav";
 
         const widgetEl = document.getElementById(`recording-${recordingId}`);
-        if (!widgetEl) return;
+        if (!widgetEl) {
+            teardownRecording(recordingId);
+            return;
+        }
 
         const statusEl = document.getElementById(`status-${recordingId}`) as HTMLElement;
         const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
@@ -88,16 +157,28 @@ async function startRecording(recordingId: string): Promise<void> {
 
         mediaRecorder.ondataavailable = (event: BlobEvent) => {
             if (event.data) {
-                audioChunks.push(event.data);
+                current.audioChunks.push(event.data);
             }
         };
 
         mediaRecorder.onstop = () => {
-            const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+            if (current.autoStopTimeout !== null) {
+                clearTimeout(current.autoStopTimeout);
+                current.autoStopTimeout = null;
+            }
+            const audioBlob = new Blob(current.audioChunks, { type: current.mimeType });
             const audioUrl = URL.createObjectURL(audioBlob);
+            if (current.objectUrl) {
+                URL.revokeObjectURL(current.objectUrl);
+            }
+            current.objectUrl = audioUrl;
             const playerEl = document.getElementById(`player-${recordingId}`);
             if (playerEl) {
-                playerEl.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+                playerEl.innerHTML = "";
+                const audio = document.createElement("audio");
+                audio.controls = true;
+                audio.src = audioUrl;
+                playerEl.appendChild(audio);
             }
 
             const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
@@ -108,9 +189,17 @@ async function startRecording(recordingId: string): Promise<void> {
                 statusEl.textContent = "Recording complete";
                 statusEl.className = "recording-status";
             }
+            if (recordBtn && stopBtn) {
+                recordBtn.style.display = "inline-block";
+                stopBtn.style.display = "none";
+            }
         };
 
         mediaRecorder.start();
+        // Honor the max_duration requested by the tool call.
+        current.autoStopTimeout = window.setTimeout(() => {
+            stopRecording(recordingId);
+        }, current.maxDurationMs);
         statusEl.textContent = "Recording...";
         statusEl.className = "recording-status recording";
         recordBtn.style.display = "none";
@@ -118,29 +207,30 @@ async function startRecording(recordingId: string): Promise<void> {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         addMessage(`Error accessing microphone: ${errorMessage}`, "error");
-    }
-}
-
-function stopRecording(recordingId: string): void {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-
-        const widgetEl = document.getElementById(`recording-${recordingId}`);
-        if (!widgetEl) return;
-
-        const stopBtn = widgetEl.querySelector(".stop-btn") as HTMLButtonElement;
-        const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
-
-        if (recordBtn && stopBtn) {
-            recordBtn.style.display = "inline-block";
-            stopBtn.style.display = "none";
+    } finally {
+        const current = recordings.get(recordingId);
+        if (current) {
+            current.starting = false;
         }
     }
 }
 
+function stopRecording(recordingId: string): void {
+    const state = recordings.get(recordingId);
+    if (!state) return;
+    if (state.autoStopTimeout !== null) {
+        clearTimeout(state.autoStopTimeout);
+        state.autoStopTimeout = null;
+    }
+    if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+        state.mediaRecorder.stop();
+        state.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+    }
+}
+
 async function sendRecording(recordingId: string): Promise<void> {
-    if (audioChunks.length === 0) {
+    const state = recordings.get(recordingId);
+    if (!state || state.audioChunks.length === 0) {
         addMessage("No audio recorded", "error");
         return;
     }
@@ -160,7 +250,7 @@ async function sendRecording(recordingId: string): Promise<void> {
         statusEl.className = "recording-status";
     }
 
-    const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+    const audioBlob = new Blob(state.audioChunks, { type: state.mimeType });
     const formData = new FormData();
     formData.append("file", audioBlob, "recording.wav");
     formData.append("recording_id", recordingId);
@@ -192,9 +282,6 @@ async function sendRecording(recordingId: string): Promise<void> {
         } else {
             addMessage("Connection lost. Please reconnect and try again.", "error");
         }
-
-        audioChunks = [];
-        mediaRecorder = null;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         addMessage(`Error uploading audio: ${errorMessage}`, "error");
@@ -211,13 +298,7 @@ async function sendRecording(recordingId: string): Promise<void> {
 }
 
 function cancelRecording(recordingId: string): void {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-    }
     removeRecordingWidget(recordingId);
-    audioChunks = [];
-    mediaRecorder = null;
 
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(

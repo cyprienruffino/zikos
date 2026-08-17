@@ -13,8 +13,51 @@ function getMessagesEl(): HTMLElement {
 
 const metronomes = new Map<string, MetronomeState>();
 
-let mediaRecorder: MediaRecorder | null = null;
-let audioChunks: Blob[] = [];
+interface RecordingState {
+    mediaRecorder: MediaRecorder | null;
+    audioChunks: Blob[];
+    /** Synchronous guard so a double-click cannot acquire two streams. */
+    starting: boolean;
+    objectUrl: string | null;
+    mimeType: string;
+}
+
+const recordings = new Map<string, RecordingState>();
+
+function getRecordingState(metronomeId: string): RecordingState {
+    let state = recordings.get(metronomeId);
+    if (!state) {
+        state = {
+            mediaRecorder: null,
+            audioChunks: [],
+            starting: false,
+            objectUrl: null,
+            mimeType: "",
+        };
+        recordings.set(metronomeId, state);
+    }
+    return state;
+}
+
+/** Stop any active recorder/stream and release resources for this widget. */
+function teardownRecording(metronomeId: string): void {
+    const state = recordings.get(metronomeId);
+    if (!state) return;
+    if (state.mediaRecorder) {
+        if (state.mediaRecorder.state !== "inactive") {
+            state.mediaRecorder.stop();
+        }
+        state.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        state.mediaRecorder = null;
+    }
+    if (state.objectUrl) {
+        URL.revokeObjectURL(state.objectUrl);
+        state.objectUrl = null;
+    }
+    state.audioChunks = [];
+    state.starting = false;
+}
+
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 
@@ -115,6 +158,8 @@ export function removeMetronomeWidget(metronomeId: string): void {
         stopMetronome(metronomeId);
         metronomes.delete(metronomeId);
     }
+    teardownRecording(metronomeId);
+    recordings.delete(metronomeId);
     const widget = document.getElementById(`metronome-${metronomeId}`);
     if (widget) {
         widget.remove();
@@ -231,6 +276,17 @@ async function startRecording(metronomeId: string): Promise<void> {
     const widgetEl = metronome?.widgetEl;
     if (!widgetEl) return;
 
+    const recState = getRecordingState(metronomeId);
+    // Synchronous guard: a second click before getUserMedia resolves must not
+    // acquire a second stream.
+    if (
+        recState.starting ||
+        (recState.mediaRecorder && recState.mediaRecorder.state !== "inactive")
+    ) {
+        return;
+    }
+    recState.starting = true;
+
     const keepPlaying = (widgetEl.querySelector(".keep-metronome-cb") as HTMLInputElement)?.checked;
     if (!keepPlaying && metronome?.isPlaying) {
         pauseMetronome(metronomeId);
@@ -244,8 +300,17 @@ async function startRecording(metronomeId: string): Promise<void> {
                 autoGainControl: false,
             },
         });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
+
+        if (!recordings.has(metronomeId)) {
+            // Widget was removed while waiting for permission.
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+        }
+
+        const mediaRecorder = new MediaRecorder(stream);
+        recState.mediaRecorder = mediaRecorder;
+        recState.audioChunks = [];
+        recState.mimeType = "audio/wav";
 
         const statusEl = document.getElementById(`rec-status-${metronomeId}`) as HTMLElement;
         const recordBtn = widgetEl.querySelector(".record-btn") as HTMLButtonElement;
@@ -255,16 +320,24 @@ async function startRecording(metronomeId: string): Promise<void> {
 
         mediaRecorder.ondataavailable = (event: BlobEvent) => {
             if (event.data) {
-                audioChunks.push(event.data);
+                recState.audioChunks.push(event.data);
             }
         };
 
         mediaRecorder.onstop = () => {
-            const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+            const audioBlob = new Blob(recState.audioChunks, { type: recState.mimeType });
             const audioUrl = URL.createObjectURL(audioBlob);
+            if (recState.objectUrl) {
+                URL.revokeObjectURL(recState.objectUrl);
+            }
+            recState.objectUrl = audioUrl;
             const playerEl = document.getElementById(`rec-player-${metronomeId}`);
             if (playerEl) {
-                playerEl.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+                playerEl.innerHTML = "";
+                const audio = document.createElement("audio");
+                audio.controls = true;
+                audio.src = audioUrl;
+                playerEl.appendChild(audio);
             }
 
             const sendBtn = widgetEl.querySelector(".send-btn") as HTMLButtonElement;
@@ -285,10 +358,14 @@ async function startRecording(metronomeId: string): Promise<void> {
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         addMessage(`Error accessing microphone: ${errorMessage}`, "error");
+    } finally {
+        recState.starting = false;
     }
 }
 
 function stopRecording(metronomeId: string): void {
+    const recState = recordings.get(metronomeId);
+    const mediaRecorder = recState?.mediaRecorder;
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach((track) => track.stop());
@@ -308,7 +385,8 @@ function stopRecording(metronomeId: string): void {
 }
 
 async function sendRecording(metronomeId: string): Promise<void> {
-    if (audioChunks.length === 0) {
+    const recState = recordings.get(metronomeId);
+    if (!recState || recState.audioChunks.length === 0) {
         addMessage("No audio recorded", "error");
         return;
     }
@@ -329,7 +407,7 @@ async function sendRecording(metronomeId: string): Promise<void> {
         statusEl.className = "recording-status";
     }
 
-    const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+    const audioBlob = new Blob(recState.audioChunks, { type: recState.mimeType || "audio/wav" });
     const formData = new FormData();
     formData.append("file", audioBlob, "recording.wav");
     formData.append("recording_id", metronomeId);
@@ -361,8 +439,7 @@ async function sendRecording(metronomeId: string): Promise<void> {
             addMessage("Connection lost. Please reconnect and try again.", "error");
         }
 
-        audioChunks = [];
-        mediaRecorder = null;
+        teardownRecording(metronomeId);
 
         // Reset recording UI but keep the metronome widget
         if (sendBtn) {
@@ -393,12 +470,7 @@ async function sendRecording(metronomeId: string): Promise<void> {
 }
 
 function cancelRecording(metronomeId: string): void {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-    }
-    audioChunks = [];
-    mediaRecorder = null;
+    teardownRecording(metronomeId);
 
     const metronome = metronomes.get(metronomeId);
     const widgetEl = metronome?.widgetEl;
