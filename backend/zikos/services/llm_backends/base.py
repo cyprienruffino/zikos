@@ -79,29 +79,29 @@ class LLMBackend(ABC):
             **kwargs,
         )
 
-        # Simulate streaming by yielding the full response as a single chunk
-        content = result["choices"][0]["message"].get("content", "")
+        # Yield the full content as ONE chunk: re-splitting on whitespace would
+        # destroy newlines/indentation (corrupting e.g. MIDI text).
+        message = result["choices"][0]["message"]
+        content = message.get("content", "")
         if content:
-            # Split content into words for simulation
-            words = content.split()
-            for i, word in enumerate(words):
-                yield {
-                    "choices": [
-                        {
-                            "delta": {
-                                "content": word + (" " if i < len(words) - 1 else ""),
-                                "role": "assistant",
-                            },
-                            "finish_reason": None,
-                        }
-                    ]
-                }
+            yield {
+                "choices": [
+                    {
+                        "delta": {"content": content, "role": "assistant"},
+                        "finish_reason": None,
+                    }
+                ]
+            }
 
-        # Final chunk with finish reason
+        # Final chunk with finish reason and any native tool calls
+        final_delta: dict[str, Any] = {}
+        tool_calls = message.get("tool_calls")
+        if tool_calls:
+            final_delta["tool_calls"] = tool_calls
         yield {
             "choices": [
                 {
-                    "delta": {},
+                    "delta": final_delta,
                     "finish_reason": result["choices"][0].get("finish_reason", "stop"),
                 }
             ]
