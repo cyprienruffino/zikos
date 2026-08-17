@@ -23,9 +23,18 @@ class MidiService:
         return dict(result)
 
     async def synthesize(self, midi_file_id: str, instrument: str) -> str:
-        """Synthesize MIDI to audio"""
+        """Synthesize MIDI to audio
+
+        Raises:
+            RuntimeError: If the synthesis tool reported an error or returned
+                no audio file ID.
+        """
         result = await self.midi_tools.midi_to_audio(midi_file_id, instrument)
+        if result.get("error"):
+            raise RuntimeError(result.get("message") or "MIDI synthesis failed")
         audio_file_id: str = result.get("audio_file_id", "")
+        if not audio_file_id:
+            raise RuntimeError("MIDI synthesis returned no audio file ID")
         return audio_file_id
 
     async def render_notation(self, midi_file_id: str, format: str) -> dict[str, Any]:
