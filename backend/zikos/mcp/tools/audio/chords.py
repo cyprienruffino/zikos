@@ -78,7 +78,9 @@ async def detect_chords(audio_path: str) -> dict[str, Any]:
             }
 
         hop_length = 512
-        chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=hop_length)
+        # CQT chroma: log-spaced bins keep pitch-class resolution in the low
+        # register (bass), where linear STFT bins smear adjacent semitones.
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop_length)
         rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
 
         # Segment the chroma sequence in FRAMES (each frame spans hop_length

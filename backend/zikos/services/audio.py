@@ -10,7 +10,9 @@ from fastapi import UploadFile
 
 from zikos.config import settings
 from zikos.mcp.tools.analysis import AudioAnalysisTools
+from zikos.mcp.tools.audio.utils import resolve_instrument_profile
 from zikos.services.audio_preprocessing import AudioPreprocessingService
+from zikos.services.user_settings import UserSettingsService
 
 _logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class AudioService:
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.analysis_tools = AudioAnalysisTools()
         self.preprocessing_service = AudioPreprocessingService()
+        self.user_settings_service = UserSettingsService(settings.user_settings_path)
 
     async def store_audio(self, file: UploadFile, recording_id: str | None = None) -> str:
         """Store uploaded audio file with preprocessing"""
@@ -67,7 +70,9 @@ class AudioService:
             return cached
 
         tempo_result = await self.analysis_tools.analyze_tempo(audio_file_id)
-        pitch_result = await self.analysis_tools.detect_pitch(audio_file_id)
+        pitch_result = await self.analysis_tools.detect_pitch(
+            audio_file_id, instrument=self._declared_instrument()
+        )
         rhythm_result = await self.analysis_tools.analyze_rhythm(audio_file_id)
         instrument_result = await self.analysis_tools.detect_instrument(audio_file_id)
 
@@ -83,6 +88,23 @@ class AudioService:
         while len(cache) > AudioService._ANALYSIS_CACHE_MAX_ENTRIES:
             cache.pop(next(iter(cache)))
         return result
+
+    def _declared_instrument(self) -> str | None:
+        """First declared instrument with a known DSP profile.
+
+        Baseline pitch analysis runs before the LLM can pass an instrument,
+        so it uses the user's saved profile; the LLM can re-run detect_pitch
+        with an explicit instrument if the recording doesn't match.
+        """
+        try:
+            instruments = self.user_settings_service.load().instruments
+        except Exception:
+            return None
+        for name in instruments:
+            canonical, _ = resolve_instrument_profile(name)
+            if canonical != "default":
+                return str(name)
+        return None
 
     async def get_audio_info(self, audio_file_id: str) -> dict[str, Any]:
         """Get audio file information"""

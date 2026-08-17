@@ -39,6 +39,8 @@ ENV/
 models/
 *.gguf
 *.wav
+# Golden regression recordings are deliberately committed (see tests/golden/README.md)
+!tests/golden/recordings/*.wav
 *.mp3
 *.flac
 *.mid

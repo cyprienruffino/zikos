@@ -171,7 +171,7 @@ class TestPitchDetection:
             patch("librosa.load") as mock_load,
             patch("librosa.pyin") as mock_pyin,
             patch("librosa.onset.onset_detect") as mock_onset,
-            patch("librosa.feature.chroma_stft") as mock_chroma,
+            patch("librosa.feature.chroma_cqt") as mock_chroma,
         ):
             mock_load.return_value = (audio, sr)
             f0 = np.array([440.0] * 100)
@@ -852,7 +852,7 @@ class TestComparisonTools:
             patch("librosa.beat.beat_track") as mock_beat,
             patch("librosa.pyin") as mock_pyin,
             patch("librosa.onset.onset_detect") as mock_onset,
-            patch("librosa.feature.chroma_stft") as mock_chroma,
+            patch("librosa.feature.chroma_cqt") as mock_chroma,
         ):
             audio = np.sin(2 * np.pi * 440 * np.linspace(0, 2, 44100))
             sr = 22050
@@ -1229,7 +1229,7 @@ class TestComparisonTools:
             patch("librosa.beat.beat_track") as mock_beat,
             patch("librosa.pyin") as mock_pyin,
             patch("librosa.onset.onset_detect") as mock_onset,
-            patch("librosa.feature.chroma_stft") as mock_chroma,
+            patch("librosa.feature.chroma_cqt") as mock_chroma,
             patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
             patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
             patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,
@@ -1611,7 +1611,7 @@ class TestComparisonTools:
             patch("librosa.beat.beat_track") as mock_beat,
             patch("librosa.pyin") as mock_pyin,
             patch("librosa.onset.onset_detect") as mock_onset,
-            patch("librosa.feature.chroma_stft") as mock_chroma,
+            patch("librosa.feature.chroma_cqt") as mock_chroma,
             patch("zikos.mcp.tools.audio.tempo.analyze_tempo") as mock_tempo,
             patch("zikos.mcp.tools.audio.pitch.detect_pitch") as mock_pitch,
             patch("zikos.mcp.tools.audio.rhythm.analyze_rhythm") as mock_rhythm,

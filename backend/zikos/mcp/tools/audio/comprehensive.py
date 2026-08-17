@@ -25,6 +25,14 @@ def get_comprehensive_analysis_tool() -> Tool:
         category=ToolCategory.AUDIO_ANALYSIS,
         parameters={
             "audio_file_id": {"type": "string"},
+            "instrument": {
+                "type": "string",
+                "description": (
+                    "Instrument being played, e.g. 'bass', 'guitar', 'piano', 'voice', "
+                    "'violin'. Tunes pitch tracking for the instrument's register — "
+                    "always pass the user's instrument when known."
+                ),
+            },
         },
         required=["audio_file_id"],
         detailed_description="""Run all analyses and provide a structured summary with scores across all dimensions.
@@ -39,7 +47,7 @@ Interpretation Guidelines:
     )
 
 
-async def comprehensive_analysis(audio_path: str) -> dict[str, Any]:
+async def comprehensive_analysis(audio_path: str, instrument: str | None = None) -> dict[str, Any]:
     """Run all analyses and provide structured summary"""
     try:
         if audio_path.endswith(".wav") or "/" in audio_path or "\\" in audio_path:
@@ -48,7 +56,7 @@ async def comprehensive_analysis(audio_path: str) -> dict[str, Any]:
             resolved_path = str(resolve_audio_path(audio_path))
 
         tempo_result = await tempo.analyze_tempo(resolved_path)
-        pitch_result = await pitch.detect_pitch(resolved_path)
+        pitch_result = await pitch.detect_pitch(resolved_path, instrument=instrument)
         rhythm_result = await rhythm.analyze_rhythm(resolved_path)
         dynamics_result = await dynamics.analyze_dynamics(resolved_path)
         articulation_result = await articulation.analyze_articulation(resolved_path)
