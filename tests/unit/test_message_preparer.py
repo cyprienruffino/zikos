@@ -71,6 +71,24 @@ class TestMessagePreparer:
         thinking_messages = [msg for msg in messages if msg.get("role") == "thinking"]
         assert len(thinking_messages) == 0
 
+    def test_injected_error_does_not_replace_system_prompt(self, preparer):
+        """A later system-role message (e.g. injected error) must never replace
+        the real system prompt: the first system message wins."""
+        history = [
+            {"role": "system", "content": "You are an expert music teacher with tools."},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi!"},
+            {"role": "system", "content": "ERROR: streaming_error: something went wrong"},
+            {"role": "user", "content": "Try again"},
+        ]
+
+        messages = preparer.prepare(history, max_tokens=1000, for_user=False)
+
+        assert messages[0]["role"] == "system"
+        assert "expert music teacher" in messages[0]["content"]
+        # The injected error is kept as ordinary context, not as the prompt
+        assert any("streaming_error" in str(m.get("content", "")) for m in messages[1:])
+
     def test_prepare_preserves_audio_analysis_messages(self, preparer):
         """Test preparing messages preserves audio analysis messages"""
         history = [

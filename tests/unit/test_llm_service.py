@@ -242,6 +242,29 @@ class TestHandleAudioReady:
         assert result["type"] == "response"
 
 
+class TestErrorInjection:
+    def test_injected_error_is_user_role(self, llm_service):
+        """Recoverable errors must be injected as marked user messages so they
+        can never displace the real system prompt."""
+        history = llm_service._get_conversation_history("s1")
+        llm_service._inject_error_system_message(history, "streaming_error", "boom")
+
+        assert history[-1]["role"] == "user"
+        assert history[-1]["content"].startswith("[system note]")
+        assert "streaming_error" in history[-1]["content"]
+
+    def test_prepared_messages_keep_real_prompt_after_error(self, llm_service):
+        history = llm_service._get_conversation_history("s1")
+        real_prompt = history[0]["content"]
+        history.append({"role": "user", "content": "Hello"})
+        llm_service._inject_error_system_message(history, "streaming_error", "boom")
+
+        messages = llm_service._prepare_messages(history)
+
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"] == real_prompt
+
+
 class TestThinking:
     def test_extract_thinking_from_content(self, llm_service):
         content = "<thinking>\nLet me analyze this.\n</thinking>\nGreat performance!"

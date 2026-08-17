@@ -53,7 +53,13 @@ class MessagePreparer:
         other_messages = []
         for msg in history:
             if msg.get("role") == "system":
-                system_prompt = msg.get("content", "")
+                # The FIRST system message is the real system prompt (persona/rules/tools).
+                # Any later system-role messages are injected context (e.g. error notes)
+                # and must be treated as ordinary history, never replace the prompt.
+                if system_prompt is None:
+                    system_prompt = msg.get("content", "")
+                else:
+                    other_messages.append(msg)
                 continue
             if for_user and msg.get("role") == "thinking":
                 continue
@@ -131,7 +137,7 @@ class MessagePreparer:
                 messages.append(msg)
                 final_total_tokens += msg_tokens
                 system_added = True
-            elif msg.get("role") != "system":
+            else:
                 # Always include audio analysis messages, even if they exceed the limit
                 # Other messages are checked against the limit
                 if (

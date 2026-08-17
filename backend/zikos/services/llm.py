@@ -183,7 +183,12 @@ class LLMService:
     def _inject_error_system_message(
         self, history: list[dict[str, Any]], error_type: str, error_details: str
     ) -> None:
-        history.append({"role": "system", "content": f"ERROR: {error_type}: {error_details}"})
+        # Injected as a clearly-marked user message, NOT role "system": appending
+        # system-role messages mid-conversation risks displacing the real system
+        # prompt (persona/rules/tools) and is rejected by some strict APIs.
+        history.append(
+            {"role": "user", "content": f"[system note] ERROR: {error_type}: {error_details}"}
+        )
 
     def _media_events_from_tool_results(
         self, tool_results: list[dict[str, Any]]
