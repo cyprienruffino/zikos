@@ -1,4 +1,12 @@
 import { WebSocketMessage } from "./types.js";
+import { sanitizeToolId } from "./utils/sanitize.js";
+import {
+    clampBpm,
+    validateTimeSignature,
+    positiveNumber,
+    optionalPositiveNumber,
+    validateNoteName,
+} from "./utils/validate.js";
 import { WS_URL } from "./config.js";
 import {
     addMessage,
@@ -30,8 +38,13 @@ import { addPracticeTimerWidget } from "./widgets/practiceTimer.js";
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 let isProcessing = false;
+let isStreaming = false;
 let reconnectAttempts = 0;
 let reconnectTimeout: number | null = null;
+
+// Side-band results that may arrive mid-stream; they must not tear down
+// the streaming bubble or the processing state machine.
+const SIDE_RESULT_TYPES = new Set(["audio_result", "notation_result", "recording_cancelled"]);
 
 export function connect(): void {
     if (reconnectTimeout) {
@@ -39,22 +52,32 @@ export function connect(): void {
         reconnectTimeout = null;
     }
 
-    updateStatus("Connecting...", "disconnected");
-    ws = new WebSocket(WS_URL);
-    setWebSocket(ws);
-    setMetronomeWebSocket(ws);
+    // Detach handlers from any previous socket so a stale connection can't
+    // fire onclose and schedule competing reconnect loops.
+    if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+    }
 
-    ws.onopen = () => {
+    updateStatus("Connecting...", "disconnected");
+    const socket = new WebSocket(WS_URL);
+    ws = socket;
+    setWebSocket(socket);
+    setMetronomeWebSocket(socket);
+
+    socket.onopen = () => {
         reconnectAttempts = 0;
         updateStatus("Connected", "connected");
         const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
         if (sendButton) {
             sendButton.disabled = false;
         }
-        ws!.send(JSON.stringify({ type: "connect", session_id: sessionId }));
+        socket.send(JSON.stringify({ type: "connect", session_id: sessionId }));
     };
 
-    ws.onmessage = (event: MessageEvent) => {
+    socket.onmessage = (event: MessageEvent) => {
         try {
             const data = JSON.parse(event.data as string) as WebSocketMessage;
 
@@ -71,38 +94,46 @@ export function connect(): void {
 
             if (data.type === "token") {
                 // Streaming token
-                if (!isProcessing) {
+                if (!isStreaming) {
                     startStreamingMessage("assistant");
-                    isProcessing = true;
+                    isStreaming = true;
                 }
+                isProcessing = true;
                 appendStreamingToken(data.content || "");
                 return;
             }
 
             if (data.type === "thinking") {
+                // Buffered by the UI layer if streaming hasn't started yet.
                 addThinkingToStreamingMessage(data.content || "");
                 return;
             }
 
-            // Handle tool calls during streaming
             let justFinishedStreaming = false;
             if (data.type === "tool_call") {
-                if (isProcessing) {
+                // Tool calls end the current stream segment.
+                if (isStreaming) {
                     finishStreamingMessage();
-                    isProcessing = false;
+                    isStreaming = false;
                 }
+                isProcessing = false;
                 // Continue to tool call handling below
-            } else {
-                // Non-streaming message or end of stream
-                if (isProcessing && (data.type === "response" || data.type === "error")) {
-                    finishStreamingMessage(data);
-                    isProcessing = false;
-                    justFinishedStreaming = true;
+            } else if (SIDE_RESULT_TYPES.has(data.type)) {
+                // Mid-stream side results: leave stream/processing state alone.
+                if (!isStreaming) {
                     removeTypingIndicator();
-                } else {
-                    removeTypingIndicator();
-                    isProcessing = false;
                 }
+            } else if (data.type === "response" || data.type === "error") {
+                if (isStreaming) {
+                    finishStreamingMessage(data);
+                    isStreaming = false;
+                    justFinishedStreaming = true;
+                }
+                removeTypingIndicator();
+                isProcessing = false;
+            } else {
+                removeTypingIndicator();
+                isProcessing = false;
             }
 
             if (data.type === "response" && !justFinishedStreaming) {
@@ -116,9 +147,9 @@ export function connect(): void {
                     max_duration?: number;
                 };
                 addRecordingWidget(
-                    data.tool_id || `rec_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "rec"),
                     args.prompt || "Please record audio",
-                    args.max_duration || 60.0
+                    Math.min(positiveNumber(args.max_duration, 60.0), 600)
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_metronome") {
                 if (data.message) {
@@ -130,9 +161,9 @@ export function connect(): void {
                     description?: string;
                 };
                 addMetronomeWidget(
-                    data.tool_id || `met_${Date.now()}`,
-                    args.bpm || 120,
-                    args.time_signature || "4/4",
+                    sanitizeToolId(data.tool_id, "met"),
+                    clampBpm(args.bpm, 120),
+                    validateTimeSignature(args.time_signature),
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_tuner") {
@@ -146,8 +177,8 @@ export function connect(): void {
                     description?: string;
                 };
                 addTunerWidget(
-                    data.tool_id || `tuner_${Date.now()}`,
-                    args.reference_frequency || 440,
+                    sanitizeToolId(data.tool_id, "tuner"),
+                    positiveNumber(args.reference_frequency, 440),
                     args.note,
                     args.octave,
                     args.description
@@ -164,12 +195,15 @@ export function connect(): void {
                     instrument?: string;
                     description?: string;
                 };
+                const chords = Array.isArray(args.chords)
+                    ? args.chords.filter((chord): chord is string => typeof chord === "string")
+                    : [];
                 addChordProgressionWidget(
-                    data.tool_id || `chord_${Date.now()}`,
-                    args.chords || [],
-                    args.tempo || 120,
-                    args.time_signature || "4/4",
-                    args.chords_per_bar || 1,
+                    sanitizeToolId(data.tool_id, "chord"),
+                    chords,
+                    clampBpm(args.tempo, 120),
+                    validateTimeSignature(args.time_signature),
+                    positiveNumber(args.chords_per_bar, 1),
                     args.instrument || "piano",
                     args.description
                 );
@@ -185,12 +219,17 @@ export function connect(): void {
                     ramp_type?: string;
                     description?: string;
                 };
+                let startBpm = clampBpm(args.start_bpm, 60);
+                let endBpm = clampBpm(args.end_bpm, 120);
+                if (startBpm > endBpm) {
+                    [startBpm, endBpm] = [endBpm, startBpm];
+                }
                 addTempoTrainerWidget(
-                    data.tool_id || `tempo_${Date.now()}`,
-                    args.start_bpm || 60,
-                    args.end_bpm || 120,
-                    args.duration_minutes || 5,
-                    args.time_signature || "4/4",
+                    sanitizeToolId(data.tool_id, "tempo"),
+                    startBpm,
+                    endBpm,
+                    positiveNumber(args.duration_minutes, 5),
+                    validateTimeSignature(args.time_signature),
                     args.ramp_type || "linear",
                     args.description
                 );
@@ -205,10 +244,10 @@ export function connect(): void {
                     description?: string;
                 };
                 addEarTrainerWidget(
-                    data.tool_id || `ear_${Date.now()}`,
+                    sanitizeToolId(data.tool_id, "ear"),
                     args.mode || "intervals",
                     args.difficulty || "medium",
-                    args.root_note || "C",
+                    validateNoteName(args.root_note),
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_practice_timer") {
@@ -222,10 +261,10 @@ export function connect(): void {
                     description?: string;
                 };
                 addPracticeTimerWidget(
-                    data.tool_id || `timer_${Date.now()}`,
-                    args.duration_minutes,
+                    sanitizeToolId(data.tool_id, "timer"),
+                    optionalPositiveNumber(args.duration_minutes),
                     args.goal,
-                    args.break_interval_minutes,
+                    optionalPositiveNumber(args.break_interval_minutes),
                     args.description
                 );
             } else if (data.type === "audio_result" && data.audio_file_id) {
@@ -245,12 +284,19 @@ export function connect(): void {
         }
     };
 
-    ws.onerror = (error: Event) => {
+    socket.onerror = (error: Event) => {
         updateStatus("Connection error", "disconnected");
         console.error("WebSocket error:", error);
     };
 
-    ws.onclose = () => {
+    socket.onclose = () => {
+        // A disconnect mid-stream would otherwise leave isProcessing stuck at
+        // true forever, permanently blocking sendMessage after reconnect.
+        finishStreamingMessage();
+        removeTypingIndicator();
+        isProcessing = false;
+        isStreaming = false;
+
         updateStatus("Disconnected", "disconnected");
         const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
         if (sendButton) {
@@ -272,6 +318,7 @@ export function sendMessage(message: string, stream: boolean = true): boolean {
         isProcessing = true;
         if (stream) {
             startStreamingMessage("assistant");
+            isStreaming = true;
         } else {
             addTypingIndicator();
         }
@@ -296,6 +343,7 @@ export function reset(): void {
     ws = null;
     sessionId = null;
     isProcessing = false;
+    isStreaming = false;
     reconnectAttempts = 0;
     if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);

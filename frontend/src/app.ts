@@ -19,29 +19,39 @@ async function initializeApp(): Promise<void> {
     connect();
 }
 
-if (sendButton) {
-    sendButton.addEventListener("click", () => {
-        const message = messageInput?.value.trim();
-        if (message) {
-            addMessage(message, "user");
-            if (messageInput) {
-                messageInput.value = "";
-            }
-            if (!sendMessage(message)) {
-                if (getIsProcessing()) {
-                    addMessage("Please wait for the current response to complete", "error");
-                } else {
-                    addMessage("Not connected. Please wait for connection...", "error");
-                }
-            }
+function submitMessage(): void {
+    const message = messageInput?.value.trim();
+    if (!message) {
+        return;
+    }
+    // Render the user bubble first so it appears above the assistant's
+    // streaming bubble, but roll it back if the send fails.
+    const bubble = addMessage(message, "user");
+    if (messageInput) {
+        messageInput.value = "";
+    }
+    if (!sendMessage(message)) {
+        bubble.remove();
+        if (messageInput) {
+            messageInput.value = message;
         }
-    });
+        if (getIsProcessing()) {
+            addMessage("Please wait for the current response to complete", "error");
+        } else {
+            addMessage("Not connected. Please wait for connection...", "error");
+        }
+    }
+}
+
+if (sendButton) {
+    sendButton.addEventListener("click", submitMessage);
 }
 
 if (messageInput) {
-    messageInput.addEventListener("keypress", (e: KeyboardEvent) => {
-        if (e.key === "Enter") {
-            sendButton?.click();
+    messageInput.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === "Enter" && !e.isComposing) {
+            e.preventDefault();
+            submitMessage();
         }
     });
 }

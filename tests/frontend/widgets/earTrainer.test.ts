@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { addEarTrainerWidget } from "../../../frontend/src/widgets/earTrainer.js";
+import { resetAudioEngine } from "../../../frontend/src/widgets/audioEngine.js";
 
 class MockAudioContext {
     state: string = "running";
@@ -33,6 +34,7 @@ describe("Ear Trainer Widget", () => {
         document.body.innerHTML = `<div id="messages"></div>`;
 
         globalThis.AudioContext = vi.fn(() => new MockAudioContext()) as any;
+        resetAudioEngine();
         vi.spyOn(Math, "floor").mockReturnValue(0);
     });
 
@@ -226,6 +228,74 @@ describe("Ear Trainer Widget", () => {
             options.forEach((btn) => {
                 expect((btn as HTMLButtonElement).disabled).toBe(true);
             });
+        });
+    });
+
+    describe("Chords Mode Qualities", () => {
+        it("should offer chord qualities as answers in chords mode", () => {
+            addEarTrainerWidget("ear_123", "chords", "hard", "C");
+            const widget = document.getElementById("ear-ear_123");
+            const options = Array.from(widget!.querySelectorAll(".ear-trainer-option")).map(
+                (btn) => btn.textContent
+            );
+            expect(options).toEqual(["maj", "min", "dim", "aug"]);
+        });
+
+        it("should offer maj/min only on easy difficulty", () => {
+            addEarTrainerWidget("ear_123", "chords", "easy", "C");
+            const widget = document.getElementById("ear-ear_123");
+            const options = Array.from(widget!.querySelectorAll(".ear-trainer-option")).map(
+                (btn) => btn.textContent
+            );
+            expect(options).toEqual(["maj", "min"]);
+        });
+
+        it("should mark the matching quality correct", () => {
+            vi.spyOn(Math, "floor").mockReturnValue(1); // answer: "min"
+
+            addEarTrainerWidget("ear_123", "chords", "easy", "C");
+            const widget = document.getElementById("ear-ear_123");
+            const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
+            playBtn.click();
+
+            const minBtn = widget?.querySelector('[data-interval="min"]') as HTMLButtonElement;
+            minBtn.click();
+
+            const resultEl = document.getElementById("result-ear_123");
+            expect(resultEl?.textContent).toContain("Correct");
+        });
+    });
+
+    describe("Enharmonic Equivalents", () => {
+        it("should accept A2 when the answer is m3 (and vice versa)", () => {
+            // hard interval list: ["m2","M2","A2","m3",...] -> index 3 is m3
+            vi.spyOn(Math, "floor").mockReturnValue(3);
+
+            addEarTrainerWidget("ear_123", "intervals", "hard", "C");
+            const widget = document.getElementById("ear-ear_123");
+            const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
+            playBtn.click();
+
+            const a2Btn = widget?.querySelector('[data-interval="A2"]') as HTMLButtonElement;
+            a2Btn.click();
+
+            const resultEl = document.getElementById("result-ear_123");
+            expect(resultEl?.textContent).toContain("Correct");
+        });
+
+        it("should still reject genuinely wrong intervals", () => {
+            vi.spyOn(Math, "floor").mockReturnValue(3); // answer: m3
+
+            addEarTrainerWidget("ear_123", "intervals", "hard", "C");
+            const widget = document.getElementById("ear-ear_123");
+            const playBtn = widget?.querySelector(".play-btn") as HTMLButtonElement;
+            playBtn.click();
+
+            const wrongBtn = widget?.querySelector('[data-interval="P5"]') as HTMLButtonElement;
+            wrongBtn.click();
+
+            const resultEl = document.getElementById("result-ear_123");
+            expect(resultEl?.textContent).toContain("Incorrect");
         });
     });
 

@@ -72,7 +72,7 @@ describe("App Module", () => {
             expect(messages.querySelector(".message.user")!.textContent).toContain("Hello");
         });
 
-        it("should show error in DOM when processing", async () => {
+        it("should show error, remove bubble, and restore input when processing", async () => {
             vi.mocked(websocket.getIsProcessing).mockReturnValue(true);
             vi.mocked(websocket.sendMessage).mockReturnValue(false);
 
@@ -86,9 +86,13 @@ describe("App Module", () => {
             const errorMessages = messages.querySelectorAll(".message.error");
             expect(errorMessages.length).toBe(1);
             expect(errorMessages[0].textContent).toContain("Please wait");
+            // The failed user bubble must not remain
+            expect(messages.querySelectorAll(".message.user").length).toBe(0);
+            // The input is restored so the user can retry
+            expect(input.value).toBe("Test message");
         });
 
-        it("should show error in DOM when not connected", async () => {
+        it("should show error, remove bubble, and restore input when not connected", async () => {
             vi.mocked(websocket.getIsProcessing).mockReturnValue(false);
             vi.mocked(websocket.sendMessage).mockReturnValue(false);
 
@@ -102,17 +106,19 @@ describe("App Module", () => {
             const errorMessages = messages.querySelectorAll(".message.error");
             expect(errorMessages.length).toBe(1);
             expect(errorMessages[0].textContent).toContain("Not connected");
+            expect(messages.querySelectorAll(".message.user").length).toBe(0);
+            expect(input.value).toBe("Test message");
         });
     });
 
-    describe("Enter Key Press", () => {
-        it("should send message when Enter is pressed", async () => {
+    describe("Enter Key", () => {
+        it("should send message on Enter keydown", async () => {
             await import("../../frontend/src/app.js");
             const input = document.getElementById("messageInput") as HTMLInputElement;
             const messages = document.getElementById("messages")!;
 
             input.value = "Test message";
-            input.dispatchEvent(new KeyboardEvent("keypress", { key: "Enter" }));
+            input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
 
             expect(messages.querySelectorAll(".message.user").length).toBe(1);
             expect(websocket.sendMessage).toHaveBeenCalledWith("Test message");
@@ -123,7 +129,17 @@ describe("App Module", () => {
             const input = document.getElementById("messageInput") as HTMLInputElement;
 
             input.value = "Test message";
-            input.dispatchEvent(new KeyboardEvent("keypress", { key: "a" }));
+            input.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+
+            expect(websocket.sendMessage).not.toHaveBeenCalled();
+        });
+
+        it("should not send while composing with an IME", async () => {
+            await import("../../frontend/src/app.js");
+            const input = document.getElementById("messageInput") as HTMLInputElement;
+
+            input.value = "Test message";
+            input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true }));
 
             expect(websocket.sendMessage).not.toHaveBeenCalled();
         });
