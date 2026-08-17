@@ -117,6 +117,6 @@ class TestTimbreAnalysis:
 
         assert "timbre_consistency" in result
         # Sustained sine-based audio should score well (>= 0.5)
-        assert result["timbre_consistency"] >= 0.5, (
-            f"timbre_consistency {result['timbre_consistency']:.2f} too low for sustained tone"
-        )
+        assert (
+            result["timbre_consistency"] >= 0.5
+        ), f"timbre_consistency {result['timbre_consistency']:.2f} too low for sustained tone"
