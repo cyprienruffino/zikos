@@ -9,6 +9,16 @@ function getMessagesEl(): HTMLElement {
     return el as HTMLElement;
 }
 
+const NEAR_BOTTOM_PX = 120;
+
+/** Autoscroll only when the user is already near the bottom, so reading
+ *  scrollback is not hijacked by incoming tokens. */
+function autoScroll(el: HTMLElement): void {
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX) {
+        el.scrollTop = el.scrollHeight;
+    }
+}
+
 /** Build media attachments (audio player, notation images) via DOM APIs so
  *  server-supplied ids/urls are never parsed as HTML. */
 function appendMediaElements(container: HTMLElement, data: Partial<WebSocketMessage>): void {
@@ -63,7 +73,7 @@ export function addMessage(
 
     const messagesEl = getMessagesEl();
     messagesEl.appendChild(messageEl);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    autoScroll(messagesEl);
     return messageEl;
 }
 
@@ -101,6 +111,10 @@ export function updateStatus(text: string, className: string): void {
 let streamingMessageEl: HTMLElement | null = null;
 let streamingTextEl: HTMLElement | null = null;
 let streamingContent: string = "";
+let thinkingContentEl: HTMLElement | null = null;
+// Thinking frames can arrive before the first token; buffer them until the
+// streaming bubble exists.
+let pendingThinking: string = "";
 
 export function startStreamingMessage(type: string = "assistant"): void {
     removeTypingIndicator();
@@ -114,6 +128,13 @@ export function startStreamingMessage(type: string = "assistant"): void {
     const messagesEl = getMessagesEl();
     messagesEl.appendChild(streamingMessageEl);
     streamingContent = "";
+    thinkingContentEl = null;
+
+    if (pendingThinking) {
+        const buffered = pendingThinking;
+        pendingThinking = "";
+        appendThinking(buffered);
+    }
 }
 
 export function appendStreamingToken(token: string): void {
@@ -121,32 +142,50 @@ export function appendStreamingToken(token: string): void {
         streamingContent += token;
         // Append as a text node; newlines are preserved via CSS white-space: pre-wrap.
         streamingTextEl.appendChild(document.createTextNode(token));
-        const messagesEl = getMessagesEl();
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        autoScroll(getMessagesEl());
     }
 }
 
-export function addThinkingToStreamingMessage(thinking: string): void {
-    if (streamingMessageEl) {
+/** Append thinking text to the bubble's single <details> section. */
+function appendThinking(thinking: string): void {
+    if (!streamingMessageEl) return;
+    if (!thinkingContentEl) {
         const details = document.createElement("details");
         details.className = "thinking-section";
         const summary = document.createElement("summary");
         summary.textContent = "Thinking";
         details.appendChild(summary);
-        const content = document.createElement("div");
-        content.className = "thinking-content";
-        content.textContent = thinking;
-        details.appendChild(content);
+        thinkingContentEl = document.createElement("div");
+        thinkingContentEl.className = "thinking-content";
+        details.appendChild(thinkingContentEl);
         streamingMessageEl.insertBefore(details, streamingTextEl);
     }
+    thinkingContentEl.appendChild(document.createTextNode(thinking));
+}
+
+export function addThinkingToStreamingMessage(thinking: string): void {
+    if (!streamingMessageEl) {
+        pendingThinking += thinking;
+        return;
+    }
+    appendThinking(thinking);
 }
 
 export function finishStreamingMessage(data: Partial<WebSocketMessage> | null = null): void {
-    if (streamingMessageEl && streamingTextEl && data) {
-        appendMediaElements(streamingMessageEl, data);
+    if (streamingMessageEl && streamingTextEl) {
+        // If the final message differs from the accumulated tokens (e.g. the
+        // server post-processed the response), prefer the final message.
+        if (data?.message && data.message !== streamingContent) {
+            streamingTextEl.textContent = data.message;
+        }
+        if (data) {
+            appendMediaElements(streamingMessageEl, data);
+        }
     }
 
     streamingMessageEl = null;
     streamingTextEl = null;
     streamingContent = "";
+    thinkingContentEl = null;
+    pendingThinking = "";
 }

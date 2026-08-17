@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { addMessage, addTypingIndicator, removeTypingIndicator, updateStatus } from "../../frontend/src/ui.js";
+import {
+    addMessage,
+    addTypingIndicator,
+    removeTypingIndicator,
+    updateStatus,
+    startStreamingMessage,
+    appendStreamingToken,
+    addThinkingToStreamingMessage,
+    finishStreamingMessage,
+} from "../../frontend/src/ui.js";
 
 describe("UI Module", () => {
     beforeEach(() => {
@@ -221,6 +230,81 @@ describe("UI Module", () => {
             updateStatus("Status & < >", "connected");
             const statusEl = document.getElementById("status");
             expect(statusEl?.textContent).toBe("Status & < >");
+        });
+    });
+
+    describe("Streaming", () => {
+        beforeEach(() => {
+            // Ensure no stale streaming state leaks between tests
+            finishStreamingMessage();
+        });
+
+        it("should append tokens incrementally as text nodes", () => {
+            startStreamingMessage();
+            appendStreamingToken("Hello");
+            appendStreamingToken(" world");
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("Hello world");
+            expect(textEl?.childNodes.length).toBe(2);
+        });
+
+        it("should escape HTML in streamed tokens", () => {
+            startStreamingMessage();
+            appendStreamingToken("<img src=x onerror=alert(1)>");
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.querySelector("img")).toBeNull();
+            expect(textEl?.textContent).toBe("<img src=x onerror=alert(1)>");
+        });
+
+        it("should buffer thinking that arrives before streaming starts", () => {
+            addThinkingToStreamingMessage("early thought");
+            expect(document.querySelector(".thinking-section")).toBeNull();
+
+            startStreamingMessage();
+            const thinking = document.querySelector(".thinking-content");
+            expect(thinking?.textContent).toBe("early thought");
+        });
+
+        it("should append multiple thinking frames to ONE details section", () => {
+            startStreamingMessage();
+            addThinkingToStreamingMessage("first ");
+            addThinkingToStreamingMessage("second");
+            const sections = document.querySelectorAll(".thinking-section");
+            expect(sections.length).toBe(1);
+            expect(sections[0].querySelector(".thinking-content")?.textContent).toBe(
+                "first second"
+            );
+        });
+
+        it("should replace bubble content when final message differs from tokens", () => {
+            startStreamingMessage();
+            appendStreamingToken("partial tok");
+            finishStreamingMessage({ message: "Final cleaned-up message" });
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("Final cleaned-up message");
+        });
+
+        it("should keep accumulated tokens when final message matches", () => {
+            startStreamingMessage();
+            appendStreamingToken("same");
+            finishStreamingMessage({ message: "same" });
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("same");
+        });
+
+        it("should not wipe streamed tokens when final message is empty", () => {
+            startStreamingMessage();
+            appendStreamingToken("streamed text");
+            finishStreamingMessage({ message: "" });
+            const textEl = document.querySelector(".message-text");
+            expect(textEl?.textContent).toBe("streamed text");
+        });
+
+        it("should clear buffered thinking after finish", () => {
+            addThinkingToStreamingMessage("stale thought");
+            finishStreamingMessage();
+            startStreamingMessage();
+            expect(document.querySelector(".thinking-section")).toBeNull();
         });
     });
 

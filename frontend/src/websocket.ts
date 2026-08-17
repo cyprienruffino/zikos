@@ -38,8 +38,13 @@ import { addPracticeTimerWidget } from "./widgets/practiceTimer.js";
 let ws: WebSocket | null = null;
 let sessionId: string | null = null;
 let isProcessing = false;
+let isStreaming = false;
 let reconnectAttempts = 0;
 let reconnectTimeout: number | null = null;
+
+// Side-band results that may arrive mid-stream; they must not tear down
+// the streaming bubble or the processing state machine.
+const SIDE_RESULT_TYPES = new Set(["audio_result", "notation_result", "recording_cancelled"]);
 
 export function connect(): void {
     if (reconnectTimeout) {
@@ -79,38 +84,46 @@ export function connect(): void {
 
             if (data.type === "token") {
                 // Streaming token
-                if (!isProcessing) {
+                if (!isStreaming) {
                     startStreamingMessage("assistant");
-                    isProcessing = true;
+                    isStreaming = true;
                 }
+                isProcessing = true;
                 appendStreamingToken(data.content || "");
                 return;
             }
 
             if (data.type === "thinking") {
+                // Buffered by the UI layer if streaming hasn't started yet.
                 addThinkingToStreamingMessage(data.content || "");
                 return;
             }
 
-            // Handle tool calls during streaming
             let justFinishedStreaming = false;
             if (data.type === "tool_call") {
-                if (isProcessing) {
+                // Tool calls end the current stream segment.
+                if (isStreaming) {
                     finishStreamingMessage();
-                    isProcessing = false;
+                    isStreaming = false;
                 }
+                isProcessing = false;
                 // Continue to tool call handling below
-            } else {
-                // Non-streaming message or end of stream
-                if (isProcessing && (data.type === "response" || data.type === "error")) {
-                    finishStreamingMessage(data);
-                    isProcessing = false;
-                    justFinishedStreaming = true;
+            } else if (SIDE_RESULT_TYPES.has(data.type)) {
+                // Mid-stream side results: leave stream/processing state alone.
+                if (!isStreaming) {
                     removeTypingIndicator();
-                } else {
-                    removeTypingIndicator();
-                    isProcessing = false;
                 }
+            } else if (data.type === "response" || data.type === "error") {
+                if (isStreaming) {
+                    finishStreamingMessage(data);
+                    isStreaming = false;
+                    justFinishedStreaming = true;
+                }
+                removeTypingIndicator();
+                isProcessing = false;
+            } else {
+                removeTypingIndicator();
+                isProcessing = false;
             }
 
             if (data.type === "response" && !justFinishedStreaming) {
@@ -272,6 +285,7 @@ export function connect(): void {
         finishStreamingMessage();
         removeTypingIndicator();
         isProcessing = false;
+        isStreaming = false;
 
         updateStatus("Disconnected", "disconnected");
         const sendButton = document.getElementById("sendButton") as HTMLButtonElement;
@@ -294,6 +308,7 @@ export function sendMessage(message: string, stream: boolean = true): boolean {
         isProcessing = true;
         if (stream) {
             startStreamingMessage("assistant");
+            isStreaming = true;
         } else {
             addTypingIndicator();
         }
@@ -318,6 +333,7 @@ export function reset(): void {
     ws = null;
     sessionId = null;
     isProcessing = false;
+    isStreaming = false;
     reconnectAttempts = 0;
     if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);

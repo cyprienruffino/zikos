@@ -411,6 +411,68 @@ describe("WebSocket Module", () => {
             consoleErrorSpy.mockRestore();
         });
 
+        it("should not tear down streaming state on mid-stream audio_result", () => {
+            sendMessage("test", true);
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "Hel" }),
+                })
+            );
+
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "audio_result", audio_file_id: "audio_1" }),
+                })
+            );
+
+            // Stream must stay open and processing must continue
+            expect(ui.finishStreamingMessage).not.toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(true);
+            // The audio result is still rendered
+            expect(ui.addMessage).toHaveBeenCalledWith(
+                "",
+                "assistant",
+                expect.objectContaining({ type: "audio_result" })
+            );
+
+            // Later tokens continue the SAME stream (no new bubble)
+            const startCalls = vi.mocked(ui.startStreamingMessage).mock.calls.length;
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "lo" }),
+                })
+            );
+            expect(vi.mocked(ui.startStreamingMessage).mock.calls.length).toBe(startCalls);
+
+            // The final response finishes the stream
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "response", message: "Hello" }),
+                })
+            );
+            expect(ui.finishStreamingMessage).toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(false);
+        });
+
+        it("should not tear down streaming state on mid-stream recording_cancelled", () => {
+            sendMessage("test", true);
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "token", content: "Hel" }),
+                })
+            );
+
+            ws.onmessage?.(
+                new MessageEvent("message", {
+                    data: JSON.stringify({ type: "recording_cancelled", tool_id: "rec_1" }),
+                })
+            );
+
+            expect(recording.removeRecordingWidget).toHaveBeenCalledWith("rec_1");
+            expect(ui.finishStreamingMessage).not.toHaveBeenCalled();
+            expect(getIsProcessing()).toBe(true);
+        });
+
         it("should set isProcessing to false after receiving message", () => {
             const message = {
                 type: "response",
