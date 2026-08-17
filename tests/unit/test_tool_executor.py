@@ -243,9 +243,7 @@ class TestParseToolArguments:
     def test_valid(self):
         from zikos.services.llm_orchestration.tool_executor import parse_tool_arguments
 
-        args, error = parse_tool_arguments(
-            {"function": {"name": "t", "arguments": '{"a": 1}'}}
-        )
+        args, error = parse_tool_arguments({"function": {"name": "t", "arguments": '{"a": 1}'}})
         assert args == {"a": 1}
         assert error is None
 

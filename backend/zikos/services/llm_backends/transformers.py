@@ -505,14 +505,6 @@ class TransformersBackend(LLMBackend):
 
         return tool_calls
 
-    def supports_tools(self) -> bool:
-        """Transformers backend supports tools via XML parsing"""
-        return True
-
-    def supports_system_messages(self) -> bool:
-        """Transformers models (like Qwen) properly handle system messages via chat template"""
-        return True
-
     def get_context_window(self) -> int:
         """Get configured context window"""
         return self.n_ctx

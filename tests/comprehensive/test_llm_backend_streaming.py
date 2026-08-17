@@ -26,12 +26,6 @@ class MockBackend(LLMBackend):
     def create_chat_completion(self, messages, tools=None, **kwargs):
         return {"choices": [{"message": {"content": "Test response", "role": "assistant"}}]}
 
-    def supports_tools(self) -> bool:
-        return False
-
-    def supports_system_messages(self) -> bool:
-        return True
-
     def get_context_window(self) -> int:
         return 4096
 
@@ -65,7 +59,7 @@ class TestBaseBackendStreaming:
         """The fallback must not re-split content on whitespace: newlines and
         indentation (e.g. MIDI text) must survive verbatim."""
         backend = MockBackend()
-        midi_text = "MFile 1 1 480\nMTrk\n  0 Meta SeqName \"test\"\nTrkEnd"
+        midi_text = 'MFile 1 1 480\nMTrk\n  0 Meta SeqName "test"\nTrkEnd'
         backend.create_chat_completion = MagicMock(  # type: ignore[method-assign]
             return_value={"choices": [{"message": {"content": midi_text, "role": "assistant"}}]}
         )

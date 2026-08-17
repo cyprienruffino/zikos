@@ -143,7 +143,12 @@ class TestMessagePreparer:
             {"role": "system", "content": "System prompt"},
             {"role": "user", "content": "old " * 300},
             {"role": "assistant", "content": None, "tool_calls": tool_calls},
-            {"role": "tool", "name": "analyze_tempo", "content": "x " * 300, "tool_call_id": "call_1"},
+            {
+                "role": "tool",
+                "name": "analyze_tempo",
+                "content": "x " * 300,
+                "tool_call_id": "call_1",
+            },
             {"role": "user", "content": "recent question"},
         ]
 

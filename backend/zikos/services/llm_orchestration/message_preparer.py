@@ -66,9 +66,7 @@ class MessagePreparer:
 
         system_prompt_tokens = len(enc.encode(system_prompt)) if system_prompt else 0
 
-        available_tokens = self._available_tokens(
-            max_tokens, system_prompt_tokens, context_window
-        )
+        available_tokens = self._available_tokens(max_tokens, system_prompt_tokens, context_window)
 
         # Group assistant(tool_calls) messages with their following tool results
         # so truncation can never orphan a tool_use/tool_result pair.

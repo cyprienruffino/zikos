@@ -9,7 +9,6 @@ from zikos.mcp.tool import ToolCategory
 from zikos.services.llm_orchestration.conversation_manager import ConversationManager
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
-from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
 from zikos.services.llm_orchestration.tool_call_parser import ToolCallParser
 from zikos.services.llm_orchestration.tool_executor import ToolExecutor, parse_tool_arguments
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
@@ -40,7 +39,6 @@ class LLMOrchestrator:
         tool_call_parser: ToolCallParser,
         tool_executor: ToolExecutor,
         response_validator: ResponseValidator,
-        thinking_extractor: ThinkingExtractor,
         system_prompt_getter,
     ):
         self.conversation_manager = conversation_manager
@@ -49,7 +47,6 @@ class LLMOrchestrator:
         self.tool_call_parser = tool_call_parser
         self.tool_executor = tool_executor
         self.response_validator = response_validator
-        self.thinking_extractor = thinking_extractor
         self._get_system_prompt = system_prompt_getter
         self.strategy: ModelStrategy | None = None
 
@@ -133,34 +130,6 @@ class LLMOrchestrator:
         )
 
         return current_messages, token_error
-
-    def process_llm_response(
-        self,
-        message_obj: dict[str, Any],
-        history: list[dict[str, Any]],
-        session_id: str,
-    ) -> tuple[str, str, str]:
-        """Process LLM response, extract thinking, validate content
-
-        Returns:
-            Tuple of (raw_content, cleaned_content, thinking_content)
-        """
-        raw_content = message_obj.get("content", "")
-
-        content_error = self.response_validator.validate_response_content(raw_content)
-        if content_error:
-            return raw_content, "", ""
-
-        cleaned_content, thinking_content = self.thinking_extractor.extract(raw_content)
-
-        if thinking_content:
-            thinking_msg = {"role": "thinking", "content": thinking_content}
-            history.append(thinking_msg)
-
-        message_obj["content"] = cleaned_content
-        history.append(message_obj)
-
-        return raw_content, cleaned_content, thinking_content
 
     async def process_tool_calls(
         self,
@@ -279,19 +248,3 @@ class LLMOrchestrator:
             return False, widget_response, tool_call_infos, tool_results
 
         return True, None, tool_call_infos, tool_results
-
-    def finalize_response(
-        self, cleaned_content: str, thinking_content: str, iteration_state: IterationState
-    ) -> str:
-        """Finalize response, reset counters
-
-        Returns:
-            Final response content
-        """
-        iteration_state.consecutive_tool_calls = 0
-        iteration_state.recent_tool_calls.clear()
-
-        return (
-            cleaned_content
-            or "I'm not sure how to help with that. Could you rephrase your request?"
-        )

@@ -99,12 +99,6 @@ class FakeBackend(LLMBackend):
             final_choice["tool_calls"] = tool_calls
         yield {"choices": [final_choice]}
 
-    def supports_tools(self) -> bool:
-        return False
-
-    def supports_system_messages(self) -> bool:
-        return True
-
     def get_context_window(self) -> int:
         return self._context_window
 

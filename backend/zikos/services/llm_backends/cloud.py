@@ -192,12 +192,6 @@ class CloudBackend(LLMBackend):
             else:
                 yield _final_chunk("stop")
 
-    def supports_tools(self) -> bool:
-        return True
-
-    def supports_system_messages(self) -> bool:
-        return True
-
     def get_context_window(self) -> int:
         try:
             info = litellm.get_model_info(self._model)

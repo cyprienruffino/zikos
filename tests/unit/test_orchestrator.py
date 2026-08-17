@@ -1,6 +1,5 @@
 """Tests for LLMOrchestrator"""
 
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,7 +10,6 @@ from zikos.services.llm_orchestration.conversation_manager import ConversationMa
 from zikos.services.llm_orchestration.message_preparer import MessagePreparer
 from zikos.services.llm_orchestration.orchestrator import IterationState, LLMOrchestrator
 from zikos.services.llm_orchestration.response_validator import ResponseValidator
-from zikos.services.llm_orchestration.thinking_extractor import ThinkingExtractor
 from zikos.services.llm_orchestration.tool_call_parser import get_tool_call_parser
 from zikos.services.llm_orchestration.tool_executor import ToolExecutor
 from zikos.services.llm_orchestration.tool_injector import ToolInjector
@@ -27,7 +25,6 @@ def make_orchestrator():
         tool_call_parser=get_tool_call_parser(),
         tool_executor=ToolExecutor(),
         response_validator=ResponseValidator(),
-        thinking_extractor=ThinkingExtractor(),
         system_prompt_getter=lambda: SYSTEM_PROMPT,
     )
 
@@ -127,44 +124,6 @@ class TestPrepareIterationMessages:
 
         assert token_error is None
         assert len(messages) < len(history)
-
-
-class TestProcessLLMResponse:
-    @pytest.fixture
-    def orchestrator(self):
-        return make_orchestrator()
-
-    def test_extracts_clean_content(self, orchestrator):
-        msg = {"content": "Here is my feedback on your performance.", "role": "assistant"}
-        history: list[dict[str, Any]] = []
-
-        raw, cleaned, thinking = orchestrator.process_llm_response(msg, history, "s1")
-
-        assert cleaned == "Here is my feedback on your performance."
-        assert thinking == ""
-        assert len(history) == 1
-
-    def test_extracts_thinking_content(self, orchestrator):
-        msg = {
-            "content": "<thinking>Let me analyze this...</thinking>Great job on the tempo!",
-            "role": "assistant",
-        }
-        history: list[dict[str, Any]] = []
-
-        raw, cleaned, thinking = orchestrator.process_llm_response(msg, history, "s1")
-
-        assert "Great job" in cleaned
-        assert "analyze this" in thinking
-        assert any(m["role"] == "thinking" for m in history)
-
-    def test_detects_gibberish(self, orchestrator):
-        gibberish = " ".join(["x"] * 600)
-        msg = {"content": gibberish, "role": "assistant"}
-        history: list[dict[str, Any]] = []
-
-        _, cleaned, _ = orchestrator.process_llm_response(msg, history, "s1")
-
-        assert cleaned == ""
 
 
 class TestProcessToolCalls:
@@ -333,25 +292,3 @@ class TestProcessToolCalls:
         await orchestrator.process_tool_calls(tool_calls, state, registry, mcp_server, "s1", "")
 
         assert state.recent_tool_calls == ["analyze_tempo", "detect_pitch"]
-
-
-class TestFinalizeResponse:
-    def test_resets_state(self):
-        orchestrator = make_orchestrator()
-        state = IterationState()
-        state.consecutive_tool_calls = 5
-        state.recent_tool_calls = ["t1", "t2"]
-
-        result = orchestrator.finalize_response("Good work!", "thinking", state)
-
-        assert result == "Good work!"
-        assert state.consecutive_tool_calls == 0
-        assert state.recent_tool_calls == []
-
-    def test_fallback_on_empty_content(self):
-        orchestrator = make_orchestrator()
-        state = IterationState()
-
-        result = orchestrator.finalize_response("", "", state)
-
-        assert "not sure how to help" in result.lower()

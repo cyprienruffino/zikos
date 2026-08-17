@@ -191,18 +191,6 @@ class LlamaCppBackend(LLMBackend):
                 raise item
             yield item
 
-    def supports_tools(self) -> bool:
-        """LlamaCpp supports tools via create_chat_completion"""
-        return True
-
-    def supports_system_messages(self) -> bool:
-        """All supported models support system messages natively
-
-        Supported models (Phi-3, Qwen2.5, Llama 3.x, Mistral) all support
-        system messages through llama-cpp-python's create_chat_completion.
-        """
-        return True
-
     def get_context_window(self) -> int:
         """Get configured context window"""
         return self.n_ctx

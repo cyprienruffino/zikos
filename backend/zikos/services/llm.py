@@ -71,7 +71,6 @@ class LLMService:
             self.tool_call_parser,
             self.tool_executor,
             self.response_validator,
-            self.thinking_extractor,
             self._get_system_prompt,
         )
         self.conversations = self.conversation_manager.conversations
@@ -470,15 +469,18 @@ class LLMService:
                 for tc in tool_calls:
                     tc["id"] = str(uuid.uuid4())
 
-                should_continue, result, tool_call_infos, tool_results = (
-                    await self.orchestrator.process_tool_calls(
-                        tool_calls,
-                        state,
-                        tool_registry,
-                        mcp_server,
-                        session_id,
-                        cleaned_content,
-                    )
+                (
+                    should_continue,
+                    result,
+                    tool_call_infos,
+                    tool_results,
+                ) = await self.orchestrator.process_tool_calls(
+                    tool_calls,
+                    state,
+                    tool_registry,
+                    mcp_server,
+                    session_id,
+                    cleaned_content,
                 )
 
                 for info in tool_call_infos:
@@ -650,9 +652,7 @@ class LLMService:
             # Never fall back to a shared "default" session — that would leak
             # conversation state across unrelated clients.
             session_id = str(uuid.uuid4())
-            _logger.warning(
-                f"handle_audio_ready called without session_id; generated {session_id}"
-            )
+            _logger.warning(f"handle_audio_ready called without session_id; generated {session_id}")
 
         try:
             analysis = await self.audio_service.run_baseline_analysis(audio_file_id)

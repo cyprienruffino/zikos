@@ -37,14 +37,6 @@ def test_not_initialized_before_initialize():
     assert not CloudBackend().is_initialized()
 
 
-def test_supports_tools(backend: CloudBackend):
-    assert backend.supports_tools()
-
-
-def test_supports_system_messages(backend: CloudBackend):
-    assert backend.supports_system_messages()
-
-
 def test_close_is_noop(backend: CloudBackend):
     backend.close()
     assert backend.is_initialized()
@@ -283,12 +275,20 @@ async def test_stream_tool_call_deltas_missing_index_not_merged(backend: CloudBa
     stream = _fake_stream(
         _make_chunk(
             tool_calls=[
-                {"id": "c1", "type": "function", "function": {"name": "analyze_tempo", "arguments": "{}"}}
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "analyze_tempo", "arguments": "{}"},
+                }
             ]
         ),
         _make_chunk(
             tool_calls=[
-                {"id": "c2", "type": "function", "function": {"name": "detect_pitch", "arguments": "{}"}}
+                {
+                    "id": "c2",
+                    "type": "function",
+                    "function": {"name": "detect_pitch", "arguments": "{}"},
+                }
             ]
         ),
         _make_chunk(finish_reason="tool_calls"),

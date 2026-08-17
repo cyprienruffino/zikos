@@ -108,22 +108,6 @@ class LLMBackend(ABC):
         }
 
     @abstractmethod
-    def supports_tools(self) -> bool:
-        """Whether this backend supports native tool calling"""
-        pass
-
-    @abstractmethod
-    def supports_system_messages(self) -> bool:
-        """Whether this backend properly handles system messages
-
-        All supported models (Phi-3, Qwen, Llama 3.x, Mistral) support system messages natively.
-
-        Returns:
-            True if system messages should be kept separate (always True for supported models)
-        """
-        pass
-
-    @abstractmethod
     def get_context_window(self) -> int:
         """Get the configured context window size"""
         pass

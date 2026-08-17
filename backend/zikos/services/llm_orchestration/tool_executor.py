@@ -30,7 +30,10 @@ def parse_tool_arguments(tool_call: Any) -> tuple[dict[str, Any], str | None]:
     if isinstance(tool_args_raw, dict):
         return tool_args_raw, None
     if not isinstance(tool_args_raw, str):
-        return {}, f"Malformed tool arguments: expected JSON string, got {type(tool_args_raw).__name__}"
+        return (
+            {},
+            f"Malformed tool arguments: expected JSON string, got {type(tool_args_raw).__name__}",
+        )
 
     try:
         parsed = json.loads(tool_args_raw or "{}")
@@ -102,7 +105,7 @@ class ToolExecutor:
                 f"Tool Call (Widget): {tool_name}\n"
                 f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
                 f"Message: {widget_content}\n"
-                f"{'='*80}"
+                f"{'=' * 80}"
             )
             return {
                 "type": "tool_call",
@@ -170,7 +173,7 @@ class ToolExecutor:
             f"Session: {session_id}\n"
             f"Tool Call: {tool_name}\n"
             f"Arguments: {json.dumps(tool_args, indent=2, default=str)}\n"
-            f"{'='*80}"
+            f"{'=' * 80}"
         )
 
         try:
@@ -184,7 +187,7 @@ class ToolExecutor:
                 f"Session: {session_id}\n"
                 f"Tool Result: {tool_name}\n"
                 f"Result: {json.dumps(result, indent=2, default=str)}\n"
-                f"{'='*80}"
+                f"{'=' * 80}"
             )
 
             return {

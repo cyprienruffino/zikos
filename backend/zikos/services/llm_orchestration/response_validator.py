@@ -120,7 +120,7 @@ class ResponseValidator:
         if len(recent_tool_calls) >= LLM.REPETITIVE_PATTERN_THRESHOLD:
             if len(set(recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD :])) == 1:
                 _logger.warning(
-                    f"Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD:]}). "
+                    f"Detected repetitive tool calling pattern ({recent_tool_calls[-LLM.REPETITIVE_PATTERN_THRESHOLD :]}). "
                     "Breaking loop to prevent infinite recursion."
                 )
                 tool_name = recent_tool_calls[-1]
