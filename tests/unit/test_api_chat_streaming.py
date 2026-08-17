@@ -35,7 +35,6 @@ def mock_chat_service():
         return_value={"type": "response", "message": "Audio processed"}
     )
     service.get_thinking = MagicMock(return_value={"thinking": []})
-    service.disconnect = AsyncMock()
 
     return service
 
@@ -172,7 +171,7 @@ class TestWebSocketStreaming:
 
     @pytest.mark.asyncio
     async def test_websocket_streaming_disconnect(self, mock_websocket, mock_chat_service):
-        """Test WebSocket handles disconnect during streaming"""
+        """Test WebSocket handles disconnect cleanly (no error frames sent)"""
         with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
 
             async def receive_json():
@@ -180,12 +179,10 @@ class TestWebSocketStreaming:
 
             mock_websocket.receive_json = receive_json
 
-            try:
-                await websocket_endpoint(mock_websocket)
-            except WebSocketDisconnect:
-                pass
+            # Must return normally, not propagate the disconnect
+            await websocket_endpoint(mock_websocket)
 
-            mock_chat_service.disconnect.assert_called_once_with(mock_websocket)
+            mock_websocket.send_json.assert_not_called()
 
 
 class TestWebSocketFrameValidation:

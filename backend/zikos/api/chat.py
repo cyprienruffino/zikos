@@ -145,8 +145,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
 
     except WebSocketDisconnect:
-        chat_service = get_chat_service()
-        await chat_service.disconnect(websocket)
+        _logger.debug("WebSocket client disconnected")
     except Exception as e:
         _logger.error(f"WebSocket error: {e}")
         try:
