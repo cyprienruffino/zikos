@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "description": "AI Music Teacher POC",
   "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "lint": "eslint frontend/src/**/*.ts || true",
-    "lint:fix": "eslint --fix frontend/src/**/*.ts || true",
+    "lint": "eslint frontend/src --ext .ts",
+    "lint:fix": "eslint --fix frontend/src --ext .ts",
     "format": "prettier --write 'frontend/**/*.{ts,html,css}'",
     "format:check": "prettier --check 'frontend/**/*.{ts,html,css}'",
     "type-check": "tsc --noEmit",
