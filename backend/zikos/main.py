@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from zikos.api import router
 from zikos.config import settings as _settings
+from zikos.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Zikos - AI Music Teacher",
     description="POC for AI-powered music teaching",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -56,15 +57,11 @@ dist_dir = frontend_dir / "dist"
 
 
 class NoCacheStaticFiles(StaticFiles):
-    """StaticFiles with no-cache headers and query parameter stripping"""
+    """StaticFiles with no-cache headers"""
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            path = scope["path"]
-            if "?" in path:
-                scope = dict(scope)
-                scope["path"] = path.split("?")[0]
-
+        # Note: ASGI scope["path"] never contains a query string, so no
+        # stripping is needed here.
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
                 headers = dict(message.get("headers", []))
@@ -97,7 +94,7 @@ async def root():
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
-    return {"message": "Zikos API", "version": "0.1.0"}
+    return {"message": "Zikos API", "version": __version__}
 
 
 @app.get("/health")
