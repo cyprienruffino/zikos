@@ -226,6 +226,104 @@ class TestAudioPreprocessingService:
         trimmed, _ = sf.read(str(path))
         assert len(trimmed) < len(audio)
 
+    @pytest.mark.asyncio
+    async def test_upload_filename_path_traversal_is_ignored(
+        self, preprocessing_service, temp_dir
+    ):
+        """Client filenames with ../ must not escape the temp storage dir."""
+        from io import BytesIO
+
+        from fastapi import UploadFile
+
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
+        # A file outside storage that a traversal filename would clobber/delete
+        outside_target = temp_dir.parent / "victim.wav"
+        outside_target.write_bytes(b"do not delete me")
+
+        source = temp_dir / "src.wav"
+        create_test_audio_file(source, audio_type="single_note", duration=1.0)
+        upload_file = UploadFile(
+            filename="../victim.wav",
+            file=BytesIO(source.read_bytes()),
+            headers={"content-type": "audio/wav"},
+        )
+
+        output_path = await preprocessing_service.preprocess_upload_file(
+            upload_file, target_format="wav", target_sample_rate=44100
+        )
+
+        assert output_path.exists()
+        # Victim file untouched (not overwritten, not deleted by cleanup)
+        assert outside_target.read_bytes() == b"do not delete me"
+
+    @pytest.mark.asyncio
+    async def test_upload_absolute_filename_is_ignored(self, preprocessing_service, temp_dir):
+        """Absolute client filenames must not be written to."""
+        from io import BytesIO
+
+        from fastapi import UploadFile
+
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
+        source = temp_dir / "src2.wav"
+        create_test_audio_file(source, audio_type="single_note", duration=1.0)
+        evil_path = temp_dir.parent / "absolute_evil.wav"
+        upload_file = UploadFile(
+            filename=str(evil_path),
+            file=BytesIO(source.read_bytes()),
+            headers={"content-type": "audio/wav"},
+        )
+
+        output_path = await preprocessing_service.preprocess_upload_file(
+            upload_file, target_format="wav", target_sample_rate=44100
+        )
+
+        assert output_path.exists()
+        assert not evil_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_upload_disallowed_extension_rejected(self, preprocessing_service):
+        """Uploads with non-audio extensions are rejected."""
+        from io import BytesIO
+
+        from fastapi import UploadFile
+
+        upload_file = UploadFile(filename="malware.exe", file=BytesIO(b"MZ..."))
+
+        with pytest.raises(ValueError, match="Unsupported file extension"):
+            await preprocessing_service.preprocess_upload_file(upload_file)
+
+    @pytest.mark.asyncio
+    async def test_upload_missing_filename_rejected(self, preprocessing_service):
+        """Uploads without a filename are rejected."""
+        from io import BytesIO
+
+        from fastapi import UploadFile
+
+        upload_file = UploadFile(filename=None, file=BytesIO(b"data"))
+
+        with pytest.raises(ValueError, match="must have a filename"):
+            await preprocessing_service.preprocess_upload_file(upload_file)
+
+    @pytest.mark.asyncio
+    async def test_upload_temp_dir_cleaned_up(self, preprocessing_service, temp_dir):
+        """Per-request temp dirs are removed even on success."""
+        from io import BytesIO
+
+        from fastapi import UploadFile
+
+        from tests.helpers.audio_synthesis import create_test_audio_file
+
+        source = temp_dir / "src3.wav"
+        create_test_audio_file(source, audio_type="single_note", duration=1.0)
+        upload_file = UploadFile(filename="ok.wav", file=BytesIO(source.read_bytes()))
+
+        await preprocessing_service.preprocess_upload_file(upload_file)
+
+        temp_root = preprocessing_service.storage_path / "temp"
+        assert list(temp_root.iterdir()) == []
+
     def test_clear_cache(self, preprocessing_service, temp_dir):
         """Test clearing preprocessing cache"""
         cache_file = preprocessing_service.cache_dir / "test.wav"
