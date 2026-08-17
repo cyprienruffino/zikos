@@ -291,4 +291,55 @@ class TestProcessToolCalls:
 
         await orchestrator.process_tool_calls(tool_calls, state, registry, mcp_server, "s1", "")
 
-        assert state.recent_tool_calls == ["analyze_tempo", "detect_pitch"]
+        assert state.recent_tool_calls == [
+            "analyze_tempo({})",
+            "detect_pitch({})",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_loop_detected_within_single_batch(self, orchestrator, mcp_server):
+        """The identical call repeated within ONE response must trip the loop
+        detector before execution."""
+        tool_calls = [
+            {
+                "id": f"c{i}",
+                "function": {"name": "analyze_tempo", "arguments": '{"audio_file_id": "a.wav"}'},
+            }
+            for i in range(LLM.REPETITIVE_PATTERN_THRESHOLD)
+        ]
+        state = IterationState()
+        registry = mcp_server.get_tool_registry()
+
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
+        )
+
+        assert should_continue is False
+        assert result is not None and result["error_type"] == "repetitive_tool_calls"
+        assert tool_results == []
+        mcp_server.call_tool.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_same_tool_different_args_is_not_a_loop(self, orchestrator, mcp_server):
+        """Repeating a tool with DIFFERENT arguments (e.g. different segments)
+        is legitimate — the loop signature includes canonical args."""
+        tool_calls = [
+            {
+                "id": f"c{i}",
+                "function": {
+                    "name": "analyze_tempo",
+                    "arguments": f'{{"audio_file_id": "seg_{i}.wav"}}',
+                },
+            }
+            for i in range(LLM.REPETITIVE_PATTERN_THRESHOLD)
+        ]
+        state = IterationState()
+        registry = mcp_server.get_tool_registry()
+
+        should_continue, result, _, tool_results = await orchestrator.process_tool_calls(
+            tool_calls, state, registry, mcp_server, "s1", ""
+        )
+
+        assert should_continue is True
+        assert result is None
+        assert len(tool_results) == LLM.REPETITIVE_PATTERN_THRESHOLD

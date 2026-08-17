@@ -1,5 +1,6 @@
 """Orchestrate LLM response generation, handling common logic"""
 
+import json
 import logging
 from typing import Any
 
@@ -158,7 +159,7 @@ class LLMOrchestrator:
         """
         iteration_state.consecutive_tool_calls += 1
 
-        current_tool_names = []
+        current_signatures = []
         tool_call_infos: list[dict[str, Any]] = []
 
         for tool_call in tool_calls:
@@ -169,7 +170,13 @@ class LLMOrchestrator:
                 if isinstance(tool_call.get("function"), dict)
                 else ""
             )
-            current_tool_names.append(tool_name)
+            tool_args, _args_error = parse_tool_arguments(tool_call)
+            # Loop signature is (name, canonical args): the same tool called
+            # with DIFFERENT arguments (e.g. re-analyzing different segments)
+            # is legitimate and must not trip the loop detector.
+            current_signatures.append(
+                f"{tool_name}({json.dumps(tool_args, sort_keys=True, default=str)})"
+            )
 
             # Build UI info, filtering out widget/recording tools
             if tool_name:
@@ -180,8 +187,6 @@ class LLMOrchestrator:
                 ):
                     continue
 
-            tool_args, _args_error = parse_tool_arguments(tool_call)
-
             tool_call_infos.append(
                 {
                     "type": "tool_call",
@@ -191,17 +196,18 @@ class LLMOrchestrator:
                 }
             )
 
-        # Check for loops BEFORE adding current names to recent
+        # Check for loops INCLUDING the current batch, so a single response
+        # repeating the identical call is caught before execution.
         loop_error = self.response_validator.validate_tool_call_loops(
             iteration_state.consecutive_tool_calls,
-            iteration_state.recent_tool_calls,
+            iteration_state.recent_tool_calls + current_signatures,
             iteration_state.max_consecutive_tool_calls,
         )
         if loop_error:
             return False, loop_error, tool_call_infos, []
 
         # Track recent tool calls
-        iteration_state.recent_tool_calls.extend(current_tool_names)
+        iteration_state.recent_tool_calls.extend(current_signatures)
         if len(iteration_state.recent_tool_calls) > LLM.RECENT_TOOL_CALLS_WINDOW:
             iteration_state.recent_tool_calls = iteration_state.recent_tool_calls[
                 -LLM.RECENT_TOOL_CALLS_WINDOW :
