@@ -1,8 +1,8 @@
 """LlamaCpp backend implementation"""
 
 import asyncio
-from collections.abc import AsyncGenerator
-from typing import Any
+from collections.abc import AsyncGenerator, Iterator
+from typing import Any, cast
 
 try:
     from llama_cpp import Llama, llama_state_load_file
@@ -174,7 +174,13 @@ class LlamaCppBackend(LLMBackend):
 
         def _produce() -> None:
             try:
-                for chunk in llm.create_chat_completion(**completion_kwargs):
+                # stream=True returns an iterator of chunk dicts; narrow past
+                # the non-streaming overload mypy also sees.
+                chunks = cast(
+                    "Iterator[dict[str, Any]]",
+                    llm.create_chat_completion(**completion_kwargs),
+                )
+                for chunk in chunks:
                     loop.call_soon_threadsafe(queue.put_nowait, dict(chunk))
             except BaseException as e:  # propagate to the async consumer
                 loop.call_soon_threadsafe(queue.put_nowait, e)
