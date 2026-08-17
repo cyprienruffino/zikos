@@ -178,6 +178,31 @@ class LLMService:
     def _yield_error(self, message: str) -> dict[str, Any]:
         return {"type": "error", "message": message}
 
+    @staticmethod
+    def _is_transient_backend_error(error: Exception) -> bool:
+        """Classify backend errors: only transient ones are worth retrying."""
+        text = f"{type(error).__name__} {error}".lower()
+        non_transient_markers = (
+            "not initialized",
+            "authentication",
+            "api key",
+            "unauthorized",
+            "401",
+            "403",
+            "permission",
+            "invalid request",
+            "bad request",
+            "importerror",
+            "not implemented",
+            "context window",
+            "maximum context",
+        )
+        if any(marker in text for marker in non_transient_markers):
+            return False
+        # Timeouts, rate limits, connection blips, provider overload etc. —
+        # and unknown errors — are retried (previous behavior for everything).
+        return True
+
     def _inject_error_system_message(
         self, history: list[dict[str, Any]], error_type: str, error_details: str
     ) -> None:
@@ -318,7 +343,7 @@ class LLMService:
         )
         for msg in history:
             if msg["role"] == "system" and msg["content"].endswith("/think"):
-                msg["content"] = msg["content"][:-6] + "/nothink"
+                msg["content"] = msg["content"].removesuffix("/think") + "/nothink"
                 break
 
     def _finalize_response(
@@ -355,7 +380,7 @@ class LLMService:
         if nothink_retry:
             for msg in history:
                 if msg["role"] == "system" and msg["content"].endswith("/nothink"):
-                    msg["content"] = msg["content"][:-8] + "/think"
+                    msg["content"] = msg["content"].removesuffix("/nothink") + "/think"
                     break
 
         chunks: list[dict[str, Any]] = []
@@ -440,6 +465,13 @@ class LLMService:
                 }
 
             except Exception as e:
+                if not self._is_transient_backend_error(e):
+                    # Auth failures, bad requests, uninitialized backends etc.
+                    # will fail identically on every retry — surface immediately
+                    # instead of burning through max_iterations.
+                    _logger.error(f"Non-transient backend error, not retrying: {e}")
+                    yield self._yield_error(f"LLM backend error: {str(e)}")
+                    return
                 self._inject_error_system_message(
                     history, "streaming_error", f"Error during streaming: {str(e)}"
                 )
@@ -594,7 +626,10 @@ class LLMService:
             stream = self._create_stream(current_messages, None, tool_schemas)
             accumulated_content = ""
             async for chunk in stream:
-                choice = chunk.get("choices", [{}])[0]
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                choice = choices[0]
                 delta = choice.get("delta", {})
                 finish_reason = choice.get("finish_reason")
 
@@ -607,6 +642,9 @@ class LLMService:
                     break
 
             cleaned_content, _ = self._extract_thinking(accumulated_content)
+            # The model may still attempt tool-call markup here even without
+            # tools; strip it rather than showing raw XML to the user.
+            cleaned_content = self.tool_call_parser.strip_tool_call_tags(cleaned_content)
             if cleaned_content:
                 history.append({"role": "assistant", "content": cleaned_content})
                 yield {"type": "response", "message": cleaned_content}

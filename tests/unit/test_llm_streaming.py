@@ -369,6 +369,36 @@ class TestLLMStreaming:
         )
 
     @pytest.mark.asyncio
+    async def test_non_transient_error_fails_fast(self, mcp_server):
+        """Auth/config errors fail identically on retry — surface immediately
+        instead of burning through max_iterations."""
+        service = make_streaming_service("OK")
+        calls = {"count": 0}
+
+        async def failing_stream(*args, **kwargs):
+            calls["count"] += 1
+            raise RuntimeError("Invalid API key: authentication failed")
+            yield  # pragma: no cover — makes this an async generator
+
+        service.backend.stream_chat_completion = failing_stream  # type: ignore[assignment]
+
+        chunks = []
+        async for chunk in service.generate_response_stream("Hello", "s1", mcp_server):
+            chunks.append(chunk)
+
+        assert chunks[-1]["type"] == "error"
+        assert calls["count"] == 1, "non-transient errors must not be retried"
+
+    def test_transient_error_classification(self):
+        service = make_streaming_service("OK")
+
+        assert service._is_transient_backend_error(TimeoutError("read timeout")) is True
+        assert service._is_transient_backend_error(RuntimeError("rate limit exceeded")) is True
+        assert service._is_transient_backend_error(RuntimeError("some unknown blip")) is True
+        assert service._is_transient_backend_error(RuntimeError("Backend not initialized")) is False
+        assert service._is_transient_backend_error(RuntimeError("401 unauthorized")) is False
+
+    @pytest.mark.asyncio
     async def test_handles_streaming_error(self, mcp_server):
         service = make_streaming_service("OK")
 
