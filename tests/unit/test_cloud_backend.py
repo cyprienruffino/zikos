@@ -353,16 +353,34 @@ def test_litellm_globals_set_at_initialize(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_create_backend_returns_cloud_for_openai_provider(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-    # Reload settings
+@pytest.fixture
+def cloud_provider_env(monkeypatch):
+    """Set LLM_PROVIDER and reload config/backends, restoring both afterwards.
+
+    Reloading zikos.config replaces the module-level settings object; without
+    the teardown reload, every later test in the session would see the
+    cloud-flavored settings (this polluted test_model_strategy in CI).
+    """
     import importlib
+    import os
 
     import zikos.config as cfg_mod
     import zikos.services.llm_backends as backends_mod
 
+    def _set(provider: str):
+        monkeypatch.setenv("LLM_PROVIDER", provider)
+        importlib.reload(cfg_mod)
+        importlib.reload(backends_mod)
+
+    yield _set
+
+    os.environ.pop("LLM_PROVIDER", None)
     importlib.reload(cfg_mod)
     importlib.reload(backends_mod)
+
+
+def test_create_backend_returns_cloud_for_openai_provider(cloud_provider_env):
+    cloud_provider_env("openai")
 
     from zikos.services.llm_backends import create_backend
     from zikos.services.llm_backends.cloud import CloudBackend
@@ -371,15 +389,8 @@ def test_create_backend_returns_cloud_for_openai_provider(monkeypatch):
     assert isinstance(backend, CloudBackend)
 
 
-def test_create_backend_returns_cloud_for_anthropic_provider(monkeypatch):
-    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-    import importlib
-
-    import zikos.config as cfg_mod
-    import zikos.services.llm_backends as backends_mod
-
-    importlib.reload(cfg_mod)
-    importlib.reload(backends_mod)
+def test_create_backend_returns_cloud_for_anthropic_provider(cloud_provider_env):
+    cloud_provider_env("anthropic")
 
     from zikos.services.llm_backends import create_backend
     from zikos.services.llm_backends.cloud import CloudBackend
