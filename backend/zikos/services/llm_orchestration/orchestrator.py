@@ -66,6 +66,22 @@ class LLMOrchestrator:
 
         original_message = message
 
+        # If an interaction request (e.g. audio recording) is still pending, the
+        # last assistant message carries a tool_call with no tool_result. The user
+        # moved on without completing it, so close the pair before continuing —
+        # strict APIs reject histories with dangling tool_use blocks.
+        pending = self.conversation_manager.pop_pending_interaction(session_id)
+        if pending:
+            history.append(
+                {
+                    "role": "tool",
+                    "name": pending["tool_name"],
+                    "content": "The user did not complete the requested recording. "
+                    "Continue the conversation without it.",
+                    "tool_call_id": pending["tool_call_id"],
+                }
+            )
+
         # Skip adding an empty user message when history already ends with a tool result
         # (handle_audio_ready closes a pending interaction and triggers LLM continuation).
         last_role = history[-1].get("role") if history else None

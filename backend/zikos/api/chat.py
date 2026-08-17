@@ -100,6 +100,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
             elif data["type"] == "cancel_recording":
+                get_chat_service().llm_service.cancel_pending_interaction(
+                    data.get("session_id")
+                )
                 await websocket.send_json(
                     {
                         "type": "recording_cancelled",

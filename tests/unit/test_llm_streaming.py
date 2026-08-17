@@ -184,6 +184,92 @@ class TestLLMStreaming:
         assert assistant_idx + 1 == tool_idx, "tool_result immediately follows assistant tool_use"
 
     @pytest.mark.asyncio
+    async def test_unfulfilled_interaction_closed_on_next_user_message(self, mcp_server):
+        """If the user replies with text instead of recording, the pending
+        tool_use must be closed with a synthesized tool_result before the new
+        user message — never left dangling."""
+        service = make_streaming_service(
+            responses=[
+                {
+                    "tool_calls": [
+                        {
+                            "id": "rec_1",
+                            "function": {
+                                "name": "request_audio_recording",
+                                "arguments": '{"prompt": "Record"}',
+                            },
+                        }
+                    ]
+                },
+                "No problem, let's talk instead.",
+            ]
+        )
+
+        async for _ in service.generate_response_stream("Teach me", "s1", mcp_server):
+            pass
+
+        # User sends a text message instead of recording
+        async for _ in service.generate_response_stream("Actually, another question", "s1", mcp_server):
+            pass
+
+        history = service._get_conversation_history("s1")
+        assistant_ids = [
+            tc["id"]
+            for m in history
+            if m["role"] == "assistant"
+            for tc in (m.get("tool_calls") or [])
+        ]
+        result_ids = [m["tool_call_id"] for m in history if m["role"] == "tool"]
+        assert sorted(assistant_ids) == sorted(result_ids), "no dangling tool_use"
+        tool_msg = next(m for m in history if m["role"] == "tool")
+        assert "did not complete" in tool_msg["content"]
+        # Synthesized result comes BEFORE the new user message
+        tool_idx = history.index(tool_msg)
+        user_idx = next(
+            i for i, m in enumerate(history) if m.get("content") == "Actually, another question"
+        )
+        assert tool_idx < user_idx
+
+    @pytest.mark.asyncio
+    async def test_cancel_pending_interaction(self, mcp_server):
+        """Explicit cancel synthesizes a tool_result closing the pending pair."""
+        service = make_streaming_service(
+            response="",
+            tool_calls=[
+                {
+                    "id": "rec_2",
+                    "function": {
+                        "name": "request_audio_recording",
+                        "arguments": '{"prompt": "Record"}',
+                    },
+                }
+            ],
+        )
+
+        async for _ in service.generate_response_stream("Teach me", "s1", mcp_server):
+            pass
+
+        service.cancel_pending_interaction("s1")
+
+        history = service._get_conversation_history("s1")
+        tool_msgs = [m for m in history if m["role"] == "tool"]
+        assert len(tool_msgs) == 1
+        assert "cancelled" in tool_msgs[0]["content"]
+        assistant_tool_use = next(
+            m for m in history if m["role"] == "assistant" and m.get("tool_calls")
+        )
+        assert tool_msgs[0]["tool_call_id"] == assistant_tool_use["tool_calls"][0]["id"]
+
+        # Cancelling again is a no-op
+        service.cancel_pending_interaction("s1")
+        assert len([m for m in history if m["role"] == "tool"]) == 1
+
+    def test_cancel_pending_interaction_without_session_is_noop(self):
+        service = make_streaming_service("OK")
+        service.cancel_pending_interaction(None)
+        service.cancel_pending_interaction("unknown_session_no_pending")
+
+    @pytest.mark.asyncio
     async def test_preserves_conversation_history(self, mcp_server):
         service = make_streaming_service("First reply")
 

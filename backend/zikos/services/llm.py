@@ -586,6 +586,29 @@ class LLMService:
         except Exception as e:
             yield self._yield_error(f"Error after max iterations: {str(e)}")
 
+    # --- Pending interactions ---
+
+    def cancel_pending_interaction(self, session_id: str | None) -> None:
+        """Close a pending interaction request (e.g. cancelled recording).
+
+        Synthesizes the missing tool_result so the assistant tool_call does not
+        dangle forever in history (strict APIs reject unpaired tool_use blocks).
+        """
+        if not session_id:
+            return
+        pending = self.conversation_manager.pop_pending_interaction(session_id)
+        if not pending:
+            return
+        history = self._get_conversation_history(session_id)
+        history.append(
+            {
+                "role": "tool",
+                "name": pending["tool_name"],
+                "content": "The user cancelled the recording.",
+                "tool_call_id": pending["tool_call_id"],
+            }
+        )
+
     # --- Audio handling ---
 
     async def handle_audio_ready(
