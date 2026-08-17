@@ -10,17 +10,34 @@ from zikos.config import Settings
 @pytest.mark.lightweight
 def test_settings_defaults():
     """Test default settings"""
-    # Temporarily remove API_RELOAD from environment to test defaults
-    api_reload_value = os.environ.pop("API_RELOAD", None)
+    # Temporarily remove relevant vars from environment to test defaults
+    saved = {var: os.environ.pop(var, None) for var in ("API_RELOAD", "API_HOST", "CORS_ORIGINS")}
     try:
         settings = Settings.from_env()
-        assert settings.api_host == "0.0.0.0"
+        # Default bind is loopback, not 0.0.0.0 (docker-compose overrides via API_HOST)
+        assert settings.api_host == "127.0.0.1"
         assert settings.api_port == 8000
         assert settings.api_reload is False
+        assert settings.cors_origins == [
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
     finally:
-        # Restore original value if it existed
-        if api_reload_value is not None:
-            os.environ["API_RELOAD"] = api_reload_value
+        # Restore original values if they existed
+        for var, value in saved.items():
+            if value is not None:
+                os.environ[var] = value
+
+
+@pytest.mark.lightweight
+def test_cors_origins_from_env():
+    """CORS origins are parsed from a comma-separated env var"""
+    os.environ["CORS_ORIGINS"] = "http://example.com, https://app.example.com"
+    try:
+        settings = Settings.from_env()
+        assert settings.cors_origins == ["http://example.com", "https://app.example.com"]
+    finally:
+        del os.environ["CORS_ORIGINS"]
 
 
 @pytest.mark.lightweight

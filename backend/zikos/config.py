@@ -18,9 +18,13 @@ class Settings(BaseModel):
     """Application settings"""
 
     # API
-    api_host: str = "0.0.0.0"
+    api_host: str = "127.0.0.1"
     api_port: int = 8000
     api_reload: bool = False
+    cors_origins: list[str] = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
 
     # LLM — local backends
     llm_model_path: str = ""
@@ -55,6 +59,15 @@ class Settings(BaseModel):
     debug_tool_calls: bool = False
 
     @staticmethod
+    def _parse_origins(env_var: str, default: list[str]) -> list[str]:
+        """Parse a comma-separated list of CORS origins from the environment."""
+        raw = os.getenv(env_var)
+        if raw is None:
+            return default
+        origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return origins if origins else default
+
+    @staticmethod
     def _parse_optional_int(env_var: str) -> int | None:
         raw = os.getenv(env_var)
         if raw is None:
@@ -74,6 +87,7 @@ class Settings(BaseModel):
         defaults = cls()
         return cls(
             api_host=os.getenv("API_HOST", defaults.api_host),
+            cors_origins=cls._parse_origins("CORS_ORIGINS", defaults.cors_origins),
             api_port=int(os.getenv("API_PORT", str(defaults.api_port))),
             api_reload=os.getenv("API_RELOAD", str(defaults.api_reload).lower()).lower() == "true",
             llm_model_path=os.getenv("LLM_MODEL_PATH", defaults.llm_model_path),
