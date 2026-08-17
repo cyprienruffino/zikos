@@ -7,15 +7,16 @@
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]" && pre-commit install
 
-# Testing
-pytest                  # Unit tests with coverage (default)
-pytest --no-cov         # Without coverage
+# Testing (coverage is NOT in addopts; plain pytest runs without it)
+pytest                  # Unit + fast tests, no coverage
 pytest -k "pattern"     # Specific tests
 pytest -m integration   # Integration tests
 pytest -m comprehensive # LLM/heavy tests (excluded from CI)
+# With the coverage gate (what CI / pre-commit run):
+pytest tests/unit/ --cov=backend/zikos --cov-config=pyproject.toml --cov-fail-under=79
 
-# Code Quality
-ruff check . && ruff format --check . && mypy backend/
+# Code Quality (black is the formatter; ruff is lint-only)
+ruff check . && black --check . && mypy backend/
 ```
 
 ---

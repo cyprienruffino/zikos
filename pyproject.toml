@@ -121,12 +121,6 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["zikos"]
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
-
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
@@ -163,16 +157,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Coverage flags intentionally NOT in addopts: plain `pytest -k x` should not
+# drag the coverage gate. CI and the pre-commit hook pass the full
+# --cov invocation explicitly.
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--cov=backend/zikos",
-    "--cov-config=pyproject.toml",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-    "--cov-fail-under=75",
-    "-v",
     "-m", "not comprehensive and not integration",
 ]
 markers = [
@@ -201,15 +191,13 @@ omit = [
     "*/test_*.py",
     "*/__pycache__/*",
     "*/.*",
-    "backend/zikos/services/llm.py",  # LLM tests are comprehensive and excluded from CI
-    # LLM backends only tested in comprehensive tests (require real models and good hardware)
+    # Real-model backends genuinely require hardware; everything else is measured.
+    # (services/llm.py, utils/context_length.py and llm_backends/__init__.py are
+    # covered by unit tests via FakeBackend and are NOT omitted.)
     "backend/zikos/services/llm_backends/transformers.py",
     "backend/zikos/services/llm_backends/llama_cpp.py",
-    "backend/zikos/services/llm_backends/__init__.py",
     # GPU utils are environment-specific and hard to test in CI
     "backend/zikos/utils/gpu.py",
-    # Context length utils require model loading, excluded from CI
-    "backend/zikos/utils/context_length.py",
 ]
 
 [tool.coverage.report]

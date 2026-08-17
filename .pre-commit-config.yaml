@@ -1,3 +1,6 @@
+# NOTE: the local (language: system) hooks below expect the project's
+# virtualenv (.venv) to be activated and `npm ci` to have been run, so that
+# `python`, `npm` and `npx` resolve to the project toolchain.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -10,13 +13,14 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements
 
+  # black is the single formatter for this project (ruff is lint-only).
   - repo: https://github.com/psf/black
     rev: 25.12.0
     hooks:
       - id: black
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
+    rev: v0.16.3
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -27,21 +31,23 @@ repos:
       - id: mypy
         args: [--ignore-missing-imports]
 
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
-    hooks:
-      - id: prettier
-        files: ^frontend/.*\.(ts|html|css)$
-
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.17.0
-    hooks:
-      - id: eslint
-        files: ^frontend/src/.*\.ts$
-        types_or: [file]
-
   - repo: local
     hooks:
+      # The mirrors-prettier/mirrors-eslint hooks are gone: the ESLint 9
+      # mirror cannot read the legacy .eslintrc.json config. Use the
+      # project-local toolchain instead.
+      - id: prettier
+        name: prettier check
+        entry: npx prettier --check "frontend/**/*.{ts,html,css}"
+        language: system
+        files: ^frontend/.*\.(ts|html|css)$
+        pass_filenames: false
+      - id: eslint
+        name: eslint
+        entry: npm run lint
+        language: system
+        files: ^frontend/src/.*\.ts$
+        pass_filenames: false
       - id: typescript-build
         name: typescript build
         entry: npm run build
@@ -56,20 +62,19 @@ repos:
         pass_filenames: false
       - id: pytest-unit
         name: pytest unit tests with coverage
-        entry: venv/bin/pytest
-        args: [
-          'tests/unit/',
-          '-v',
-          '-m', 'not comprehensive and not integration',
-          '-x',
-          '--cov=backend/zikos',
-          '--cov-config=pyproject.toml',
-          '--cov-report=term-missing',
-          '--cov-fail-under=75'
-        ]
+        # `env` sets PYTHONPATH portably (pre-commit has no `env:` key for
+        # language: system hooks). Coverage flags are passed explicitly here
+        # (and in CI) rather than via pytest addopts.
+        entry: env PYTHONPATH=backend python -m pytest
+        args:
+          [
+            'tests/unit/',
+            '-x',
+            '--cov=backend/zikos',
+            '--cov-config=pyproject.toml',
+            '--cov-report=term-missing',
+            '--cov-fail-under=79',
+          ]
         language: system
         files: ^(backend/|tests/).*\.py$
         pass_filenames: false
-        always_run: false
-        env:
-          PYTHONPATH: backend
