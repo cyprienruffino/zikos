@@ -154,7 +154,6 @@ class TestStatusEndpoint:
         mock_chat_service = MagicMock()
         mock_chat_service.llm_service = mock_llm_service
 
-
         with patch("zikos.api.system.detect_hardware", return_value=mock_hardware_profile):
             with patch("zikos.api.system.get_hardware_tier", return_value="medium"):
                 with patch("zikos.api.chat.get_chat_service", return_value=mock_chat_service):
@@ -179,7 +178,6 @@ class TestStatusEndpoint:
 
         mock_chat_service = MagicMock()
         mock_chat_service.llm_service = mock_llm_service
-
 
         with patch("zikos.api.system.detect_hardware", return_value=mock_hardware_profile):
             with patch("zikos.api.system.get_hardware_tier", return_value="medium"):
