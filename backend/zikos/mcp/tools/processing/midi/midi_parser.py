@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from music21 import key, meter, note, stream, tempo
+from music21 import chord, key, meter, note, stream, tempo
 
 
 class MidiParseError(Exception):
@@ -28,9 +28,12 @@ _FORMAT_HINT = (
 
 
 def parse_midi_text(midi_text: str) -> dict[str, Any]:
-    """Parse simplified MIDI format to structured data"""
+    """Parse simplified MIDI format to structured data.
+
+    Returns {"metadata": ..., "tracks": ..., "warnings": [...]}.
+    """
     midi_block_pattern = r"\[MIDI\](.*?)\[/MIDI\]"
-    match = re.search(midi_block_pattern, midi_text, re.DOTALL)
+    match = re.search(midi_block_pattern, midi_text, re.DOTALL | re.IGNORECASE)
 
     if not match:
         raise MidiParseError(f"No [MIDI]...[/MIDI] block found. {_FORMAT_HINT}")
@@ -45,6 +48,7 @@ def parse_midi_text(midi_text: str) -> dict[str, Any]:
     }
     tracks: list[dict[str, Any]] = []
     current_track: dict[str, Any] | None = None
+    warnings: list[str] = []
 
     for line in lines:
         line_lower = line.lower()
@@ -52,9 +56,13 @@ def parse_midi_text(midi_text: str) -> dict[str, Any]:
         if line_lower.startswith("tempo:"):
             tempo_str = line.split(":", 1)[1].strip()
             try:
-                metadata["tempo"] = int(float(tempo_str))
+                tempo_value = float(tempo_str)
             except ValueError as err:
                 raise MidiParseError(f"Invalid tempo: {tempo_str}") from err
+            if tempo_value <= 0:
+                raise MidiParseError(f"Tempo must be positive, got: {tempo_str}")
+            # Keep fractional tempi (e.g. 72.5), but report clean ints as ints
+            metadata["tempo"] = int(tempo_value) if tempo_value.is_integer() else tempo_value
 
         elif line_lower.startswith("time signature:") or line_lower.startswith("time sig:"):
             ts_str = line.split(":", 1)[1].strip()
@@ -79,7 +87,7 @@ def parse_midi_text(midi_text: str) -> dict[str, Any]:
             }
 
         elif current_track is not None:
-            note_data = parse_note_line(line)
+            note_data = parse_note_line(line, warnings)
             if note_data:
                 current_track["notes"].append(note_data)
 
@@ -94,11 +102,22 @@ def parse_midi_text(midi_text: str) -> dict[str, Any]:
             "    C4 velocity=60 duration=1.0"
         )
 
-    return {"metadata": metadata, "tracks": tracks}
+    return {"metadata": metadata, "tracks": tracks, "warnings": warnings}
 
 
-def parse_note_line(line: str) -> dict[str, Any] | None:
-    """Parse a note line like 'C4 velocity=60 duration=0.5'"""
+def parse_note_line(line: str, warnings: list[str] | None = None) -> dict[str, Any] | None:
+    """Parse a note line like 'C4 velocity=60 duration=0.5'.
+
+    Chord lines with several pitches ('C4 E4 G4 velocity=60 duration=1.0')
+    are supported: all pitches share the velocity/duration.
+
+    Malformed velocity=/duration= values raise MidiParseError instead of
+    silently falling back to defaults. Out-of-range velocities are clamped
+    to 0-127 with a warning appended to `warnings`.
+    """
+    if warnings is None:
+        warnings = []
+
     line = line.strip()
     if not line:
         return None
@@ -107,24 +126,57 @@ def parse_note_line(line: str) -> dict[str, Any] | None:
     if not parts:
         return None
 
-    note_name = parts[0]
+    pitches: list[str] = []
     velocity = 60
     duration = 0.5
 
-    for part in parts[1:]:
+    for part in parts:
         if part.startswith("velocity="):
+            value = part.split("=", 1)[1]
             try:
-                velocity = int(float(part.split("=", 1)[1]))
-            except (ValueError, IndexError):
-                pass
+                velocity = int(float(value))
+            except (ValueError, IndexError) as err:
+                raise MidiParseError(
+                    f"Invalid velocity '{value}' in line '{line}'. "
+                    "Velocity must be a number between 0 and 127 (e.g. velocity=80)."
+                ) from err
+            if velocity < 0 or velocity > 127:
+                clamped = max(0, min(127, velocity))
+                warnings.append(
+                    f"Velocity {velocity} out of range in line '{line}'; clamped to {clamped}."
+                )
+                velocity = clamped
         elif part.startswith("duration="):
+            value = part.split("=", 1)[1]
             try:
-                duration = float(part.split("=", 1)[1])
-            except (ValueError, IndexError):
-                pass
+                duration = float(value)
+            except (ValueError, IndexError) as err:
+                raise MidiParseError(
+                    f"Invalid duration '{value}' in line '{line}'. "
+                    "Duration must be a positive number in quarter notes "
+                    "(e.g. duration=0.5 for an eighth note)."
+                ) from err
+            if duration <= 0:
+                raise MidiParseError(
+                    f"Duration must be greater than 0, got '{value}' in line '{line}'."
+                )
+        elif "=" in part:
+            warnings.append(f"Ignoring unknown attribute '{part}' in line '{line}'.")
+        else:
+            pitches.append(part)
+
+    if not pitches:
+        warnings.append(f"Line '{line}' has no note name; skipped.")
+        return None
+
+    if len(pitches) > 1:
+        warnings.append(
+            f"Line '{line}' contains {len(pitches)} pitches; interpreted as a chord."
+        )
 
     return {
-        "note": note_name,
+        "note": pitches[0],
+        "pitches": pitches,
         "velocity": velocity,
         "duration": duration,
     }
@@ -145,6 +197,7 @@ def create_music21_stream(parsed_data: dict[str, Any]) -> Any:
 
         for note_data in track_data["notes"]:
             note_name = note_data["note"]
+            pitches = note_data.get("pitches", [note_name])
             duration = note_data["duration"]
             velocity = note_data["velocity"]
 
@@ -155,13 +208,16 @@ def create_music21_stream(parsed_data: dict[str, Any]) -> Any:
                 continue
 
             try:
-                n = note.Note(note_name)
-                n.quarterLength = duration
-                n.volume.velocity = velocity
-                part.append(n)
+                if len(pitches) > 1:
+                    element: note.Note | chord.Chord = chord.Chord(pitches)
+                else:
+                    element = note.Note(note_name)
+                element.quarterLength = duration
+                element.volume.velocity = velocity
+                part.append(element)
             except Exception as e:
                 raise MidiParseError(
-                    f"Invalid note name '{note_name}'. "
+                    f"Invalid note name '{note_name if len(pitches) <= 1 else ' '.join(pitches)}'. "
                     "Use standard note names like C4, D#5, Bb3, or 'rest'. "
                     f"Original error: {str(e)}"
                 ) from e

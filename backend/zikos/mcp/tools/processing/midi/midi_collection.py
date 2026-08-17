@@ -7,7 +7,7 @@ from typing import Any
 from zikos.config import settings
 from zikos.mcp.tool import Tool, ToolCategory
 from zikos.mcp.tools.base import ToolCollection
-from zikos.mcp.tools.processing.midi.midi_parser import MidiParseError, midi_text_to_file
+from zikos.mcp.tools.processing.midi.midi_parser import MidiParseError
 
 
 class MidiTools(ToolCollection):
@@ -206,15 +206,40 @@ Error Handling:
         metadata: dict[str, Any] = {}
 
         try:
-            from zikos.mcp.tools.processing.midi.midi_parser import parse_midi_text
+            from zikos.mcp.tools.processing.midi.midi_parser import (
+                create_music21_stream,
+                parse_midi_text,
+            )
 
             parsed_data = parse_midi_text(midi_text)
-            metadata = parsed_data.get("metadata", {})
+            metadata = dict(parsed_data.get("metadata", {}))
+            warnings.extend(parsed_data.get("warnings", []))
+
+            # Enrich metadata with note/track counts and estimated duration
+            tracks = parsed_data.get("tracks", [])
+            note_count = sum(
+                1
+                for track in tracks
+                for note_data in track.get("notes", [])
+                if str(note_data.get("note", "")).lower() != "rest"
+            )
+            metadata["track_count"] = len(tracks)
+            metadata["note_count"] = note_count
+            tempo_bpm = float(metadata.get("tempo", 120) or 120)
+            track_quarters = [
+                sum(float(note_data.get("duration", 0)) for note_data in track.get("notes", []))
+                for track in tracks
+            ]
+            longest_quarters = max(track_quarters) if track_quarters else 0.0
+            metadata["estimated_duration_seconds"] = round(
+                longest_quarters * 60.0 / tempo_bpm, 2
+            )
 
             midi_file_id = str(uuid.uuid4())
             midi_path = self.storage_path / f"{midi_file_id}.mid"
 
-            midi_text_to_file(midi_text, midi_path)
+            score = create_music21_stream(parsed_data)
+            score.write("midi", fp=str(midi_path))
 
             if not midi_path.exists() or midi_path.stat().st_size == 0:
                 errors.append("Failed to create MIDI file")
