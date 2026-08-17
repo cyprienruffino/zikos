@@ -1,5 +1,12 @@
 import { WebSocketMessage } from "./types.js";
 import { sanitizeToolId } from "./utils/sanitize.js";
+import {
+    clampBpm,
+    validateTimeSignature,
+    positiveNumber,
+    optionalPositiveNumber,
+    validateNoteName,
+} from "./utils/validate.js";
 import { WS_URL } from "./config.js";
 import {
     addMessage,
@@ -119,7 +126,7 @@ export function connect(): void {
                 addRecordingWidget(
                     sanitizeToolId(data.tool_id, "rec"),
                     args.prompt || "Please record audio",
-                    args.max_duration || 60.0
+                    Math.min(positiveNumber(args.max_duration, 60.0), 600)
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_metronome") {
                 if (data.message) {
@@ -132,8 +139,8 @@ export function connect(): void {
                 };
                 addMetronomeWidget(
                     sanitizeToolId(data.tool_id, "met"),
-                    args.bpm || 120,
-                    args.time_signature || "4/4",
+                    clampBpm(args.bpm, 120),
+                    validateTimeSignature(args.time_signature),
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_tuner") {
@@ -148,7 +155,7 @@ export function connect(): void {
                 };
                 addTunerWidget(
                     sanitizeToolId(data.tool_id, "tuner"),
-                    args.reference_frequency || 440,
+                    positiveNumber(args.reference_frequency, 440),
                     args.note,
                     args.octave,
                     args.description
@@ -165,12 +172,15 @@ export function connect(): void {
                     instrument?: string;
                     description?: string;
                 };
+                const chords = Array.isArray(args.chords)
+                    ? args.chords.filter((chord): chord is string => typeof chord === "string")
+                    : [];
                 addChordProgressionWidget(
                     sanitizeToolId(data.tool_id, "chord"),
-                    args.chords || [],
-                    args.tempo || 120,
-                    args.time_signature || "4/4",
-                    args.chords_per_bar || 1,
+                    chords,
+                    clampBpm(args.tempo, 120),
+                    validateTimeSignature(args.time_signature),
+                    positiveNumber(args.chords_per_bar, 1),
                     args.instrument || "piano",
                     args.description
                 );
@@ -186,12 +196,17 @@ export function connect(): void {
                     ramp_type?: string;
                     description?: string;
                 };
+                let startBpm = clampBpm(args.start_bpm, 60);
+                let endBpm = clampBpm(args.end_bpm, 120);
+                if (startBpm > endBpm) {
+                    [startBpm, endBpm] = [endBpm, startBpm];
+                }
                 addTempoTrainerWidget(
                     sanitizeToolId(data.tool_id, "tempo"),
-                    args.start_bpm || 60,
-                    args.end_bpm || 120,
-                    args.duration_minutes || 5,
-                    args.time_signature || "4/4",
+                    startBpm,
+                    endBpm,
+                    positiveNumber(args.duration_minutes, 5),
+                    validateTimeSignature(args.time_signature),
                     args.ramp_type || "linear",
                     args.description
                 );
@@ -209,7 +224,7 @@ export function connect(): void {
                     sanitizeToolId(data.tool_id, "ear"),
                     args.mode || "intervals",
                     args.difficulty || "medium",
-                    args.root_note || "C",
+                    validateNoteName(args.root_note),
                     args.description
                 );
             } else if (data.type === "tool_call" && data.tool_name === "create_practice_timer") {
@@ -224,9 +239,9 @@ export function connect(): void {
                 };
                 addPracticeTimerWidget(
                     sanitizeToolId(data.tool_id, "timer"),
-                    args.duration_minutes,
+                    optionalPositiveNumber(args.duration_minutes),
                     args.goal,
-                    args.break_interval_minutes,
+                    optionalPositiveNumber(args.break_interval_minutes),
                     args.description
                 );
             } else if (data.type === "audio_result" && data.audio_file_id) {

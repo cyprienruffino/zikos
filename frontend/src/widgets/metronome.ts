@@ -1,6 +1,7 @@
 import { MetronomeState } from "../types.js";
 import { addMessage, addTypingIndicator } from "../ui.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { clampBpm, validateTimeSignature } from "../utils/validate.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -32,6 +33,8 @@ export function addMetronomeWidget(
     description?: string
 ): void {
     metronomeId = sanitizeToolId(metronomeId, "met");
+    bpm = clampBpm(bpm);
+    timeSignature = validateTimeSignature(timeSignature);
     const widgetEl = document.createElement("div");
     widgetEl.className = "metronome-widget";
     widgetEl.id = `metronome-${metronomeId}`;
@@ -119,6 +122,7 @@ export function removeMetronomeWidget(metronomeId: string): void {
 }
 
 export function startMetronome(metronomeId: string, bpm: number, beats: number): void {
+    bpm = clampBpm(bpm);
     const metronome = metronomes.get(metronomeId);
     if (!metronome || metronome.isPlaying) return;
     if (!metronome.audioContext) {

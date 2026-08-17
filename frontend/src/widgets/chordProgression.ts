@@ -1,5 +1,6 @@
 import { ChordProgressionState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { clampBpm, positiveNumber, validateTimeSignature } from "../utils/validate.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -21,6 +22,9 @@ export function addChordProgressionWidget(
     description?: string
 ): void {
     progressionId = sanitizeToolId(progressionId, "chord");
+    tempo = clampBpm(tempo);
+    timeSignature = validateTimeSignature(timeSignature);
+    chordsPerBar = positiveNumber(chordsPerBar, 1);
     const widgetEl = document.createElement("div");
     widgetEl.className = "chord-progression-widget";
     widgetEl.id = `chord-${progressionId}`;
@@ -139,6 +143,8 @@ function startChordProgression(
     timeSignature: string,
     chordsPerBar: number
 ): void {
+    // Nothing to play; would otherwise crash on chords[chordIndex].
+    if (chords.length === 0) return;
     const progression = chordProgressions.get(progressionId);
     if (!progression || progression.isPlaying) return;
     if (!progression.audioContext) {

@@ -189,7 +189,8 @@ function getNoteFrequency(note: string, octave: number): number {
         "A#": 10,
         B: 11,
     };
-    const semitones = notes[note] + (octave - 4) * 12;
+    // Unknown notes fall back to C rather than producing NaN frequencies.
+    const semitones = (notes[note] ?? 0) + (octave - 4) * 12;
     return 440 * Math.pow(2, semitones / 12);
 }
 

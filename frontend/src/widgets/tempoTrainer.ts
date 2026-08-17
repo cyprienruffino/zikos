@@ -1,5 +1,6 @@
 import { TempoTrainerState } from "../types.js";
 import { escapeHtml, sanitizeToolId } from "../utils/sanitize.js";
+import { clampBpm, positiveNumber, validateTimeSignature } from "../utils/validate.js";
 
 function getMessagesEl(): HTMLElement {
     const el = document.getElementById("messages");
@@ -21,6 +22,13 @@ export function addTempoTrainerWidget(
     description?: string
 ): void {
     trainerId = sanitizeToolId(trainerId, "tempo");
+    startBpm = clampBpm(startBpm, 60);
+    endBpm = clampBpm(endBpm, 120);
+    if (startBpm > endBpm) {
+        [startBpm, endBpm] = [endBpm, startBpm];
+    }
+    durationMinutes = positiveNumber(durationMinutes, 5);
+    timeSignature = validateTimeSignature(timeSignature);
     const widgetEl = document.createElement("div");
     widgetEl.className = "tempo-trainer-widget";
     widgetEl.id = `tempo-${trainerId}`;
