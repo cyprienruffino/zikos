@@ -1,5 +1,6 @@
 """Abstract base class for LLM backends"""
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -67,7 +68,10 @@ class LLMBackend(ABC):
         Default implementation falls back to non-streaming and yields final result.
         Backends should override this for true streaming.
         """
-        result = self.create_chat_completion(
+        # create_chat_completion is synchronous and may block for the whole
+        # generation — run it off the event loop.
+        result = await asyncio.to_thread(
+            self.create_chat_completion,
             messages=messages,
             tools=tools,
             temperature=temperature,

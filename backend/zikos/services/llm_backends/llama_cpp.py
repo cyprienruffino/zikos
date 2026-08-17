@@ -1,5 +1,6 @@
 """LlamaCpp backend implementation"""
 
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -163,12 +164,32 @@ class LlamaCppBackend(LLMBackend):
         if tools is not None:
             completion_kwargs["tools"] = tools
 
-        stream = self.llm.create_chat_completion(**completion_kwargs)
+        # llama-cpp-python's generator is synchronous and blocks the event loop
+        # (both on the initial prompt processing and on every token). Run the
+        # call + iteration in a worker thread, feeding an asyncio.Queue.
+        llm = self.llm
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        sentinel = object()
 
-        for chunk in stream:
-            chunk_dict = dict(chunk)  # type: ignore[arg-type]
+        def _produce() -> None:
+            try:
+                for chunk in llm.create_chat_completion(**completion_kwargs):
+                    loop.call_soon_threadsafe(queue.put_nowait, dict(chunk))
+            except BaseException as e:  # propagate to the async consumer
+                loop.call_soon_threadsafe(queue.put_nowait, e)
+                return
+            loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
-            yield chunk_dict
+        loop.run_in_executor(None, _produce)
+
+        while True:
+            item = await queue.get()
+            if item is sentinel:
+                break
+            if isinstance(item, BaseException):
+                raise item
+            yield item
 
     def supports_tools(self) -> bool:
         """LlamaCpp supports tools via create_chat_completion"""
