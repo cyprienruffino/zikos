@@ -275,15 +275,19 @@ Interpretation Guidelines:
                 "message": f"Audio file {audio_file_id} not found",
             }
 
-        return await self._dispatch_analysis(tool_name, resolved_path)
+        return await self._dispatch_analysis(
+            tool_name, resolved_path, instrument=kwargs.get("instrument")
+        )
 
-    async def _dispatch_analysis(self, tool_name: str, resolved_path: str) -> dict[str, Any]:
+    async def _dispatch_analysis(
+        self, tool_name: str, resolved_path: str, instrument: str | None = None
+    ) -> dict[str, Any]:
         """Run a single-file analysis tool on an already-resolved path"""
         if tool_name == "analyze_tempo":
             result = await tempo.analyze_tempo(resolved_path)
             return dict(result)
         elif tool_name == "detect_pitch":
-            result = await pitch.detect_pitch(resolved_path)
+            result = await pitch.detect_pitch(resolved_path, instrument=instrument)
             return dict(result)
         elif tool_name == "analyze_rhythm":
             result = await rhythm.analyze_rhythm(resolved_path)
@@ -307,7 +311,9 @@ Interpretation Guidelines:
             result = await phrase_segmentation.segment_phrases(resolved_path)
             return dict(result)
         elif tool_name == "comprehensive_analysis":
-            result = await comprehensive.comprehensive_analysis(resolved_path)
+            result = await comprehensive.comprehensive_analysis(
+                resolved_path, instrument=instrument
+            )
             return dict(result)
         elif tool_name == "analyze_groove":
             result = await groove.analyze_groove(resolved_path)
@@ -323,7 +329,11 @@ Interpretation Guidelines:
             }
 
     async def _run_internal(
-        self, tool_name: str, audio_file_id: str | None, audio_path: str | None
+        self,
+        tool_name: str,
+        audio_file_id: str | None,
+        audio_path: str | None,
+        instrument: str | None = None,
     ) -> dict[str, Any]:
         """Internal (Python-level) entry point for services and tests.
 
@@ -348,7 +358,7 @@ Interpretation Guidelines:
                 "error_type": "MISSING_PARAMETER",
                 "message": f"'{tool_name}' requires audio_file_id or audio_path",
             }
-        return await self._dispatch_analysis(tool_name, resolved_path)
+        return await self._dispatch_analysis(tool_name, resolved_path, instrument=instrument)
 
     async def analyze_tempo(
         self, audio_file_id: str | None = None, audio_path: str | None = None
@@ -357,10 +367,15 @@ Interpretation Guidelines:
         return await self._run_internal("analyze_tempo", audio_file_id, audio_path)
 
     async def detect_pitch(
-        self, audio_file_id: str | None = None, audio_path: str | None = None
+        self,
+        audio_file_id: str | None = None,
+        audio_path: str | None = None,
+        instrument: str | None = None,
     ) -> dict[str, Any]:
         """Call a tool"""
-        return await self._run_internal("detect_pitch", audio_file_id, audio_path)
+        return await self._run_internal(
+            "detect_pitch", audio_file_id, audio_path, instrument=instrument
+        )
 
     async def analyze_rhythm(
         self, audio_file_id: str | None = None, audio_path: str | None = None
@@ -431,9 +446,13 @@ Interpretation Guidelines:
         """Call a tool"""
         return await self._run_internal("segment_phrases", audio_file_id, None)
 
-    async def comprehensive_analysis(self, audio_file_id: str) -> dict[str, Any]:
+    async def comprehensive_analysis(
+        self, audio_file_id: str, instrument: str | None = None
+    ) -> dict[str, Any]:
         """Call a tool"""
-        return await self._run_internal("comprehensive_analysis", audio_file_id, None)
+        return await self._run_internal(
+            "comprehensive_analysis", audio_file_id, None, instrument=instrument
+        )
 
     async def analyze_groove(self, audio_file_id: str) -> dict[str, Any]:
         """Call a tool"""

@@ -93,7 +93,9 @@ async def detect_key(audio_path: str) -> dict[str, Any]:
                 "message": "Audio is too short (minimum 0.5 seconds required)",
             }
 
-        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+        # CQT chroma: log-spaced bins keep pitch-class resolution in the low
+        # register (bass), where linear STFT bins smear adjacent semitones.
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
         chroma_mean = np.mean(chroma, axis=1)
 
         note_names = NOTE_NAMES

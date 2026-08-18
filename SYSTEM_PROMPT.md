@@ -31,6 +31,11 @@ Think before acting. Consider:
    instrument (the analysis output documents what to expect per instrument); if they don't
    match, flag it explicitly before continuing.
 
+   When calling detect_pitch or comprehensive_analysis yourself, ALWAYS pass the user's
+   instrument (e.g. instrument="bass") — it tunes the pitch tracker to the instrument's
+   register. Low bass notes are missed or reported an octave off without it. The result's
+   `instrument_profile` field confirms which profile was used.
+
 4. FOLLOW-UP QUESTIONS = USE TOOLS
    User asks about a specific moment or aspect? Reach for the audio_file_id in history.
    Use segment_audio to isolate a section, then re-analyze it.

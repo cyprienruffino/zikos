@@ -5,6 +5,47 @@ from pathlib import Path
 from typing import Any
 
 from zikos.config import settings
+from zikos.constants import (
+    DEFAULT_INSTRUMENT_DSP_PROFILE,
+    INSTRUMENT_DSP_PROFILES,
+    InstrumentDSPProfile,
+)
+
+# Substring → canonical profile name. Checked in order: "bass" first so
+# "bass guitar" resolves to bass, not guitar.
+_INSTRUMENT_ALIASES: tuple[tuple[str, str], ...] = (
+    ("bass", "bass"),
+    ("guitar", "guitar"),
+    ("ukulele", "guitar"),
+    ("piano", "piano"),
+    ("keyboard", "piano"),
+    ("keys", "piano"),
+    ("synth", "piano"),
+    ("voice", "voice"),
+    ("vocal", "voice"),
+    ("sing", "voice"),
+    ("violin", "violin"),
+    ("fiddle", "violin"),
+)
+
+
+def resolve_instrument_profile(instrument: Any) -> tuple[str, InstrumentDSPProfile]:
+    """Map a free-form instrument name to (canonical name, DSP profile).
+
+    Accepts anything the LLM or user settings might supply ("bass guitar",
+    "Electric Bass", "keys"); unknown or missing names fall back to the wide
+    default profile under the name "default".
+    """
+    if not isinstance(instrument, str) or not instrument.strip():
+        return "default", DEFAULT_INSTRUMENT_DSP_PROFILE
+    name = instrument.strip().lower()
+    if name in INSTRUMENT_DSP_PROFILES:
+        return name, INSTRUMENT_DSP_PROFILES[name]
+    for alias, canonical in _INSTRUMENT_ALIASES:
+        if alias in name:
+            return canonical, INSTRUMENT_DSP_PROFILES[canonical]
+    return "default", DEFAULT_INSTRUMENT_DSP_PROFILE
+
 
 UUID_REGEX = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"

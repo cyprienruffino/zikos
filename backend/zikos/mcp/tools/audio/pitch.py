@@ -6,6 +6,7 @@ import librosa
 import numpy as np
 
 from zikos.mcp.tool import Tool, ToolCategory
+from zikos.mcp.tools.audio.utils import resolve_instrument_profile
 
 
 def get_detect_pitch_tool() -> Tool:
@@ -16,6 +17,16 @@ def get_detect_pitch_tool() -> Tool:
         category=ToolCategory.AUDIO_ANALYSIS,
         parameters={
             "audio_file_id": {"type": "string"},
+            "instrument": {
+                "type": "string",
+                "description": (
+                    "Instrument being played, e.g. 'bass', 'guitar', 'piano', 'voice', "
+                    "'violin'. Tunes the pitch-tracking frequency range and analysis "
+                    "window — REQUIRED for reliable low-register (bass) detection. "
+                    "Always pass the user's instrument when known; omit for a generic "
+                    "wide range."
+                ),
+            },
         },
         required=["audio_file_id"],
         detailed_description="""Detect pitch and notes with intonation analysis.
@@ -83,7 +94,7 @@ def intonation_score_from_cents(avg_abs_cents: float) -> float:
         return float(max(0.0, 0.7 - (avg_abs_cents - 30) / 200))
 
 
-async def detect_pitch(audio_path: str) -> dict[str, Any]:
+async def detect_pitch(audio_path: str, instrument: str | None = None) -> dict[str, Any]:
     """Detect pitch and notes with intonation analysis"""
     try:
         y, sr = librosa.load(audio_path, sr=None)
@@ -95,13 +106,15 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
                 "message": "Audio is too short (minimum 0.5 seconds required)",
             }
 
+        profile_name, profile = resolve_instrument_profile(instrument)
+
         hop_length = 512
         f0, voiced_flag, voiced_prob = librosa.pyin(
             y,
             sr=sr,
-            fmin=float(librosa.note_to_hz("C1")),
-            fmax=float(librosa.note_to_hz("C7")),
-            frame_length=4096,
+            fmin=profile.fmin_hz,
+            fmax=profile.fmax_hz,
+            frame_length=profile.pyin_frame_length,
             hop_length=hop_length,
         )
 
@@ -192,7 +205,9 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
             try:
                 from zikos.mcp.tools.audio.key import estimate_key_from_chroma
 
-                chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+                # CQT chroma: log-spaced bins keep pitch-class resolution in
+                # the low register, where linear STFT bins smear semitones.
+                chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
                 chroma_mean = np.mean(chroma, axis=1)
                 detected_key, _, _, _ = estimate_key_from_chroma(chroma_mean)
             except Exception:
@@ -206,6 +221,8 @@ async def detect_pitch(audio_path: str) -> dict[str, Any]:
             "detected_key": detected_key,
             "sharp_tendency": float(sharp_tendency),
             "flat_tendency": float(flat_tendency),
+            "instrument_profile": profile_name,
+            "pitch_search_range_hz": [profile.fmin_hz, profile.fmax_hz],
         }
     except FileNotFoundError:
         return {

@@ -3,6 +3,8 @@
 All hardcoded constants should be defined here for easy configuration.
 """
 
+from dataclasses import dataclass
+
 
 class LLMConstants:
     """Constants for LLM service and conversation management"""
@@ -101,6 +103,39 @@ class AudioAnalysisConstants:
 
     # Amplitude envelope sampling
     AMPLITUDE_ENVELOPE_DOWNSAMPLE: int = 10
+
+
+@dataclass(frozen=True)
+class InstrumentDSPProfile:
+    """Pitch-tracking parameters for one instrument family.
+
+    fmin_hz/fmax_hz bound pyin's F0 search range; pyin_frame_length is the
+    analysis window in samples — low fundamentals need longer windows to
+    resolve (pyin's longest detectable period is roughly frame_length/2).
+    """
+
+    fmin_hz: float
+    fmax_hz: float
+    pyin_frame_length: int
+
+
+# Wide generic range used when the instrument is unknown: C1..C7 with the
+# historical 4096-sample window.
+DEFAULT_INSTRUMENT_DSP_PROFILE = InstrumentDSPProfile(
+    fmin_hz=32.70, fmax_hz=2093.0, pyin_frame_length=4096
+)
+
+# fmin sits below each instrument's lowest standard fundamental with margin
+# for drop/detuned setups: 5-string bass low B0 = 30.87 Hz, drop-D guitar
+# D2 = 73.42 Hz, piano A0 = 27.5 Hz. fmax caps the search near the highest
+# playable fundamental so pyin doesn't lock onto harmonics.
+INSTRUMENT_DSP_PROFILES: dict[str, InstrumentDSPProfile] = {
+    "bass": InstrumentDSPProfile(fmin_hz=25.0, fmax_hz=500.0, pyin_frame_length=8192),
+    "guitar": InstrumentDSPProfile(fmin_hz=70.0, fmax_hz=1400.0, pyin_frame_length=4096),
+    "piano": InstrumentDSPProfile(fmin_hz=26.0, fmax_hz=4200.0, pyin_frame_length=8192),
+    "voice": InstrumentDSPProfile(fmin_hz=60.0, fmax_hz=1500.0, pyin_frame_length=4096),
+    "violin": InstrumentDSPProfile(fmin_hz=180.0, fmax_hz=3600.0, pyin_frame_length=2048),
+}
 
 
 class RecordingConstants:

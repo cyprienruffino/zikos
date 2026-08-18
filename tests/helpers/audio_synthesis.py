@@ -102,6 +102,43 @@ def generate_guitar_tone(frequency: float, duration: float, sample_rate: int = 4
     return signal
 
 
+def generate_bass_tone(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
+    """Generate an electric-bass-like tone
+
+    Real bass notes carry much of their energy in the 2nd/3rd harmonics — the
+    fundamental is present but not dominant. That's exactly the case
+    low-register pitch tracking has to handle, so tests should use this
+    rather than a pure sine.
+    """
+    t = np.linspace(0, duration, int(sample_rate * duration))
+
+    harmonics = [
+        (1.0, 0.8),
+        (2.0, 1.0),
+        (3.0, 0.6),
+        (4.0, 0.3),
+        (5.0, 0.15),
+    ]
+
+    signal = np.zeros_like(t)
+    for harmonic_freq, amplitude in harmonics:
+        signal += amplitude * np.sin(2 * np.pi * frequency * harmonic_freq * t)
+
+    # Plucked-string envelope: fast attack, slow decay (bass sustains longer
+    # than guitar)
+    envelope = np.exp(-t * 1.2)
+    attack_samples = int(0.005 * sample_rate)
+    if attack_samples > 0 and attack_samples < len(envelope):
+        envelope[:attack_samples] *= np.linspace(0, 1, attack_samples)
+    signal *= envelope
+
+    # Normalize
+    if np.max(np.abs(signal)) > 0:
+        signal = signal / np.max(np.abs(signal)) * 0.8
+
+    return signal
+
+
 def generate_scale_audio(
     notes: list[str],
     note_duration: float = 0.5,
@@ -113,7 +150,7 @@ def generate_scale_audio(
     Args:
         notes: List of note names (e.g., ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'])
         note_duration: Duration of each note in seconds
-        instrument: 'piano' or 'guitar'
+        instrument: 'piano', 'guitar', or 'bass'
         sample_rate: Sample rate for audio
 
     Returns:
@@ -129,6 +166,8 @@ def generate_scale_audio(
             note_audio = generate_piano_tone(freq, note_duration, sample_rate)
         elif instrument == "guitar":
             note_audio = generate_guitar_tone(freq, note_duration, sample_rate)
+        elif instrument == "bass":
+            note_audio = generate_bass_tone(freq, note_duration, sample_rate)
         else:
             # Fallback to simple sine wave
             t = np.linspace(0, note_duration, int(sample_rate * note_duration))
